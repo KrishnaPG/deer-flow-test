@@ -2,7 +2,7 @@
 
 ## Core Responsibilities
 - Canonical UI/agent state authority (scene graph, widgets, objectives, agent lifecycle).
-- RBAC + policy enforcement for operator vs observers; audit logging for every intent/event.
+- ABAC + policy enforcement for operator vs observers; audit logging for every intent/event.
 - Adapters to orchestrators (DeerFlow, Hermes, Rowboat, Temporal workflows) with normalized event schema.
 - Emit UI state diffs over realtime transports (WS/SSE/Centrifugo). LiveKit optional for multimodal audio/video only.
 
