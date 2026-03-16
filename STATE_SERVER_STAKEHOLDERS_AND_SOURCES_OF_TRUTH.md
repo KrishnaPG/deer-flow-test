@@ -1,89 +1,89 @@
 # State Server Stakeholders And Sources Of Truth
 
-## Stakeholders And Who Touches The State Server
-- Control Center (operator UI): writes `intent` commands; reads lossless ordered `state_diffs` + periodic `snapshots`; needs canonical `mission_state` (scene graph, widgets, objectives, approvals, run progress), plus references to artifacts/memory (IDs, cursors, URLs), not the blobs themselves.
-- Observer UIs (read-only): reads best-effort `state_diffs`/`snapshots`; needs sanitized views (RBAC-filtered) + high-level progress + selected artifact previews.
-- Human operators (people): indirectly write via UI intents; need auditability (who changed what, when, why) and reproducible what-was-true-at-time-T.
-- Agents (DeerFlow/Hermes/Rowboat workers): never directly mutate canonical UI state; emit `agent_events`/tool results to orchestration lanes, which the State Server consumes and converts into canonical state transitions.
-- Orchestrator (Temporal workflows): owns durable step execution, retries, timers, HITL gates; it does not own UI truth; emits workflow events (started/step/progress/completed/failed) that are reflected into State Server canonical state.
-- Runtime plumbing (Dapr sidecars + mTLS): provides invocation/pubsub/bindings so every service can publish/consume normalized events without bespoke networking; State Server is a Dapr participant and policy gate.
-- Event bus (NATS JetStream): high-volume fanout/replay/backpressure for non-UI lanes (telemetry, lineage, memory promotions); State Server consumes/produces but should not be the sole relay for sustained telemetry.
-- Storage + artifact graph (object store + Iceberg + lakeFS + Postgres hot tables): is the system-of-record for artifacts and lineage; State Server stores pointers + what the operator sees right now.
-- Memory layers (Redis hot, Postgres warm/pgvector, Milvus cold macro): are retrieval substrates; State Server only needs current working set pointers (selected memory items, retrieval plan, citations list, cache keys).
-- Policy/audit (Casbin ABAC + audit log): State Server is the enforcement point for any canonical state append; must record every intent/event with `mission_id`, `run_id`, `agent_id`, `trace_id`.
-- Observability (OTel/Langfuse/Prometheus): reads traces/metrics; State Server must propagate correlation IDs and emit spans, but is not a source of business truth.
+## 1. Stakeholders & Access Matrix
 
-## What Data Lives Where (So We Actually Have A Single Source Of Truth)
-- Single source of truth for what happened: append-only `state_events` (and `lineage_events`) in the immutable store (object store + Iceberg). Nothing mutates history.
-- Single source of truth for what exists (files, transcripts, embeddings, derived outputs): the hierarchical artifact graph:
-  - L0 raw blobs in object storage + `artifacts_raw` rows
-  - L1 derived primitives in `artifacts_features`
-  - L2 semantic summaries in Postgres (hot) + Iceberg (cold)
-  - L3 operational metadata/lineage in Postgres (hot) + Iceberg (cold)
-- Single source of truth for what the UI should show now: State Server derived materialized state (rebuilt from `state_events`), delivered as `snapshots` + `diffs`.
-- Not a source of truth: Redis/Postgres snapshots/caches, vector indexes. They are derived and rebuildable from artifacts + events.
+| Stakeholder / Component | Role | Access Type | Data Handled / Transferred |
+| :--- | :--- | :--- | :--- |
+| **Control Center (Operator)** | Active Human Operator | Write / Read | Writes `intents` (commands). Reads lossless `state_diffs`, `snapshots`, and pointers (URLs/IDs) to artifacts and memory. |
+| **Observer UI** | Read-Only Viewer | Read | Reads best-effort, RBAC-filtered `state_diffs` and `snapshots`. Views sanitized progress and artifacts. |
+| **Real-Time Ingestion Pipeline** | High-Throughput Data Plane | Write Only | Ingests, processes, and writes L0-L4 artifacts directly to ClickHouse/Milvus/Iceberg. Bypasses State Server. Emits metadata pointers via NATS. |
+| **LiveKit Server** | Real-Time Media Plane | Stream | Handles raw audio/video streaming (e.g., live voice, WebRTC). Bypasses Temporal. Feeds directly into the Ingestion Pipeline. |
+| **Agents (DeerFlow/Hermes)** | Task Execution Workers | Emit Only | Emit `agent_events` and tool outputs to the Ingestion Pipeline. *Never directly mutate canonical UI state.* |
+| **Temporal** | Control Plane (Orchestrator) | Read / Emit | Reads mission config. Orchestrates macro-jobs (retries, timers). Waits for HITL approvals from State Server. *Does not handle the data plane.* |
+| **Dapr Sidecars** | Runtime Plumbing | Pub/Sub / Invoke | Routes normalized events between polyglot microservices via mTLS. |
+| **NATS JetStream** | Event Bus | Pub/Sub | High-volume fanout for telemetry, lineage, and pipeline metadata notifications. |
+| **State Server** | UI / Mission Gatekeeper | Read / Write | Sole writer of UI intent and mission state. Subscribes to NATS for artifact pointers to update the UI. |
+| **Memory Policy Service** | Memory Manager | Read / Emit | Reads artifact changes. Emits promotion/demotion events for memory tiers. |
+| **Observability Stack** | Tracing & Metrics (OTel) | Read | Consumes traces/metrics. Requires correlation IDs propagated by State Server and Pipeline. |
 
-## Concrete Access Matrix (Who Needs What From State Server)
-- Operator UI (write + read): `intents` (start mission, upload/select artifacts, run agent, approve step, fork branch, pin citation, publish report), `snapshots/diffs`, cursor resume tokens.
-- Observer UI (read): filtered `snapshots/diffs`, redacted artifact refs, progress timeline, published outputs.
-- Temporal (read + emit): reads minimal mission config (or is passed it at start); emits workflow step events; waits for HITL signals sourced from State Server approvals.
-- Agent workers/services (emit only): tool outputs + artifact creation events + progress; never write canonical UI state directly.
-- Memory policy service (emit + read pointers): reads artifact/summary changes; emits promotions/demotions; State Server consumes only what changes operator-visible state (e.g., new summary ready, citations updated).
-- Ingest/connectors (Drive/YouTube/etc.) (emit): emit artifact version changed events + write new blobs; State Server reflects source changed and re-deriving outputs.
+---
 
-## Stress-Test Scenarios (End-to-End Truth + Update Propagation)
+## 2. Data Architecture & Sources of Truth
 
-### 1) Q&A Over Private Google Drive Files; Realtime Answer Updates When Files Change
-- Sources of truth:
-  - Raw file versions: L0 blob + `artifacts_raw` (include `drive_file_id`, `drive_revision_id`, checksum, RBAC labels).
-  - Extracted text/OCR: L1 in `artifacts_features` keyed by `(source_artifact_id, extractor_version, revision_id)`.
-  - Answers: L2 summary objects with explicit provenance (which revisions, which chunks, which model/version).
-- Who touches State Server and for what:
-  - Operator UI: selects folder/files, asks question, pins allowed doc set, sets auto-refresh on change.
-  - Drive connector: emits revision-updated event + stores new L0; triggers Temporal extraction workflow.
-  - Temporal: runs extraction -> embedding -> summary refresh; emits progress events.
-  - State Server: reflects progress + updates current answer pointer to newest L2 answer only if policy allows (e.g., operator opted into auto-refresh); otherwise shows new revision available.
-- Real-world failure modes to validate:
-  - Partial updates: show answer is based on rev X; rev Y processing 60% with deterministic provenance.
-  - RBAC drift: if a user loses access to a file, State Server must stop serving it and invalidate derived outputs for that user view (policy enforced at read time, not just write time).
-  - Consistency: avoid silent answer mutation; either version answers (recommended) or explicitly mark updated.
+| Data Category | Tier | Immutable Source of Truth (Cold/Log) | Fast Lookup / Cache (Warm/Hot) | Description & Examples |
+| :--- | :--- | :--- | :--- | :--- |
+| **UI State** | Canonical | `state_events` (Iceberg + S3) | State Server Memory / Redis | The materialized view of the UI (scene graph, widgets) rebuilt from events. |
+| **Artifacts** | **L0: Crude Data** | Object Store + `artifacts_raw` | - | **Raw, untouched sources:** Original PDFs, raw MP4s, unparsed log files, raw CAD meshes, raw TSV/CSV dumps, raw web scrapes. |
+| **Artifacts** | **L1: Refined Data** | `artifacts_refined` (Iceberg) | ClickHouse (OLAP) + Milvus (Vector) | **Cleaned & Standardized:** Filled NAs, TSV converted to JSON, denoised audio, valid Markdown. |
+| **Artifacts** | **L2: Information** | `artifacts_features` (Iceberg) | ClickHouse (OLAP) + Milvus (Vector) | **Extractions & Views:** OCR text, ASR transcripts, visemes, embedding vectors, object bounding boxes, parsed ASTs, extracted claims. |
+| **Artifacts** | **L3: Knowledge** | `artifacts_knowledge` (Iceberg)| ClickHouse (OLAP) + Milvus (Vector) | **Aggregations & Semantics:** Translated text, semantic summaries, mathematical proofs, entity-relationship graphs, synthesized answers. |
+| **Artifacts** | **L4: Intelligence**| `artifacts_intel` (Iceberg) | ClickHouse (OLAP) + Milvus (Vector) | **Insights & Predictions:** Generated hypotheses, what-if simulations, future research directions, predictive corollaries, fully synthesized papers. |
+| **Lineage** | Cross-Cutting | `lineage_events` (Iceberg) | ClickHouse (Graph/Relational) | The directed acyclic graph (DAG) tracking provenance across all L0-L4 artifacts (e.g., "L3-Answer derived from L2-Chunk_A and L1-Doc_B"). |
 
-### 2) YouTube Translate + Dub + Lip-Sync Pipeline (ASR -> Translate -> TTS -> Align -> Render)
-- Sources of truth:
-  - Original video: L0.
-  - ASR transcript + timestamps: L1 (time-aligned segments).
-  - Translation segments + glossary constraints: L1/L2 depending on structure.
-  - Generated audio + visemes/phoneme alignment: L1 artifacts.
-  - Rendered translated video: L2 deliverable.
-- State Server needs to expose:
-  - Job graph state (stages, percent, ETA), per-stage artifacts pointers, preview links, and operator overrides (voice selection, glossary edits, re-render).
-- Update semantics:
-  - Operator edits glossary: emits intent -> new workflow branch; State Server shows branch lineage (render v3 uses glossary v2).
-  - Retry/rollback: never overwrite; append new render artifacts and update the current published output pointer.
+*Note: Redis, ClickHouse, and Milvus indexes are rebuildable caches/views. They are NOT the absolute system of record.*
 
-### 3) Deep Scientific Research Lifecycle (Survey -> Direction Choice -> Hypothesis -> Experiments/Code -> Results -> Paper + Slides + Images)
-- Sources of truth:
-  - Research corpus snapshots: artifact set with lakeFS branch/release tags (reproducibility).
-  - Claims, citations, experiment configs, code, datasets, run logs, metrics: artifacts + lineage events.
-  - Paper/slides/images: L2 deliverables with provenance to datasets/runs/citations.
-- State Server canonical state should include:
-  - Decision points (picked direction, hypothesis), task DAG status, experiment queue, approvals (e.g., run code on dataset X), and a publication assembly view (sections, figures, citations list).
-- Critical stress points:
-  - Parallelism: many agents produce artifacts concurrently; State Server remains the single canonical what-is-the-current-plan + what-is-approved + what-is-published.
-  - Reproducibility: every figure/table references artifact IDs (dataset version + code hash + run id).
-  - On-the-fly code: treat code and outputs as artifacts; execution is a Temporal activity; State Server shows status + links + extracted metrics.
+---
 
-## More Scenarios To Stress-Test (Recommended)
-1. Multi-tenant enterprise: per-tenant RBAC + audit export + legal hold; ensure State Server read filtering and immutable event retention works under strict compliance.
-2. Right to be forgotten / retention enforcement: tombstone Iceberg rows + purge blobs; State Server must render historical states with redactions while preserving audit integrity.
-3. Live demo with 1 operator + 10k observers: observers get downsampled diffs; operator stays lossless with ack/backpressure and snapshot fallback.
-4. Long-running mission (days): State Server failover + resume from snapshot+cursor; verify no duplicate UI transitions (idempotency tokens).
-5. Model upgrades: new extractor/model versions generate new L1/L2 artifacts; State Server lets operator compare outputs and choose which becomes published.
-6. Adversarial inputs (prompt injection in docs/videos): policy gate prevents tools from exfiltrating; State Server records tool allow/deny decisions and shows blocked-by-policy events.
-7. Multimodal voice/video agent (LiveKit): LiveKit is transport for media only; State Server stays truth for session state, transcript pointers, and agent control intents.
-8. Fork/merge research branches (lakeFS): operator forks a mission branch, explores, then merges metadata; State Server reflects branch pointers and published-branch selection.
+## 3. Stress-Test Scenarios
 
-## Open Question (Determines The Cleanest Single Truth Contract)
-Should the State Server be the only writer of `state_events` (recommended: yes), with all other services publishing to NATS/Dapr and the State Server translating those into canonical state transitions?
+### Scenario 1: Q&A Over Private Google Drive Files
+*Realtime answer updates when source files change.*
 
-If no, we need a stricter shared command/event schema + conflict policy because multiple writers to canonical state complicate audit and replay semantics.
+| Dimension | Details |
+| :--- | :--- |
+| **Sources of Truth** | **L0**: Drive Blob.<br>**L1**: Cleaned Markdown.<br>**L2**: Text Embeddings/Chunks.<br>**L3**: Synthesized Answer.<br>**L4**: Strategic insight/recommendation based on answer. |
+| **State Server Role** | Reflects extraction progress via NATS metadata. Updates pointer to newest L3 answer (based on auto-refresh policy). |
+| **Stress Points** | **Partial Updates**: Must show deterministic provenance (e.g., "Answer based on Rev 1, Rev 2 is 60% processed").<br>**RBAC Drift**: If user loses Drive access mid-session, State Server must revoke read access instantly.<br>**Consistency**: Avoid silent answer mutation; either version answers or explicitly mark updated. |
+
+### Scenario 2: YouTube Translate + Dub + Lip-Sync
+*ASR -> Translate -> TTS -> Align -> Render pipeline.*
+
+| Dimension | Details |
+| :--- | :--- |
+| **Sources of Truth** | **L0**: Source Video.<br>**L1**: Denoised Audio Track.<br>**L2**: ASR Timestamps, Visemes.<br>**L3**: Translated Glossary, Generated Audio.<br>**L4**: Final lip-synced composite video tailored for target culture. |
+| **State Server Role** | Exposes job DAG state, completion ETAs, stage previews, and accepts operator overrides (e.g., glossary edits). |
+| **Stress Points** | **Glossary Edits**: Operator edits create a new workflow branch. State Server must track branch lineage.<br>**Retries**: Never overwrite; append new render artifacts and update "published output" pointer. |
+
+### Scenario 3: Deep Scientific Research Lifecycle
+*Survey -> Hypothesis -> Experiments -> On-the-fly Code -> Paper/Slides.*
+
+| Dimension | Details |
+| :--- | :--- |
+| **Sources of Truth** | **LakeFS**: Research corpus snapshots (reproducibility).<br>**L1**: Normalized Datasets.<br>**L2**: Extracted metrics from on-the-fly code.<br>**L3**: Proofs, Entity graphs, Paper sections.<br>**L4**: Novel hypotheses, Future research directions, Final published Intelligence. |
+| **State Server Role** | Tracks decision points, experiment queues, explicit approvals, and publication assembly views. |
+| **Stress Points** | **Parallelism**: Ingestion Pipeline handles 10,000+ parallel agent outputs. State Server orchestrates the single canonical plan without bottlenecking on artifact writes.<br>**Code Execution**: Code/Outputs treated as artifacts; Temporal runs the code; State Server tracks metrics.<br>**Reproducibility**: Every figure/table references artifact IDs (dataset version + code hash + run id). |
+
+---
+
+## 4. Additional Edge-Case Scenarios
+
+| Scenario | Challenge | State Server Responsibility |
+| :--- | :--- | :--- |
+| **Multi-Tenant Enterprise** | Strict isolation and compliance. | Apply Casbin ABAC at read-time. Ensure immutable audit export. |
+| **Right to be Forgotten** | Purging data without breaking UI. | Render historical state gracefully when underlying L0/L1 blobs are tombstoned. |
+| **Massive Broadcast** | 1 Operator, 10,000 Observers. | Maintain lossless ack/backpressure for operator; downsample/throttle diffs for observers. |
+| **Long-Running Mission** | Multi-day runs with failovers. | Fast resume via snapshot + cursor. Prevent duplicate transitions using idempotency tokens. |
+| **Model Upgrades** | Upgraded L2/L3 artifact generation. | Allow operator to visually compare old vs. new pipeline outputs before publishing. |
+| **Adversarial Inputs** | Prompt injection in docs/videos. | Record tool allow/deny decisions and show "blocked by policy" events. |
+| **Multimodal Voice/Video** | Agent LiveKit sessions. | Retain truth for session state, transcript pointers, and agent control intents (LiveKit is media transport only). |
+| **Fork/Merge Branches** | Operator explores a fork. | Reflect branch pointers and the final "published branch" selection. |
+
+---
+
+## 5. Architectural Mandate
+
+**Dual-Plane Truth Contract:**
+To prevent write bottlenecks and workflow bloat, the system strictly separates the Control Plane from the Data Plane:
+
+1. **Control Plane (UI Truth):** The State Server is the SOLE writer of `state_events` (Mission progress, HITL approvals, UI intents, agent lifecycles). It must never gatekeep or serialize high-volume artifact data.
+2. **Data Plane (Artifact Truth):** The Real-Time Ingestion Pipeline is the high-throughput writer for L0-L4 artifacts into Iceberg/ClickHouse/Milvus. Agents, extractors, and LiveKit emit raw data/features directly to this pipeline. The State Server merely subscribes to lightweight *metadata pointers* from the pipeline via NATS to update the UI.
