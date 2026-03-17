@@ -9,6 +9,7 @@ import {
   deployService, 
   registerExistingInstance,
   getAllConfigFromNats,
+  testConnection,
   type DeployRequest 
 } from "./src/deployer";
 
@@ -95,6 +96,21 @@ const app = new Elysia()
       service_id: t.String(),
       connection_url: t.String(),
       nats_url: t.String(),
+      metadata: t.Optional(t.Record(t.String(), t.String()))
+    })
+  })
+  // NEW: Test connection to existing instance
+  .post("/api/test-connection", async ({ body }) => {
+    try {
+      const result = await testConnection(body as any);
+      return result;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  }, {
+    body: t.Object({
+      service_id: t.String(),
+      connection_url: t.String(),
       metadata: t.Optional(t.Record(t.String(), t.String()))
     })
   })

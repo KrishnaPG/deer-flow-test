@@ -1,7 +1,7 @@
 import { Server, Link2 } from 'lucide-react';
 import type { Template, Mode, ServiceStatus } from '../definitions';
 import { DeployModeForm } from './DeployModeForm';
-import { ExistingModeForm } from './ExistingModeForm';
+import { ExistingModeForm, type TestStatus } from './ExistingModeForm';
 import { DeployButton } from './DeployButton';
 import { Console } from './Console';
 
@@ -15,10 +15,13 @@ interface TabContentProps {
   hosts: string[];
   consoleOutput: string[];
   isDeploying: boolean;
+  testStatus: TestStatus;
+  testMessage?: string;
   onModeChange: (mode: Mode) => void;
   onFormChange: (key: string, value: string) => void;
   onHostChange: (host: string) => void;
   onExistingUrlChange: (url: string) => void;
+  onTestConnection: () => void;
   onDeploy: () => void;
 }
 
@@ -32,10 +35,13 @@ export function TabContent({
   hosts,
   consoleOutput,
   isDeploying,
+  testStatus,
+  testMessage,
   onModeChange,
   onFormChange,
   onHostChange,
   onExistingUrlChange,
+  onTestConnection,
   onDeploy
 }: TabContentProps) {
   return (
@@ -68,8 +74,11 @@ export function TabContent({
               existingUrl={existingUrl}
               formValues={formValues}
               isDeploying={isDeploying}
+              testStatus={testStatus}
+              testMessage={testMessage}
               onExistingUrlChange={onExistingUrlChange}
               onFormChange={onFormChange}
+              onTestConnection={onTestConnection}
             />
           )}
 
@@ -78,6 +87,7 @@ export function TabContent({
             status={status}
             isDeploying={isDeploying}
             selectedHost={selectedHost}
+            testStatus={testStatus}
             onDeploy={onDeploy}
           />
         </div>

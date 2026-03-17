@@ -1,12 +1,18 @@
 import type { Template } from '../definitions';
+import { Activity, Check, AlertCircle } from 'lucide-react';
+
+export type TestStatus = 'idle' | 'testing' | 'success' | 'error';
 
 interface ExistingModeFormProps {
   template: Template;
   existingUrl: string;
   formValues: Record<string, string>;
   isDeploying: boolean;
+  testStatus: TestStatus;
+  testMessage?: string;
   onExistingUrlChange: (url: string) => void;
   onFormChange: (key: string, value: string) => void;
+  onTestConnection: () => void;
 }
 
 export function ExistingModeForm({
@@ -14,9 +20,16 @@ export function ExistingModeForm({
   existingUrl,
   formValues,
   isDeploying,
+  testStatus,
+  testMessage,
   onExistingUrlChange,
-  onFormChange
+  onFormChange,
+  onTestConnection
 }: ExistingModeFormProps) {
+  const isTesting = testStatus === 'testing';
+  const hasTested = testStatus === 'success' || testStatus === 'error';
+  const isSuccess = testStatus === 'success';
+
   return (
     <>
       <div>
@@ -51,6 +64,41 @@ export function ExistingModeForm({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onTestConnection}
+          disabled={isDeploying || isTesting || !existingUrl.trim()}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md shadow-sm text-sm font-medium transition-colors ${
+            isSuccess 
+              ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300' 
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {isTesting ? (
+            <><Activity size={16} className="animate-spin" /> Testing...</>
+          ) : isSuccess ? (
+            <><Check size={16} /> Connection Verified</>
+          ) : (
+            <>Test Connection</>
+          )}
+        </button>
+
+        {hasTested && testMessage && (
+          <div className={`flex items-center gap-1.5 text-sm ${isSuccess ? 'text-green-600' : 'text-red-600'}`}>
+            {isSuccess ? <Check size={16} /> : <AlertCircle size={16} />}
+            <span>{testMessage}</span>
+          </div>
+        )}
+      </div>
+
+      {!isSuccess && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+          <p className="text-xs text-blue-700">
+            You must test the connection successfully before registering the existing instance.
+          </p>
         </div>
       )}
     </>
