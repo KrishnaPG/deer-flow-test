@@ -1,4 +1,4 @@
-import { Template } from '../types';
+import type { Template } from '../definitions';
 
 interface DeployModeFormProps {
   hosts: string[];

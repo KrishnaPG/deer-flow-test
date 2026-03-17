@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Template, ServiceStatus, Mode } from './types';
+import type { Template, ServiceStatus, Mode } from './definitions';
 type NatsStatus = 'connected' | 'disconnected' | 'checking';
 import { useNatsUrl } from './hooks/useNatsUrl';
 import { Header } from './components/Header';
@@ -26,11 +26,11 @@ export default function App() {
   const [hosts, setHosts] = useState<string[]>(['localhost']);
   const [status, setStatus] = useState<Record<string, ServiceStatus>>({});
   const [deploying, setDeploying] = useState<string | null>(null);
-  
+
   // Tab state
   const [tabs, setTabs] = useState<TabState[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  
+
   const { natsUrl, setNatsUrl } = useNatsUrl();
   const [natsStatus, setNatsStatus] = useState<NatsStatus>('checking');
   const [showSettings, setShowSettings] = useState(false);
@@ -64,7 +64,7 @@ export default function App() {
       axios.get(`${API_URL}/catalog`),
       axios.get(`${API_URL}/ssh-hosts`)
     ]);
-    
+
     setTemplates(tplRes.data);
     setHosts(hostsRes.data);
   };
@@ -110,7 +110,7 @@ export default function App() {
   const closeTab = (tabId: string) => {
     const newTabs = tabs.filter(t => t.id !== tabId);
     setTabs(newTabs);
-    
+
     if (activeTabId === tabId) {
       setActiveTabId(newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null);
     }
@@ -121,8 +121,8 @@ export default function App() {
   };
 
   const appendConsole = useCallback((tabId: string, message: string) => {
-    setTabs(prev => prev.map(t => 
-      t.id === tabId 
+    setTabs(prev => prev.map(t =>
+      t.id === tabId
         ? { ...t, consoleOutput: [...t.consoleOutput, `[${new Date().toLocaleTimeString()}] ${message}`] }
         : t
     ));
@@ -226,8 +226,8 @@ export default function App() {
               consoleOutput={activeTab.consoleOutput}
               isDeploying={deploying === activeTab.id}
               onModeChange={(mode) => updateTab(activeTab.id, { mode })}
-              onFormChange={(key, value) => updateTab(activeTab.id, { 
-                formValues: { ...activeTab.formValues, [key]: value } 
+              onFormChange={(key, value) => updateTab(activeTab.id, {
+                formValues: { ...activeTab.formValues, [key]: value }
               })}
               onHostChange={(host) => updateTab(activeTab.id, { selectedHost: host })}
               onExistingUrlChange={(url) => updateTab(activeTab.id, { existingUrl: url })}

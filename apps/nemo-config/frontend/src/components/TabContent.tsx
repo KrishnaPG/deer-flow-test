@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { Server, Link2 } from 'lucide-react';
-import { Template, Mode, ServiceStatus } from '../types';
+import type { Template, Mode, ServiceStatus } from '../definitions';
 import { DeployModeForm } from './DeployModeForm';
 import { ExistingModeForm } from './ExistingModeForm';
 import { DeployButton } from './DeployButton';

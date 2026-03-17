@@ -1,5 +1,5 @@
-import { Play, Activity, Server, Link2, CheckCircle } from 'lucide-react';
-import { Template, Mode, ServiceStatus } from '../types';
+import { Play, Activity, Server, Link2 } from 'lucide-react';
+import type { Mode, ServiceStatus } from '../definitions';
 
 interface DeployButtonProps {
   mode: Mode;
@@ -23,9 +23,8 @@ export function DeployButton({
       <button
         onClick={onDeploy}
         disabled={isDeploying}
-        className={`flex items-center gap-2 px-6 py-2.5 rounded-md shadow-sm text-sm font-medium text-white transition-colors ${
-          isHealthy ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-        } disabled:opacity-50`}
+        className={`flex items-center gap-2 px-6 py-2.5 rounded-md shadow-sm text-sm font-medium text-white transition-colors ${isHealthy ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+          } disabled:opacity-50`}
       >
         {isDeploying ? (
           <><Activity size={16} className="animate-spin" /> {mode === 'deploy' ? 'Deploying...' : 'Registering...'}</>
