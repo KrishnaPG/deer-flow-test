@@ -2,6 +2,7 @@ name: "LiveKit (WebRTC Audio/Video)"
 id: "livekit"
 icon: "message-square"
 default_port: 7880
+connection_url_pattern: "wss://${HOST}:7880"
 env_vars:
   - key: LIVEKIT_API_KEY
     description: "API Key"

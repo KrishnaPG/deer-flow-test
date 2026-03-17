@@ -8,18 +8,31 @@ import { connect, StringCodec } from "nats";
 const execAsync = promisify(exec);
 const sc = StringCodec();
 
+const KV_BUCKET = "deer_flow_config";
+
 export interface DeployRequest {
-  target_host: string; // 'localhost' or an ssh host entry
+  target_host: string;
   service_id: string;
   template: any;
   env_values: Record<string, string>;
-  nats_url: string; // the bootstrap node
+  nats_url: string;
+  mode: 'deploy' | 'existing'; // NEW: deploy = docker, existing = register URL
+}
+
+export interface RegisterExistingRequest {
+  service_id: string;
+  connection_url: string;
+  nats_url: string;
+  metadata?: Record<string, string>; // For extra fields like access_key/secret_key
 }
 
 export async function deployService(req: DeployRequest) {
+  if (req.mode === 'existing') {
+    throw new Error("Use registerExistingInstance for existing mode");
+  }
+
   console.log(`[Deploy] Initiating deploy for ${req.service_id} to ${req.target_host}`);
   
-  // 1. Substitute Environment Variables into the Docker Compose template
   let composeStr = req.template.docker_compose;
   for (const [key, value] of Object.entries(req.env_values)) {
     composeStr = composeStr.replace(new RegExp(`\\$\\{${key}\\}`, "g"), value);
@@ -28,90 +41,154 @@ export async function deployService(req: DeployRequest) {
   const tmpFile = resolve(import.meta.dir, `../../.tmp_${req.service_id}.yml`);
   
   try {
-    // 2. Write substituted compose file locally
     await writeFile(tmpFile, composeStr);
     
-    // 3. Execute via SSH or Localhost
     const remoteDir = `/opt/nemo/${req.service_id}`;
     let command = "";
     
     if (req.target_host === "localhost") {
       command = `mkdir -p ${remoteDir} && cp ${tmpFile} ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d`;
     } else {
-      // Stream the file over SSH and execute
       command = `cat ${tmpFile} | ssh ${req.target_host} "mkdir -p ${remoteDir} && cat > ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d"`;
     }
 
-    console.log(`[Deploy] Executing: ${command.replace(/cat .* \|/, "cat <template> |")}`); // Hide exact path in logs
+    console.log(`[Deploy] Executing: ${command.replace(/cat .* \\|/, "cat <template> |")}`);
     
     const { stdout, stderr } = await execAsync(command);
     console.log(`[Deploy] Success output: ${stdout}`);
     if (stderr) console.warn(`[Deploy] Warning output: ${stderr}`);
 
-    // 4. Update NATS KV
-    await updateNatsKV(req);
+    // Build connection URL from deployed service
+    const connectionUrl = buildConnectionUrl(req.service_id, req.target_host, req.env_values);
+    await updateNatsKV(req.nats_url, req.service_id, connectionUrl, req.target_host, req.env_values);
 
     return { success: true, message: `Deployed ${req.service_id} to ${req.target_host}` };
   } catch (error: any) {
     console.error(`[Deploy] Error: ${error.message}`);
     throw error;
   } finally {
-    // Cleanup tmp file
     await unlink(tmpFile).catch(() => {});
   }
 }
 
-async function updateNatsKV(req: DeployRequest) {
-  try {
-    console.log(`[NATS] Connecting to ${req.nats_url}`);
-    const nc = await connect({ servers: req.nats_url });
-    const jsm = await nc.jetstreamManager();
-    const js = nc.jetstream();
+export async function registerExistingInstance(req: RegisterExistingRequest) {
+  console.log(`[Register] Registering existing ${req.service_id} at ${req.connection_url}`);
+  
+  await updateNatsKV(
+    req.nats_url, 
+    req.service_id, 
+    req.connection_url, 
+    'external', 
+    req.metadata || {}
+  );
 
-    // Ensure Bucket Exists
-    const bucketName = "deer_flow_config";
-    try {
-      await jsm.kv.create({ name: bucketName });
-      console.log(`[NATS] KV Bucket ${bucketName} ensured.`);
-    } catch (e: any) {
-      if (!e.message.includes("already exists")) {
-        throw e;
+  return { success: true, message: `Registered existing ${req.service_id}` };
+}
+
+export async function getAllConfigFromNats(natsUrl: string): Promise<Record<string, string>> {
+  console.log(`[NATS] Fetching all config from ${natsUrl}`);
+  const nc = await connect({ servers: natsUrl });
+  const js = nc.jetstream();
+  
+  try {
+    const kv = await js.views.kv(KV_BUCKET);
+    const configs: Record<string, string> = {};
+    
+    // Watch all keys and collect them
+    const iter = await kv.watch();
+    for await (const entry of iter) {
+      if (entry.operation === "PUT") {
+        configs[entry.key] = sc.decode(entry.value);
       }
     }
-
-    const kv = await js.views.kv(bucketName);
-    
-    // Create the connection string based on the service type
-    let connectionUrl = "";
-    
-    // Resolve IP if localhost, else use the ssh host (assuming ssh host resolves locally or we use tailscale)
-    // A more robust implementation would resolve the target_host to its actual Wireguard IP.
-    // For now, if it's localhost we use 127.0.0.1, otherwise we trust the target_host name.
-    const ip = req.target_host === "localhost" ? "127.0.0.1" : req.target_host;
-    
-    if (req.service_id === "postgres") {
-      connectionUrl = `postgres://${req.env_values.POSTGRES_USER}:${req.env_values.POSTGRES_PASSWORD}@${ip}:5432/state_server`;
-    } else if (req.service_id === "minio") {
-      connectionUrl = `http://${ip}:9000`;
-      // Also need to store creds separately or in URL depending on SDK
-      await kv.put("minio.access_key", sc.encode(req.env_values.MINIO_ROOT_USER));
-      await kv.put("minio.secret_key", sc.encode(req.env_values.MINIO_ROOT_PASSWORD));
-    } else if (req.service_id === "redis") {
-      connectionUrl = `redis://${ip}:6379`;
-    }
-
-    if (connectionUrl) {
-      const key = `${req.service_id}.url`;
-      await kv.put(key, sc.encode(connectionUrl));
-      console.log(`[NATS] Wrote ${key} to KV store.`);
-    }
-
-    // NATS KV Memory (Option D) - Remember the last used host
-    await kv.put(`nemo_metadata.${req.service_id}_last_host`, sc.encode(req.target_host));
     
     await nc.drain();
+    return configs;
   } catch (error: any) {
-    console.error(`[NATS] Error updating KV: ${error.message}`);
+    await nc.drain();
+    if (error.message?.includes("bucket not found")) {
+      return {}; // Bucket doesn't exist yet
+    }
     throw error;
   }
+}
+
+function buildConnectionUrl(
+  serviceId: string, 
+  targetHost: string, 
+  envValues: Record<string, string>
+): string {
+  const ip = targetHost === "localhost" ? "127.0.0.1" : targetHost;
+  
+  switch (serviceId) {
+    case 'postgres':
+      return `postgres://${envValues.POSTGRES_USER}:${envValues.POSTGRES_PASSWORD}@${ip}:5432/state_server`;
+    case 'minio':
+      return `http://${ip}:9000`;
+    case 'redis':
+      return `redis://${ip}:6379`;
+    case 'nats':
+      return `nats://${ip}:4222`;
+    case 'clickhouse':
+      return `http://${ip}:8123`;
+    case 'temporal':
+      return `${ip}:7233`;
+    case 'livekit':
+      return `wss://${ip}:7880`;
+    case 'signoz':
+      return `http://${ip}:3301`;
+    default:
+      return `${ip}:${envValues.PORT || 'unknown'}`;
+  }
+}
+
+async function updateNatsKV(
+  natsUrl: string,
+  serviceId: string,
+  connectionUrl: string,
+  targetHost: string,
+  envValues: Record<string, string>
+) {
+  console.log(`[NATS] Connecting to ${natsUrl}`);
+  const nc = await connect({ servers: natsUrl });
+  const jsm = await nc.jetstreamManager();
+  const js = nc.jetstream();
+
+  // Ensure Bucket Exists
+  try {
+    await jsm.kv.create({ name: KV_BUCKET });
+    console.log(`[NATS] KV Bucket ${KV_BUCKET} ensured.`);
+  } catch (e: any) {
+    if (!e.message.includes("already exists")) {
+      throw e;
+    }
+  }
+
+  const kv = await js.views.kv(KV_BUCKET);
+  
+  // Store the connection URL
+  const urlKey = `${serviceId}.url`;
+  await kv.put(urlKey, sc.encode(connectionUrl));
+  console.log(`[NATS] Wrote ${urlKey} = ${connectionUrl}`);
+
+  // Store extra credentials if needed
+  if (serviceId === 'minio') {
+    if (envValues.MINIO_ROOT_USER) {
+      await kv.put("minio.access_key", sc.encode(envValues.MINIO_ROOT_USER));
+    }
+    if (envValues.MINIO_ROOT_PASSWORD) {
+      await kv.put("minio.secret_key", sc.encode(envValues.MINIO_ROOT_PASSWORD));
+    }
+  }
+  
+  if (serviceId === 'postgres') {
+    await kv.put("postgres.user", sc.encode(envValues.POSTGRES_USER || 'admin'));
+    await kv.put("postgres.password", sc.encode(envValues.POSTGRES_PASSWORD || 'password'));
+    await kv.put("postgres.database", sc.encode(envValues.POSTGRES_DB || 'state_server'));
+  }
+
+  // Remember the last used host
+  await kv.put(`nemo_metadata.${serviceId}_last_host`, sc.encode(targetHost));
+  
+  await nc.drain();
 }

@@ -2,6 +2,7 @@ name: "Redis (Hot Lane)"
 id: "redis"
 icon: "activity"
 default_port: 6379
+connection_url_pattern: "redis://${HOST}:6379"
 env_vars: []
 health_check:
   type: "tcp"
