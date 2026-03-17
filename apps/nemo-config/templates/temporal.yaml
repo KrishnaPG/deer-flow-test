@@ -2,6 +2,7 @@ name: "Temporal (Orchestrator)"
 id: "temporal"
 icon: "activity"
 default_port: 7233
+connection_url_pattern: "${HOST}:7233"
 env_vars:
   - key: POSTGRES_URL
     description: "Postgres Connection string for Temporal"

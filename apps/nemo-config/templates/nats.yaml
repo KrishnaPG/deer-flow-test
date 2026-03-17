@@ -2,6 +2,7 @@ name: "NATS JetStream (Bootstrap)"
 id: "nats"
 icon: "message-square"
 default_port: 4222
+connection_url_pattern: "nats://${HOST}:4222"
 env_vars: []
 health_check:
   type: "tcp"

@@ -2,6 +2,7 @@ name: "MinIO (Object Storage)"
 id: "minio"
 icon: "box"
 default_port: 9000
+connection_url_pattern: "http://${HOST}:9000"
 env_vars:
   - key: MINIO_ROOT_USER
     description: "Root Username"

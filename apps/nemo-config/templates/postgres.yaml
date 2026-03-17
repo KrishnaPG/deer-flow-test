@@ -2,6 +2,7 @@ name: "PostgreSQL (pgvector)"
 id: "postgres"
 icon: "database"
 default_port: 5432
+connection_url_pattern: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${HOST}:5432/${POSTGRES_DB}"
 env_vars:
   - key: POSTGRES_USER
     description: "Database User"
@@ -9,6 +10,9 @@ env_vars:
   - key: POSTGRES_PASSWORD
     description: "Database Password"
     secret: true
+  - key: POSTGRES_DB
+    description: "Database Name"
+    default: "state_server"
 health_check:
   type: "tcp"
   port: 5432

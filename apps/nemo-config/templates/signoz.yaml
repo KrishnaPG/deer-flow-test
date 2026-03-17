@@ -2,6 +2,7 @@ name: "SigNoz (Telemetry)"
 id: "signoz"
 icon: "activity"
 default_port: 3301
+connection_url_pattern: "http://${HOST}:3301"
 env_vars: []
 health_check:
   type: "http"
