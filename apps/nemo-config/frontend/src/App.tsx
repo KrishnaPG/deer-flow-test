@@ -147,10 +147,19 @@ export default function App() {
     updateTab(tabId, { testStatus: 'testing', testMessage: undefined });
     appendConsole(tabId, `Testing connection to ${tab.existingUrl}...`);
 
+    // Get the health_check from the template
+    const healthCheck = template.health_check;
+    if (!healthCheck) {
+      updateTab(tabId, { testStatus: 'error', testMessage: 'No health check configuration for this service' });
+      appendConsole(tabId, 'Error: No health check configuration found');
+      return;
+    }
+
     try {
       const res = await axios.post(`${API_URL}/test-connection`, {
         service_id: tabId,
         connection_url: tab.existingUrl,
+        health_check: healthCheck,
         metadata: tab.formValues
       }, { timeout: 15000 });
 
