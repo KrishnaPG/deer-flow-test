@@ -69,7 +69,21 @@ The State Server is explicitly **not** the Source of Truth. It is highly optimiz
 *   **Database View:** ClickHouse instantly sees the new text chunks via its S3 mount. Milvus Sync Workers pull the NATS events and index the Parquet vectors, storing only the float arrays and the `chunk_hash`.
 *   **Stress Point Survived:** The State Server and Databases are protected from massive write contention because Storage absorbs the parallel burst effortlessly, and data duplication is avoided via the 1:N:M Tri-Plane architecture.
 
-### Scenario 2: Right to be Forgotten (Compliance & Immutability)
+### Scenario 2: YouTube Translate + Dub + Lip-Sync
+*ASR -> Translate -> TTS -> Align -> Render pipeline.*
+
+*   **Action:** A complex, multi-stage pipeline transcribes an original L0 video, translates it, synthesizes new audio, and renders a lip-synced composite video tailored for a target culture.
+*   **Data Path (Storage):** Every intermediate artifact is written directly to the Tri-Plane Storage as an immutable record:
+    *   **L0:** Original MP4 video.
+    *   **L1:** Denoised Audio Track (`As-Is`).
+    *   **L2:** ASR Timestamps, Visemes (`Chunks`), Text Embeddings (`Embeddings`).
+    *   **L3:** Translated Glossary, Synthesized Audio Track (`As-Is`).
+    *   **L4:** Final lip-synced composite video MP4 (`As-Is`).
+*   **Data Path (Event Bus):** After writing each L1-L4 artifact, workers publish a URI pointer to NATS. 
+*   **State Server Role:** Listens to NATS to update the UI's progress bars and stage previews (e.g., showing the translated glossary to the operator). Accepts operator overrides (intents) to edit the glossary.
+*   **Stress Point Survived:** **Glossary Edits & Immutability:** If an operator edits the L3 glossary, the system does *not* overwrite the existing L3 artifact. It writes a *new* L3 glossary with a new `as_is_hash` and generates a new branch of the DAG (L4 composite video). The UI seamlessly updates its "published output" pointer to the newest branch, while the old branch remains intact and fully reproducible on Storage.
+
+### Scenario 3: Right to be Forgotten (Compliance & Immutability)
 *A user requests the deletion of a massive, heavily processed L0 document.*
 
 *   **Action:** User clicks "Delete Document" in the UI.
@@ -78,7 +92,7 @@ The State Server is explicitly **not** the Source of Truth. It is highly optimiz
 *   **Database View (Overlay):** ClickHouse and Milvus dynamically construct their "Search Views" using an anti-join or filter against the Exclusions ledger (`WHERE hash NOT IN (SELECT target_hash FROM exclusions)`).
 *   **Stress Point Survived:** The document and all its derivative chunks/embeddings instantly vanish from UI search results and agent context windows, satisfying compliance without violating the append-only, immutable guarantee of the Storage truth.
 
-### Scenario 3: Massive Video Proxying (LakeFS / Streaming)
+### Scenario 4: Massive Video Proxying (LakeFS / Streaming)
 *A user requests to view an original 4GB L0 raw MP4 file.*
 
 *   **Action:** User clicks "View Original Source" in the UI.
@@ -86,7 +100,7 @@ The State Server is explicitly **not** the Source of Truth. It is highly optimiz
 *   **State Server Role:** Validates ABAC permissions, generates a Pre-Signed URL pointing directly to the specific version commit in lakeFS/S3, and returns the URL.
 *   **Stress Point Survived:** The State Server avoids OOM (Out Of Memory) crashes and bandwidth saturation by never proxying large blob traffic.
 
-### Scenario 4: Real-Time Audio/Text Streaming Chat
+### Scenario 5: Real-Time Audio/Text Streaming Chat
 *User speaking to an AI agent with millisecond latency requirements.*
 
 *   **Action:** User initiates a live voice conversation with an AI Agent.
