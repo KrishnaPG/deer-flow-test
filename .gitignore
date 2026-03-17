@@ -47,3 +47,16 @@ venv.bak
 # Local environment files
 .env
 .env.local
+
+# Node & Bun
+node_modules/
+dist/
+build/
+.next/
+out/
+.turbo/
+apps/nemo-config/backend/.tmp_*.yml
+
+# Rust
+target/
+Cargo.lock

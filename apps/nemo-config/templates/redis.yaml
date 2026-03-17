@@ -1,0 +1,14 @@
+name: "Redis (Hot Lane)"
+id: "redis"
+icon: "activity"
+default_port: 6379
+env_vars: []
+health_check:
+  type: "tcp"
+  port: 6379
+docker_compose: |
+  services:
+    redis:
+      image: redis:7-alpine
+      ports:
+        - "6379:6379"
