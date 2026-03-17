@@ -111,6 +111,11 @@ const app = new Elysia()
     body: t.Object({
       service_id: t.String(),
       connection_url: t.String(),
+      health_check: t.Object({
+        type: t.String(),
+        port: t.Number(),
+        path: t.Optional(t.String())
+      }),
       metadata: t.Optional(t.Record(t.String(), t.String()))
     })
   })

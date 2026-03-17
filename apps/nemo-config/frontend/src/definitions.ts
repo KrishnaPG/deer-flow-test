@@ -7,6 +7,12 @@ export const ICONS: Record<string, any> = {
   'message-square': MessageSquare
 };
 
+export interface HealthCheck {
+  type: 'tcp' | 'http';
+  port: number;
+  path?: string;
+}
+
 export interface Template {
   id: string;
   name: string;
@@ -19,6 +25,7 @@ export interface Template {
     default?: string;
     secret?: boolean;
   }>;
+  health_check: HealthCheck;
 }
 
 export type Mode = 'deploy' | 'existing';

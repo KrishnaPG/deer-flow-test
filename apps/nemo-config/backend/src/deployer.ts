@@ -52,7 +52,7 @@ export async function deployService(req: DeployRequest) {
       command = `cat ${tmpFile} | ssh ${req.target_host} "mkdir -p ${remoteDir} && cat > ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d"`;
     }
 
-    console.log(`[Deploy] Executing: ${command.replace(/cat .* \\|/, "cat <template> |")}`);
+    console.log(`[Deploy] Executing: ${command.replace(/cat .* \\/, "cat <template> |")}`);
     
     const { stdout, stderr } = await execAsync(command);
     console.log(`[Deploy] Success output: ${stdout}`);
@@ -193,30 +193,45 @@ async function updateNatsKV(
   await nc.drain();
 }
 
+interface HealthCheck {
+  type: 'tcp' | 'http';
+  port: number;
+  path?: string;
+}
+
 export interface TestConnectionRequest {
   service_id: string;
   connection_url: string;
+  health_check: HealthCheck;
   metadata?: Record<string, string>;
 }
 
 export async function testConnection(req: TestConnectionRequest): Promise<{ success: boolean; message: string; details?: any }> {
   console.log(`[Test] Testing connection to ${req.service_id} at ${req.connection_url}`);
   
-  const url = req.connection_url;
+  const { host, port } = parseHostPortFromUrl(req.connection_url);
+  const healthCheck = req.health_check;
   
   try {
-    // Parse URL to determine connection type
-    if (url.startsWith('postgres://') || url.startsWith('postgresql://')) {
-      return await testPostgresConnection(url);
-    } else if (url.startsWith('redis://') || url.startsWith('rediss://')) {
-      return await testRedisConnection(url);
-    } else if (url.startsWith('http://') || url.startsWith('https://')) {
-      return await testHttpConnection(url);
-    } else if (url.startsWith('nats://')) {
-      return await testNatsConnection(url);
+    if (healthCheck.type === 'tcp') {
+      return await testTcpConnection(host, healthCheck.port);
+    } else if (healthCheck.type === 'http') {
+      const path = healthCheck.path || '/';
+      // Build HTTP URL from connection URL
+      let httpUrl: string;
+      if (req.connection_url.startsWith('http://') || req.connection_url.startsWith('https://')) {
+        // Replace the port and path in the URL
+        const parsed = new URL(req.connection_url);
+        parsed.port = healthCheck.port.toString();
+        parsed.pathname = path;
+        httpUrl = parsed.toString();
+      } else {
+        // Default to http if no protocol specified
+        httpUrl = `http://${host}:${healthCheck.port}${path}`;
+      }
+      return await testHttpConnection(httpUrl);
     } else {
-      // Try TCP connection for unknown protocols
-      return await testTcpConnection(url);
+      throw new Error(`Unknown health check type: ${healthCheck.type}`);
     }
   } catch (error: any) {
     console.error(`[Test] Connection test failed: ${error.message}`);
@@ -228,172 +243,49 @@ export async function testConnection(req: TestConnectionRequest): Promise<{ succ
   }
 }
 
-async function testPostgresConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
+async function testTcpConnection(host: string, port: number): Promise<{ success: boolean; message: string; details?: any }> {
   try {
-    // Use pg_isready if available, otherwise use a simple TCP check
-    const { host, port } = parseHostPortFromUrl(url);
-    
-    // Try TCP connection first
-    const net = await import('net');
-    await new Promise<void>((resolve, reject) => {
-      const socket = net.createConnection({ host, port: port || 5432 }, () => {
-        socket.end();
-        resolve();
-      });
-      socket.setTimeout(5000);
-      socket.on('error', reject);
-      socket.on('timeout', () => {
-        socket.destroy();
-        reject(new Error('Connection timeout'));
-      });
-    });
+    // Use netcat (nc) to test TCP connection
+    const command = `nc -z -w 5 ${host} ${port}`;
+    await execAsync(command);
     
     return { 
       success: true, 
-      message: 'Successfully connected to PostgreSQL',
-      details: { host, port: port || 5432 }
+      message: `TCP connection successful to ${host}:${port}`,
+      details: { host, port, command }
     };
   } catch (error: any) {
     return { 
       success: false, 
-      message: `PostgreSQL connection failed: ${error.message}`,
-      details: { error: error.message }
-    };
-  }
-}
-
-async function testRedisConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
-  try {
-    const { host, port } = parseHostPortFromUrl(url);
-    
-    const net = await import('net');
-    await new Promise<void>((resolve, reject) => {
-      const socket = net.createConnection({ host, port: port || 6379 }, () => {
-        socket.end();
-        resolve();
-      });
-      socket.setTimeout(5000);
-      socket.on('error', reject);
-      socket.on('timeout', () => {
-        socket.destroy();
-        reject(new Error('Connection timeout'));
-      });
-    });
-    
-    return { 
-      success: true, 
-      message: 'Successfully connected to Redis',
-      details: { host, port: port || 6379 }
-    };
-  } catch (error: any) {
-    return { 
-      success: false, 
-      message: `Redis connection failed: ${error.message}`,
-      details: { error: error.message }
+      message: `TCP connection failed to ${host}:${port}: ${error.message}`,
+      details: { host, port, error: error.message }
     };
   }
 }
 
 async function testHttpConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
   try {
-    const response = await fetch(url, { 
-      method: 'GET',
-      signal: AbortSignal.timeout(10000)
-    });
+    // Use curl to test HTTP connection
+    // -f flag makes curl return error on HTTP error codes (4xx, 5xx)
+    // -s silent mode
+    // -o /dev/null discard output
+    // --connect-timeout 5 connection timeout
+    // --max-time 10 max time for request
+    const command = `curl -f -s -o /dev/null --connect-timeout 5 --max-time 10 "${url}"`;
+    await execAsync(command);
     
     return { 
       success: true, 
-      message: `HTTP connection successful (status: ${response.status})`,
-      details: { 
-        status: response.status,
-        statusText: response.statusText,
-        url: url 
-      }
+      message: `HTTP connection successful to ${url}`,
+      details: { url, command }
     };
   } catch (error: any) {
-    // For services like MinIO, they might return an error but still be reachable
-    if (error.message?.includes('fetch failed') || error.message?.includes('ECONNREFUSED')) {
-      return { 
-        success: false, 
-        message: `HTTP connection failed: Unable to reach ${url}`,
-        details: { error: error.message }
-      };
-    }
-    
-    // Some services are reachable but return errors (auth required, etc.)
-    return { 
-      success: true, 
-      message: `Service is reachable (returned error: ${error.message})`,
-      details: { 
-        reachable: true,
-        error: error.message 
-      }
-    };
-  }
-}
-
-async function testNatsConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
-  try {
-    const nc = await connect({ 
-      servers: url,
-      timeout: 5000
-    });
-    await nc.jetstreamManager();
-    await nc.drain();
-    
-    return { 
-      success: true, 
-      message: 'Successfully connected to NATS',
-      details: { url }
-    };
-  } catch (error: any) {
+    // curl returns non-zero exit code even if server responds with error status
+    // but we're using -f so any HTTP error is treated as failure
     return { 
       success: false, 
-      message: `NATS connection failed: ${error.message}`,
-      details: { error: error.message }
-    };
-  }
-}
-
-async function testTcpConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
-  try {
-    // Parse host:port format
-    const match = url.match(/^([^:]+):(\d+)$/);
-    if (!match) {
-      return { 
-        success: false, 
-        message: `Unable to parse connection URL: ${url}. Expected format: host:port`,
-        details: { url }
-      };
-    }
-    
-    const [, host, portStr] = match;
-    const port = parseInt(portStr, 10);
-    
-    const net = await import('net');
-    await new Promise<void>((resolve, reject) => {
-      const socket = net.createConnection({ host, port }, () => {
-        socket.end();
-        resolve();
-      });
-      socket.setTimeout(5000);
-      socket.on('error', reject);
-      socket.on('timeout', () => {
-        socket.destroy();
-        reject(new Error('Connection timeout'));
-      });
-    });
-    
-    return { 
-      success: true, 
-      message: `Successfully connected to ${host}:${port}`,
-      details: { host, port }
-    };
-  } catch (error: any) {
-    return { 
-      success: false, 
-      message: `TCP connection failed: ${error.message}`,
-      details: { error: error.message }
+      message: `HTTP connection failed to ${url}: ${error.message}`,
+      details: { url, error: error.message }
     };
   }
 }
@@ -407,13 +299,23 @@ function parseHostPortFromUrl(url: string): { host: string; port?: number } {
     };
   } catch {
     // Fallback for URLs that might not parse with URL constructor
-    const match = url.match(/@([^:]+):(\d+)\//);
-    if (match) {
-      return {
-        host: match[1],
-        port: parseInt(match[2], 10)
-      };
+    // Try to extract host:port from various URL formats
+    const patterns = [
+      /@([^:]+):(\d+)\//,  // postgres://user:pass@host:port/db
+      /:\/\/([^:]+):(\d+)/, // protocol://host:port
+      /^([^:]+):(\d+)$/     // host:port
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) {
+        return {
+          host: match[1],
+          port: parseInt(match[2], 10)
+        };
+      }
     }
+    
     throw new Error(`Could not parse host and port from URL: ${url}`);
   }
 }
