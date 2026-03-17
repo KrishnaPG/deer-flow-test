@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import type { Template, ServiceStatus, Mode } from './definitions';
+import type { TestStatus } from './components/ExistingModeForm';
 type NatsStatus = 'connected' | 'disconnected' | 'checking';
 import { useNatsUrl } from './hooks/useNatsUrl';
 import { Header } from './components/Header';
@@ -19,6 +20,8 @@ interface TabState {
   selectedHost: string;
   existingUrl: string;
   consoleOutput: string[];
+  testStatus: TestStatus;
+  testMessage?: string;
 }
 
 export default function App() {
@@ -100,7 +103,9 @@ export default function App() {
       formValues,
       selectedHost: 'localhost',
       existingUrl,
-      consoleOutput: []
+      consoleOutput: [],
+      testStatus: 'idle',
+      testMessage: undefined
     };
 
     setTabs([...tabs, newTab]);
@@ -128,10 +133,57 @@ export default function App() {
     ));
   }, []);
 
+  const handleTestConnection = async (tabId: string) => {
+    const tab = tabs.find(t => t.id === tabId);
+    const template = templates.find(t => t.id === tabId);
+    if (!tab || !template) return;
+
+    if (!tab.existingUrl.trim()) {
+      updateTab(tabId, { testStatus: 'error', testMessage: 'Please enter a connection URL' });
+      appendConsole(tabId, 'Error: No connection URL provided');
+      return;
+    }
+
+    updateTab(tabId, { testStatus: 'testing', testMessage: undefined });
+    appendConsole(tabId, `Testing connection to ${tab.existingUrl}...`);
+
+    try {
+      const res = await axios.post(`${API_URL}/test-connection`, {
+        service_id: tabId,
+        connection_url: tab.existingUrl,
+        metadata: tab.formValues
+      }, { timeout: 15000 });
+
+      if (res.data.success) {
+        updateTab(tabId, { 
+          testStatus: 'success', 
+          testMessage: res.data.message || 'Connection successful' 
+        });
+        appendConsole(tabId, `✓ Connection test successful: ${res.data.message}`);
+      } else {
+        updateTab(tabId, { 
+          testStatus: 'error', 
+          testMessage: res.data.message || 'Connection failed' 
+        });
+        appendConsole(tabId, `✗ Connection test failed: ${res.data.message}`);
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Connection test failed';
+      updateTab(tabId, { testStatus: 'error', testMessage: errorMsg });
+      appendConsole(tabId, `✗ Connection test error: ${errorMsg}`);
+    }
+  };
+
   const handleDeploy = async (tabId: string) => {
     const tab = tabs.find(t => t.id === tabId);
     const template = templates.find(t => t.id === tabId);
     if (!tab || !template) return;
+
+    // For existing mode, require successful test first
+    if (tab.mode === 'existing' && tab.testStatus !== 'success') {
+      appendConsole(tabId, 'Error: Please test the connection successfully before registering');
+      return;
+    }
 
     setDeploying(tabId);
     setStatus(prev => ({ ...prev, [tabId]: 'deploying' }));
@@ -159,8 +211,9 @@ export default function App() {
       }
 
       setStatus(prev => ({ ...prev, [tabId]: 'healthy' }));
-    } catch (err: any) {
-      appendConsole(tabId, `Error: ${err.message || 'Deployment failed'}`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
+      appendConsole(tabId, `Error: ${errorMessage}`);
       setStatus(prev => ({ ...prev, [tabId]: 'unconfigured' }));
     } finally {
       setDeploying(null);
@@ -178,7 +231,7 @@ export default function App() {
       a.href = url;
       a.download = '.env.export';
       a.click();
-    } catch (err) {
+    } catch {
       alert('Failed to export config. Is NATS running?');
     }
   };
@@ -225,12 +278,22 @@ export default function App() {
               hosts={hosts}
               consoleOutput={activeTab.consoleOutput}
               isDeploying={deploying === activeTab.id}
-              onModeChange={(mode) => updateTab(activeTab.id, { mode })}
+              testStatus={activeTab.testStatus}
+              testMessage={activeTab.testMessage}
+              onModeChange={(mode) => {
+                // Reset test status when switching modes
+                const resetTest = mode === 'existing' ? {} : { testStatus: 'idle' as TestStatus, testMessage: undefined };
+                updateTab(activeTab.id, { mode, ...resetTest });
+              }}
               onFormChange={(key, value) => updateTab(activeTab.id, {
                 formValues: { ...activeTab.formValues, [key]: value }
               })}
               onHostChange={(host) => updateTab(activeTab.id, { selectedHost: host })}
-              onExistingUrlChange={(url) => updateTab(activeTab.id, { existingUrl: url })}
+              onExistingUrlChange={(url) => {
+                // Reset test status when URL changes
+                updateTab(activeTab.id, { existingUrl: url, testStatus: 'idle', testMessage: undefined });
+              }}
+              onTestConnection={() => handleTestConnection(activeTab.id)}
               onDeploy={() => handleDeploy(activeTab.id)}
             />
           ) : (

@@ -192,3 +192,228 @@ async function updateNatsKV(
   
   await nc.drain();
 }
+
+export interface TestConnectionRequest {
+  service_id: string;
+  connection_url: string;
+  metadata?: Record<string, string>;
+}
+
+export async function testConnection(req: TestConnectionRequest): Promise<{ success: boolean; message: string; details?: any }> {
+  console.log(`[Test] Testing connection to ${req.service_id} at ${req.connection_url}`);
+  
+  const url = req.connection_url;
+  
+  try {
+    // Parse URL to determine connection type
+    if (url.startsWith('postgres://') || url.startsWith('postgresql://')) {
+      return await testPostgresConnection(url);
+    } else if (url.startsWith('redis://') || url.startsWith('rediss://')) {
+      return await testRedisConnection(url);
+    } else if (url.startsWith('http://') || url.startsWith('https://')) {
+      return await testHttpConnection(url);
+    } else if (url.startsWith('nats://')) {
+      return await testNatsConnection(url);
+    } else {
+      // Try TCP connection for unknown protocols
+      return await testTcpConnection(url);
+    }
+  } catch (error: any) {
+    console.error(`[Test] Connection test failed: ${error.message}`);
+    return { 
+      success: false, 
+      message: `Connection test failed: ${error.message}`,
+      details: { error: error.message }
+    };
+  }
+}
+
+async function testPostgresConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
+  try {
+    // Use pg_isready if available, otherwise use a simple TCP check
+    const { host, port } = parseHostPortFromUrl(url);
+    
+    // Try TCP connection first
+    const net = await import('net');
+    await new Promise<void>((resolve, reject) => {
+      const socket = net.createConnection({ host, port: port || 5432 }, () => {
+        socket.end();
+        resolve();
+      });
+      socket.setTimeout(5000);
+      socket.on('error', reject);
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error('Connection timeout'));
+      });
+    });
+    
+    return { 
+      success: true, 
+      message: 'Successfully connected to PostgreSQL',
+      details: { host, port: port || 5432 }
+    };
+  } catch (error: any) {
+    return { 
+      success: false, 
+      message: `PostgreSQL connection failed: ${error.message}`,
+      details: { error: error.message }
+    };
+  }
+}
+
+async function testRedisConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
+  try {
+    const { host, port } = parseHostPortFromUrl(url);
+    
+    const net = await import('net');
+    await new Promise<void>((resolve, reject) => {
+      const socket = net.createConnection({ host, port: port || 6379 }, () => {
+        socket.end();
+        resolve();
+      });
+      socket.setTimeout(5000);
+      socket.on('error', reject);
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error('Connection timeout'));
+      });
+    });
+    
+    return { 
+      success: true, 
+      message: 'Successfully connected to Redis',
+      details: { host, port: port || 6379 }
+    };
+  } catch (error: any) {
+    return { 
+      success: false, 
+      message: `Redis connection failed: ${error.message}`,
+      details: { error: error.message }
+    };
+  }
+}
+
+async function testHttpConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
+  try {
+    const response = await fetch(url, { 
+      method: 'GET',
+      signal: AbortSignal.timeout(10000)
+    });
+    
+    return { 
+      success: true, 
+      message: `HTTP connection successful (status: ${response.status})`,
+      details: { 
+        status: response.status,
+        statusText: response.statusText,
+        url: url 
+      }
+    };
+  } catch (error: any) {
+    // For services like MinIO, they might return an error but still be reachable
+    if (error.message?.includes('fetch failed') || error.message?.includes('ECONNREFUSED')) {
+      return { 
+        success: false, 
+        message: `HTTP connection failed: Unable to reach ${url}`,
+        details: { error: error.message }
+      };
+    }
+    
+    // Some services are reachable but return errors (auth required, etc.)
+    return { 
+      success: true, 
+      message: `Service is reachable (returned error: ${error.message})`,
+      details: { 
+        reachable: true,
+        error: error.message 
+      }
+    };
+  }
+}
+
+async function testNatsConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
+  try {
+    const nc = await connect({ 
+      servers: url,
+      timeout: 5000
+    });
+    await nc.jetstreamManager();
+    await nc.drain();
+    
+    return { 
+      success: true, 
+      message: 'Successfully connected to NATS',
+      details: { url }
+    };
+  } catch (error: any) {
+    return { 
+      success: false, 
+      message: `NATS connection failed: ${error.message}`,
+      details: { error: error.message }
+    };
+  }
+}
+
+async function testTcpConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
+  try {
+    // Parse host:port format
+    const match = url.match(/^([^:]+):(\d+)$/);
+    if (!match) {
+      return { 
+        success: false, 
+        message: `Unable to parse connection URL: ${url}. Expected format: host:port`,
+        details: { url }
+      };
+    }
+    
+    const [, host, portStr] = match;
+    const port = parseInt(portStr, 10);
+    
+    const net = await import('net');
+    await new Promise<void>((resolve, reject) => {
+      const socket = net.createConnection({ host, port }, () => {
+        socket.end();
+        resolve();
+      });
+      socket.setTimeout(5000);
+      socket.on('error', reject);
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error('Connection timeout'));
+      });
+    });
+    
+    return { 
+      success: true, 
+      message: `Successfully connected to ${host}:${port}`,
+      details: { host, port }
+    };
+  } catch (error: any) {
+    return { 
+      success: false, 
+      message: `TCP connection failed: ${error.message}`,
+      details: { error: error.message }
+    };
+  }
+}
+
+function parseHostPortFromUrl(url: string): { host: string; port?: number } {
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port, 10) : undefined
+    };
+  } catch {
+    // Fallback for URLs that might not parse with URL constructor
+    const match = url.match(/@([^:]+):(\d+)\//);
+    if (match) {
+      return {
+        host: match[1],
+        port: parseInt(match[2], 10)
+      };
+    }
+    throw new Error(`Could not parse host and port from URL: ${url}`);
+  }
+}
