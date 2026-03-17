@@ -1,0 +1,29 @@
+name: "ClickHouse (OLAP View)"
+id: "clickhouse"
+icon: "database"
+default_port: 8123
+env_vars:
+  - key: CLICKHOUSE_USER
+    description: "Database User"
+    default: "default"
+  - key: CLICKHOUSE_PASSWORD
+    description: "Database Password"
+    secret: true
+health_check:
+  type: "http"
+  port: 8123
+  path: "/ping"
+docker_compose: |
+  services:
+    clickhouse:
+      image: clickhouse/clickhouse-server:latest
+      environment:
+        CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+        CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      ports:
+        - "8123:8123"
+        - "9000:9000"
+      volumes:
+        - clickhouse_data:/var/lib/clickhouse
+  volumes:
+    clickhouse_data:

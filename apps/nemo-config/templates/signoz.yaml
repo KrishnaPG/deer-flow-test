@@ -1,0 +1,23 @@
+name: "SigNoz (Telemetry)"
+id: "signoz"
+icon: "activity"
+default_port: 3301
+env_vars: []
+health_check:
+  type: "http"
+  port: 3301
+  path: "/"
+docker_compose: |
+  # SigNoz is complex; usually we pull their deploy repo.
+  # For nemo-config, we'll provide a simplified 'all-in-one' or point to their single-node script.
+  # This is a placeholder for the massive SigNoz compose file.
+  services:
+    signoz-frontend:
+      image: signoz/frontend:latest
+      ports:
+        - "3301:3301"
+    otel-collector:
+      image: signoz/signoz-otel-collector:latest
+      ports:
+        - "4317:4317" # OTLP gRPC
+        - "4318:4318" # OTLP HTTP

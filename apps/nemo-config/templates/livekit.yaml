@@ -1,0 +1,25 @@
+name: "LiveKit (WebRTC Audio/Video)"
+id: "livekit"
+icon: "message-square"
+default_port: 7880
+env_vars:
+  - key: LIVEKIT_API_KEY
+    description: "API Key"
+    default: "devkey"
+  - key: LIVEKIT_API_SECRET
+    description: "API Secret"
+    secret: true
+    default: "secret"
+health_check:
+  type: "http"
+  port: 7880
+  path: "/"
+docker_compose: |
+  services:
+    livekit:
+      image: livekit/livekit-server:latest
+      command: --dev --keys "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      ports:
+        - "7880:7880"
+        - "7881:7881"
+        - "50000-50200:50000-50200/udp"
