@@ -7,3 +7,9 @@
 [submodule "3rdParty/rowboat"]
 	path = 3rdParty/rowboat
 	url = https://github.com/rowboatlabs/rowboat.git
+[submodule "3rdParty/PocketFlow"]
+	path = 3rdParty/PocketFlow
+	url = https://github.com/The-Pocket/PocketFlow.git
+[submodule "3rdParty/claude-prism"]
+	path = 3rdParty/claude-prism
+	url = https://github.com/delibae/claude-prism.git
