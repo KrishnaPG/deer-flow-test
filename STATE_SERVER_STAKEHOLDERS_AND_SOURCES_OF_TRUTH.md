@@ -12,11 +12,11 @@ To prevent the State Server from becoming a write bottleneck, to ensure ultra-lo
     *   **As-Is Plane (1):** The actual canonical data (raw video, chat JSON, OCR text, synthesized Markdown). Identified by `as_is_hash = SHA256(payload)`.
     *   **Chunks Plane (N):** The segmented data derived from the As-Is plane. Stores the chunk payload and is identified by `chunk_hash = SHA256(as_is_hash + chunking_strategy + chunk_index)`.
     *   **Embeddings Plane (M):** The mathematical vector representations of the Chunks. **Strict Rule:** This plane *only* stores the vector array and the pointer (`chunk_hash`) back to the Chunks plane. It never duplicates the payload text.
-4. **Internal Write Path (The Storage Service & Dual-Dispatch):** AI agents and workers are "thin clients". They do not manage S3 connections or retries. Instead, they send write requests to a centralized **Storage Service**. The Storage Service implements a **Dual-Dispatch pattern**: it accepts the file into a reliable persistent queue and *in parallel* emits an event to the Event Bus.
-5. **The Event Bus (WAL / Claim Check):** Parallel to the persistent queue, lightweight notification events are published to NATS JetStream. Small payloads (chat tokens) are embedded directly in the event; large payloads emit stateful progress URIs (`WriteStarted`, `WriteProgress`, `ArtifactCreated`).
-6. **Databases as Views (Read/Compute Plane):** Databases (ClickHouse/Milvus) are purely projections, views, and search indexes built on top of the Storage truth. ClickHouse mounts the Storage data lake directly, while Milvus is populated asynchronously via internal Sync Workers.
-7. **External Read Path (Mediated):** Any external entity (UI, Control Center, Observers) **must** route reads through the State Server acting as the strict **ABAC** gatekeeper.
-8. **External Write Path (Intents):** External human commands/intents go through the State Server for immediate ABAC validation, then handed to the Storage Service to document the intent into Storage and publish to the Event Bus.
+15. **Internal Write Path (The Storage Service & Dual-Dispatch):** AI agents and workers are "thin clients". They do not manage S3 connections or retries. Instead, they send write requests to a centralized **Storage Service**. The Storage Service implements a **Dual-Dispatch pattern**: it accepts the file into a reliable persistent queue (powered by NATS JetStream acting as the local fast queue) and *in parallel* emits an event to the Event Bus.
+16. **The Event Bus (WAL / Claim Check):** Parallel to the persistent queue, lightweight notification events are published to NATS JetStream. Small payloads (chat tokens) are embedded directly in the event; large payloads emit stateful progress URIs (`WriteStarted`, `WriteProgress`, `ArtifactCreated`).
+17. **Databases as Views (Read/Compute Plane):** Databases (ClickHouse/Milvus) are purely projections, views, and search indexes built on top of the Storage truth. ClickHouse mounts the Storage data lake directly, while Milvus is populated asynchronously via internal Sync Workers.
+18. **External Read Path (Mediated):** Any external entity (UI, Control Center, Observers) **must** route reads through the State Server acting as the strict **ABAC** gatekeeper.
+19. **External Write Path (Intents):** External human commands/intents go through the State Server for immediate ABAC validation, then handed to the Storage Service to document the intent into Storage and publish to the Event Bus.
 
 ---
 
@@ -54,8 +54,9 @@ To prevent the State Server from becoming a write bottleneck, to ensure ultra-lo
 
 The Storage Service dictates how data moves depending on the required latency and interaction type.
 
-### The Storage Service & Dual-Dispatch
-*   **Small Payloads (<1MB):** Written directly to local fast queue. Full payload emitted to NATS in parallel.
+### The Storage Service & Dual-Dispatch (Stateless Ingress)
+The Storage Service acts as a highly optimized, stateless router (e.g., written in Rust). It delegates the "local fast queue" responsibility to NATS JetStream, allowing it to instantly acknowledge ingest requests without managing an embedded disk WAL.
+*   **Small Payloads (<1MB):** Written directly to a NATS JetStream ingress queue. Full payload emitted to the NATS Event Bus in parallel. Background workers pull from the ingress queue, micro-batch the data into highly-optimized Parquet/JSONL files, and push to S3.
 *   **Large Payloads (>1MB):** Written to temp S3. Queue receives task pointer. NATS emits progress events (`WriteStarted`, `WriteProgress: 45%`). Background workers commit via S3 idempotent rename (`CopyObject`/`DeleteObject`) and emit final `ArtifactCreated` (100% Ready) URI.
 
 ### HITL: Human-In-The-Loop (Interactive / Synchronous)
@@ -124,3 +125,30 @@ The State Server is explicitly **not** the Source of Truth. It is highly optimiz
 *   **Data Path (Media):** Direct WebRTC connection via LiveKit (sub-50ms latency). LiveKit Egress independently records the raw session to an S3 "landing zone" for later Hash & Promote to L0 truth by the Storage Service.
 *   **Data Path (Text/Data):** AI Agent streams text to the Storage Service. The "Stream-Tee" instantly pushes tokens to NATS for real-time UI display, while micro-batching sentences to S3 in the background.
 *   **Stress Point Survived:** Absolute low-latency HITL interaction while preserving strict "Storage-Native" truth, completely offloading the transport layer, and keeping AI Agents extremely "thin".
+---
+
+## 7. Orchestration, Observability, and Operations
+
+While the Storage Service handles truth and ingestion, the orchestration of agents, policy enforcement, and system observability rely on a specific stack of permissive open-source tools.
+
+### Orchestration & Runtime Plumbing
+*   **Temporal (MIT):** Handles durable workflows, retries, timers, and approval gates. Used exclusively for orchestrating the *logic* of the agents and pipelines, not for transporting large payloads or telemetry.
+*   **Dapr (Apache-2.0):** Sidecars deployed alongside every polyglot microservice (Rust, Python, Node). Provides mTLS, service invocation, and pub/sub bindings, ensuring agents can emit/consume consistent events over zero-trust lanes without embedding custom network SDKs.
+
+### Memory & Retrieval Stack (Cognitive Tiers)
+To support the State Server's caching and the AI Agents' context windows, the system utilizes a layered memory approach:
+*   **Hot Lane (Redis):** Working set per mission (scene graph deltas, recent human prompts, short token windows). Holds the leadership lease (fencing tokens) for active State Server replicas.
+*   **Warm Lane (Postgres + pgvector):** Mission/session metadata, RBAC definitions, structured tool outputs, and embedding shards for the most recent cycle. Acts as the fast lookup cache before querying the cold vector store.
+*   **Cold Lane (Iceberg / Milvus):** The durable, append-only Tri-Plane data residing on S3, queryable via ClickHouse and Milvus.
+
+### Operational Guardrails & Security
+*   **Canonical State Model (Event Sourced):** The State Server is strictly event-sourced. Commands append new events to the log. Snapshots are checkpointed per mission ID in Postgres/Redis, allowing reconnecting clients to replay from the last acknowledged cursor.
+*   **High Availability:** Active/active State Server replicas deploy behind sticky load balancing. Only a single replica per mission holds the Redis leadership lease. On failover, followers load the latest snapshot and replay the diff log before resuming emission.
+*   **Security & ABAC:** Mutual TLS everywhere via Dapr and Envoy. JWT-based auth for humans; SPIFFE/SPIRE IDs for services. ABAC policies are evaluated using **Casbin** (backed by Postgres) before any state append is permitted.
+*   **Backpressure & Load Shedding:** Under overload, the system prioritizes operator sessions over observability. It dynamically parks non-critical Temporal workflows and downsamples observer UI diffs to maintain operator stability.
+
+### Observability & Telemetry
+*   **The Correlation Contract:** Every event, span, and log MUST carry: `mission_id`, `run_id`, `agent_id`, `artifact_id`, and `trace_id`.
+*   **Trace Backbone:** OpenTelemetry (OTEL) spans from UI prompt → State Server intent → Temporal workflow steps → downstream Dapr services. Exported to ClickHouse via SigNoz/Tempo.
+*   **LLM Metrics:** **Langfuse (MIT)** captures latency, cost, and token usage per model call.
+*   **Artifact Lineage:** Every artifact tier mutation emits to NATS and lands in Iceberg `lineage_events`, allowing UI dashboards to show the complete `prompt -> agent -> artifact -> memory` chain.
