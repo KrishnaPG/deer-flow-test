@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { cleanupTestResources } from '../../helpers/consul';
-import { get, post } from '../../helpers/api';
+import { cleanupTestResources } from './helpers/consul';
+import { get, post } from './helpers/api';
 import { CONFIG } from '../../config';
 
 describe('Test Connection API - E2E Tests', () => {

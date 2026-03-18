@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { cleanupTestResources, cleanupConsulForService, getContainerName } from '../../helpers/consul';
-import { containerExists, containerIsRunning, getContainerLogs, waitForContainerStatus, stopContainer, startContainer, removeContainer } from '../../helpers/docker';
-import { get, post, del } from '../../helpers/api';
-import { generateTestServiceId } from '../../helpers/consul';
-import { CONFIG } from '../../config';
+import { cleanupTestResources, cleanupConsulForService, getContainerName } from '../helpers/consul';
+import { containerExists, containerIsRunning, getContainerLogs, waitForContainerStatus, stopContainer, startContainer, removeContainer } from '../helpers/docker';
+import { get, post, del } from '../helpers/api';
+import { generateTestServiceId } from '../helpers/consul';
+import { CONFIG } from '../config';
 
 describe('Deploy Redis - E2E Tests', () => {
   let testServiceId: string;

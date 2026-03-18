@@ -17,28 +17,20 @@ export async function apiRequest<T>(
     ...options,
   });
   
-  let data: T | null = null;
-  try {
-    // Try to parse JSON, but handle cases where response might be text
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      // Try to parse as JSON anyway in case content-type is wrong
-      try {
-        data = JSON.parse(text) as T;
-      } catch {
-        // If it's not JSON, return as text (cast to T)
-        data = text as unknown as T;
-      }
-    }
-  } catch (error) {
-    // If parsing fails, return empty object
-    data = {} as T;
+  const text = await response.text();
+  
+  if (!text.trim()) {
+    return { data: {} as T, status: response.status };
   }
   
-  return { data: data!, status: response.status };
+  let data: T;
+  try {
+    data = JSON.parse(text) as T;
+  } catch (error) {
+    throw new Error(`Failed to parse JSON from ${url}: ${error.message}`);
+  }
+  
+  return { data, status: response.status };
 }
 
 /**
