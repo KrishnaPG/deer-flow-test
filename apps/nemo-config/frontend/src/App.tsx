@@ -48,32 +48,69 @@ export default function App() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const logPollingRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
   // WebSocket for real-time deployment logs
   useEffect(() => {
-    if (wsRef.current) return;
-
-    const ws = new WebSocket('ws://localhost:3001/ws/logs');
-    wsRef.current = ws;
-    
-    ws.onmessage = (event) => {
+    const connectWebSocket = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      
       try {
-        const data = JSON.parse(event.data);
-        if (data.serviceId && data.message) {
-          setTabs(prevTabs => prevTabs.map(tab => 
-            tab.id === data.serviceId 
-              ? { ...tab, consoleOutput: [...tab.consoleOutput, data.message] }
-              : tab
-          ));
-        }
+        const ws = new WebSocket('ws://localhost:3001/ws/logs');
+        wsRef.current = ws;
+        
+        ws.onopen = () => {
+          console.log('WebSocket connected');
+          reconnectAttemptsRef.current = 0;
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.serviceId && data.message) {
+              setTabs(prevTabs => prevTabs.map(tab => 
+                tab.id === data.serviceId 
+                  ? { ...tab, consoleOutput: [...tab.consoleOutput, data.message] }
+                  : tab
+              ));
+            }
+          } catch (err) {
+            console.error('Failed to parse WebSocket message', err);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket closed');
+          wsRef.current = null;
+          
+          // Attempt to reconnect if not intentionally closed
+          if (reconnectAttemptsRef.current < 5) {
+            reconnectAttemptsRef.current++;
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+            console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+            reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
+          }
+        };
       } catch (err) {
-        console.error('Failed to parse WebSocket message', err);
+        console.error('Failed to create WebSocket:', err);
       }
     };
 
+    connectWebSocket();
+
     return () => {
-      ws.close();
-      wsRef.current = null;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, []);
 
@@ -204,7 +241,7 @@ export default function App() {
 fetchDetails();
   }, [activeTabId, status, natsUrl]);
 
-  const openTab = (templateId: string) => {
+  const openTab = async (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
     if (!template) return;
 
@@ -212,6 +249,21 @@ fetchDetails();
     const existingTab = tabs.find(t => t.id === templateId);
     if (existingTab) {
       setActiveTabId(templateId);
+      // If tab exists but has no instance details and service is healthy, fetch them
+      if (!existingTab.instanceDetails && status[templateId] === 'healthy') {
+        try {
+          const res = await axios.get(`${API_URL}/services/${templateId}/details`, {
+            params: { nats_url: natsUrl }
+          });
+          setTabs(prevTabs => prevTabs.map(tab =>
+            tab.id === templateId
+              ? { ...tab, instanceDetails: res.data as InstanceDetails }
+              : tab
+          ));
+        } catch (err) {
+          console.error('Failed to fetch instance details for existing tab', err);
+        }
+      }
       return;
     }
 

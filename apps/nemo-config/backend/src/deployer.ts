@@ -97,7 +97,7 @@ function injectContainerName(composeStr: string, containerName: string): string 
 }
 
 export async function getInstanceDetails(serviceId: string, natsUrl: string): Promise<InstanceDetails> {
-  const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.`, `nemo_metadata.${serviceId}`]);
+  const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.>`, `nemo_metadata.${serviceId}.>`, `nemo_metadata.${serviceId}_`]);
   const connectionUrl = configs[`${serviceId}.url`] || null;
   const metadataRaw = configs[`nemo_metadata.${serviceId}`];
   let metadata: ServiceMetadata | null = null;
@@ -461,27 +461,32 @@ export async function getAllConfigFromNats(natsUrl: string, allowedPrefixes?: st
     const kv = await js.views.kv(KV_BUCKET);
     const configs: Record<string, string> = {};
     
-    const filters = allowedPrefixes && allowedPrefixes.length > 0 ? allowedPrefixes : [">"];
-    console.log(`[DEBUG] using filters:`, filters);
-    try {
-      const keysIter = await kv.keys(filters);
-      for await (const key of keysIter) {
-        console.log(`[DEBUG] Got key from NATS: ${key}`);
-        const entry = await kv.get(key);
-        if (entry && entry.operation !== "DEL" && entry.operation !== "PURGE") {
-          try {
-            configs[key] = sc.decode(entry.value);
-            console.log(`[DEBUG] Decoded key ${key} = ${configs[key]}`);
-          } catch (decodeErr) {
-            console.warn(`[NATS] Failed to decode key ${key}:`, decodeErr);
+    // If specific prefixes requested, iterate through each
+    const prefixes = allowedPrefixes && allowedPrefixes.length > 0 ? allowedPrefixes : [">"];
+    console.log(`[DEBUG] using prefixes:`, prefixes);
+    
+    for (const prefix of prefixes) {
+      try {
+        const keysIter = await kv.keys(prefix);
+        for await (const key of keysIter) {
+          console.log(`[DEBUG] Got key from NATS: ${key}`);
+          const entry = await kv.get(key);
+          if (entry && entry.operation !== "DEL" && entry.operation !== "PURGE") {
+            try {
+              configs[key] = sc.decode(entry.value);
+              console.log(`[DEBUG] Decoded key ${key} = ${configs[key]}`);
+            } catch (decodeErr) {
+              console.warn(`[NATS] Failed to decode key ${key}:`, decodeErr);
+            }
+          } else {
+            console.log(`[DEBUG] Skipped key ${key} due to operation ${entry?.operation}`);
           }
-        } else {
-          console.log(`[DEBUG] Skipped key ${key} due to operation ${entry?.operation}`);
         }
-      }
-    } catch (err: any) {
-      if (!err.message?.includes("no messages")) {
-        throw err;
+      } catch (err: any) {
+        // If no keys match filter, it might throw a 404 No Messages error
+        if (!err.message?.includes("no messages")) {
+          throw err;
+        }
       }
     }
     
