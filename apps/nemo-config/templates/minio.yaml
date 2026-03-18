@@ -10,6 +10,9 @@ env_vars:
   - key: MINIO_ROOT_PASSWORD
     description: "Root Password"
     secret: true
+  - key: DATA_PATH
+    description: "Host path for data persistence"
+    default: "./data"
 exports:
   "minio.url": "http://${HOST}:9000"
   "minio.access_key": "${MINIO_ROOT_USER:-admin}"
@@ -30,6 +33,4 @@ docker_compose: |
         - "9000:9000"
         - "9001:9001"
       volumes:
-        - minio_data:/data
-  volumes:
-    minio_data:
+        - ${DATA_PATH:-./data}:/data

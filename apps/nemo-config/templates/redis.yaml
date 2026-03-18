@@ -3,7 +3,10 @@ id: "redis"
 icon: "activity"
 default_port: 6379
 connection_url_pattern: "redis://${HOST}:6379"
-env_vars: []
+env_vars:
+  - key: DATA_PATH
+    description: "Host path for data persistence (default: ./data)"
+    default: "./data"
 exports:
   "redis.url": "redis://${HOST}:6379"
 health_check:
@@ -13,5 +16,8 @@ docker_compose: |
   services:
     redis:
       image: redis:7-alpine
+      command: redis-server --appendonly yes
       ports:
         - "6379:6379"
+      volumes:
+        - ${DATA_PATH:-./data}:/data

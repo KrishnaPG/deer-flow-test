@@ -10,6 +10,9 @@ env_vars:
   - key: CLICKHOUSE_PASSWORD
     description: "Database Password"
     secret: true
+  - key: DATA_PATH
+    description: "Host path for data persistence"
+    default: "./data"
 exports:
   "clickhouse.url": "http://${CLICKHOUSE_USER:-default}:${CLICKHOUSE_PASSWORD:-}@${HOST}:8123"
   "clickhouse.user": "${CLICKHOUSE_USER:-default}"
@@ -29,6 +32,4 @@ docker_compose: |
         - "8123:8123"
         - "9000:9000"
       volumes:
-        - clickhouse_data:/var/lib/clickhouse
-  volumes:
-    clickhouse_data:
+        - ${DATA_PATH:-./data}:/var/lib/clickhouse
