@@ -31,6 +31,7 @@ interface TabState {
 
 export default function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
   const [hosts, setHosts] = useState<string[]>(['localhost']);
   const [status, setStatus] = useState<Record<string, ServiceStatus>>({});
   const [deploying, setDeploying] = useState<string | null>(null);
@@ -142,14 +143,19 @@ export default function App() {
 
     const isHealthy = status[activeTabId] === 'healthy';
     const isManaged = activeTab.instanceDetails?.metadata?.managedBy === 'nemo';
+    const isContainerMode = activeTab.consoleMode === 'container';
 
-    if (isHealthy && isManaged) {
+    // Only start polling when:
+    // 1. Service is healthy
+    // 2. We have confirmed it's managed by nemo (has instanceDetails)
+    // 3. Not currently in deployment mode
+    if (isHealthy && isManaged && isContainerMode) {
       // Start polling for container logs
       const pollLogs = async () => {
         const logs = await fetchContainerLogs(activeTabId);
         setTabs(prevTabs => prevTabs.map(tab =>
           tab.id === activeTabId
-            ? { ...tab, consoleOutput: logs, consoleMode: 'container' as ConsoleMode }
+            ? { ...tab, consoleOutput: logs }
             : tab
         ));
       };
@@ -172,26 +178,33 @@ export default function App() {
   }, [activeTabId, status, tabs, fetchContainerLogs, natsUrl]);
 
   const fetchData = useCallback(async () => {
-    const [tplRes, hostsRes, configsRes] = await Promise.all([
-      axios.get(`${API_URL}/catalog`),
-      axios.get(`${API_URL}/ssh-hosts`),
-      axios.get(`${API_URL}/configs`, { params: { nats_url: natsUrl } }).catch(() => ({ data: {} }))
-    ]);
+    setIsLoadingTemplates(true);
+    try {
+      const [tplRes, hostsRes, configsRes] = await Promise.all([
+        axios.get(`${API_URL}/catalog`),
+        axios.get(`${API_URL}/ssh-hosts`),
+        axios.get(`${API_URL}/configs`, { params: { nats_url: natsUrl } }).catch(() => ({ data: {} }))
+      ]);
 
-    setTemplates(tplRes.data);
-    setHosts(hostsRes.data);
+      setTemplates(tplRes.data);
+      setHosts(hostsRes.data);
 
-    // Compute status from configs
-    const configs = configsRes.data || {};
-    const newStatus: Record<string, ServiceStatus> = {};
-    
-    tplRes.data.forEach((tpl: Template) => {
-      if (configs[`${tpl.id}.url`]) {
-        newStatus[tpl.id] = 'healthy';
-      }
-    });
-    
-    setStatus(newStatus);
+      // Compute status from configs
+      const configs = configsRes.data || {};
+      const newStatus: Record<string, ServiceStatus> = {};
+      
+      tplRes.data.forEach((tpl: Template) => {
+        if (configs[`${tpl.id}.url`]) {
+          newStatus[tpl.id] = 'healthy';
+        }
+      });
+      
+      setStatus(newStatus);
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+    } finally {
+      setIsLoadingTemplates(false);
+    }
   }, [natsUrl]);
 
   // Fetch initial data
@@ -417,16 +430,26 @@ fetchDetails();
       setStatus(prev => ({ ...prev, [tabId]: 'healthy' }));
       
       // Fetch instance details after successful deployment
-      setTimeout(async () => {
-        try {
-          const res = await axios.get(`${API_URL}/services/${tabId}/details`, {
-            params: { nats_url: natsUrl }
+      try {
+        const res = await axios.get(`${API_URL}/services/${tabId}/details`, {
+          params: { nats_url: natsUrl }
+        });
+        const details = res.data as InstanceDetails;
+        
+        // If managed by nemo, switch to container mode and fetch logs
+        if (details.metadata?.managedBy === 'nemo') {
+          const logs = await fetchContainerLogs(tabId);
+          updateTab(tabId, { 
+            instanceDetails: details,
+            consoleOutput: logs,
+            consoleMode: 'container'
           });
-          updateTab(tabId, { instanceDetails: res.data as InstanceDetails });
-        } catch (err) {
-          console.error('Failed to fetch instance details after deploy', err);
+        } else {
+          updateTab(tabId, { instanceDetails: details });
         }
-      }, 500);
+      } catch (err) {
+        console.error('Failed to fetch instance details after deploy', err);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
       appendConsole(tabId, `Error: ${errorMessage}`);
@@ -537,6 +560,7 @@ fetchDetails();
           selectedId={activeTabId}
           status={status}
           onSelect={openTab}
+          isLoading={isLoadingTemplates}
         />
 
         <div className="flex-1 flex flex-col bg-white">

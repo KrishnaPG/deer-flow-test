@@ -1,4 +1,4 @@
-import { CheckCircle, Activity } from 'lucide-react';
+import { CheckCircle, Activity, Loader2 } from 'lucide-react';
 import type { Template, ServiceStatus } from '../definitions';
 import { ICONS } from '../definitions';
 
@@ -7,9 +7,10 @@ interface SidebarProps {
   selectedId: string | null;
   status: Record<string, ServiceStatus>;
   onSelect: (id: string) => void;
+  isLoading?: boolean;
 }
 
-export function Sidebar({ templates, selectedId, status, onSelect }: SidebarProps) {
+export function Sidebar({ templates, selectedId, status, onSelect, isLoading = false }: SidebarProps) {
   const sortedTemplates = [...templates].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -18,15 +19,26 @@ export function Sidebar({ templates, selectedId, status, onSelect }: SidebarProp
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Services</h2>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {sortedTemplates.map(tpl => (
-          <ServiceItem
-            key={tpl.id}
-            template={tpl}
-            isSelected={selectedId === tpl.id}
-            status={status[tpl.id] || 'unconfigured'}
-            onClick={() => onSelect(tpl.id)}
-          />
-        ))}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <Loader2 size={24} className="text-gray-400 animate-spin mb-3" />
+            <p className="text-sm text-gray-500">Loading services...</p>
+          </div>
+        ) : sortedTemplates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <p className="text-sm text-gray-500 text-center">No services available</p>
+          </div>
+        ) : (
+          sortedTemplates.map(tpl => (
+            <ServiceItem
+              key={tpl.id}
+              template={tpl}
+              isSelected={selectedId === tpl.id}
+              status={status[tpl.id] || 'unconfigured'}
+              onClick={() => onSelect(tpl.id)}
+            />
+          ))
+        )}
       </div>
     </div>
   );
