@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import type { Template, ServiceStatus, Mode } from './definitions';
 import type { TestStatus } from './components/ExistingModeForm';
@@ -42,9 +42,14 @@ export default function App() {
   const [natsUrlInput, setNatsUrlInput] = useState(natsUrl);
   const [deployPathInput, setDeployPathInput] = useState(deployPath);
 
+  const wsRef = useRef<WebSocket | null>(null);
+
   // WebSocket for real-time logs
   useEffect(() => {
+    if (wsRef.current) return; // Prevent duplicate connections in StrictMode
+
     const ws = new WebSocket('ws://localhost:3001/ws/logs');
+    wsRef.current = ws;
     
     ws.onmessage = (event) => {
       try {
@@ -63,6 +68,7 @@ export default function App() {
 
     return () => {
       ws.close();
+      wsRef.current = null;
     };
   }, []);
 
@@ -203,10 +209,16 @@ export default function App() {
         });
         appendConsole(tabId, `✗ Connection test failed: ${res.data.message}`);
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.message || 'Connection test failed';
-      updateTab(tabId, { testStatus: 'error', testMessage: errorMsg });
-      appendConsole(tabId, `✗ Connection test error: ${errorMsg}`);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const errorMsg = err.response?.data?.error || err.message || 'Connection test failed';
+        updateTab(tabId, { testStatus: 'error', testMessage: errorMsg });
+        appendConsole(tabId, `✗ Connection test error: ${errorMsg}`);
+      } else {
+        const errorMsg = err instanceof Error ? err.message : 'Connection test failed';
+        updateTab(tabId, { testStatus: 'error', testMessage: errorMsg });
+        appendConsole(tabId, `✗ Connection test error: ${errorMsg}`);
+      }
     }
   };
 

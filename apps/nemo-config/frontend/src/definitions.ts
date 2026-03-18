@@ -1,6 +1,6 @@
-import { Database, Box, Activity, MessageSquare } from 'lucide-react';
+import { Database, Box, Activity, MessageSquare, type LucideIcon } from 'lucide-react';
 
-export const ICONS: Record<string, any> = {
+export const ICONS: Record<string, LucideIcon> = {
   'database': Database,
   'box': Box,
   'activity': Activity,
