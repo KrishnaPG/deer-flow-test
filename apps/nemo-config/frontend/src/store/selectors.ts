@@ -20,12 +20,11 @@ export type TabContentStateKey =
 
 export const selectTabContentState = (s: any, tabId: string | null): TabContentStateKey => {
   if (!tabId) return 'deploy';
-  
+
   if (s.configsError) return 'error';
   if (s.isLoadingConfigs && !s.configs[`${tabId}.url`]) return 'checking';
   if (s.configs[`${tabId}.url`]) {
-    const tab = s.tabs.find((t: any) => t.id === tabId);
-    return tab?.instanceDetails ? 'healthy' : 'loading-details';
+    return 'healthy';
   }
   const tab = s.tabs.find((t: any) => t.id === tabId);
   return tab?.mode || 'deploy';

@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { Activity, Check, AlertCircle } from 'lucide-react';
 import { store, selectActiveTab, selectActiveTemplate } from '../../../store';
@@ -12,37 +12,65 @@ export const TabExistingForm = () => {
   const isDeploying = snap.deploying === snap.activeTabId;
   const { testConnection } = useMutations();
   
+  // Local state to prevent cursor jumping
+  const [localUrl, setLocalUrl] = useState('');
+  const [localFormValues, setLocalFormValues] = useState<Record<string, string>>({});
+  
+  // Sync local state with store when tab changes
+  useEffect(() => {
+    if (activeTab) {
+      setLocalUrl(activeTab.existingUrl);
+      setLocalFormValues(activeTab.formValues);
+    }
+  }, [activeTab?.id]);
+  
   if (!activeTab || !template) return null;
   
-  const { testStatus, testMessage, existingUrl, formValues } = activeTab;
+  const { testStatus, testMessage } = activeTab;
   const isTesting = testStatus === 'testing';
   const hasTested = testStatus === 'success' || testStatus === 'error';
   const isSuccess = testStatus === 'success';
   
-  const handleExistingUrlChange = (url: string) => {
-    if (snap.activeTabId) {
-      actions.setExistingUrl(snap.activeTabId, url);
-    }
-  };
+  const handleUrlChange = useCallback((url: string) => {
+    setLocalUrl(url);
+  }, []);
   
-  const handleFormChange = (key: string, value: string) => {
-    if (snap.activeTabId) {
-      actions.setFormValue(snap.activeTabId, key, value);
+  const tabId = snap.activeTabId;
+  
+  const handleUrlBlur = useCallback((url: string) => {
+    if (tabId) {
+      actions.setExistingUrl(tabId, url);
     }
-  };
+  }, [tabId]);
+  
+  const handleFormChange = useCallback((key: string, value: string) => {
+    setLocalFormValues(prev => ({ ...prev, [key]: value }));
+  }, []);
+  
+  const handleFormBlur = useCallback((key: string, value: string) => {
+    if (tabId) {
+      actions.setFormValue(tabId, key, value);
+    }
+  }, [tabId]);
   
   const handleTestConnection = () => {
-    if (snap.activeTabId && template) {
-      if (!activeTab?.existingUrl.trim()) {
-        actions.setTestStatus(snap.activeTabId, 'error', 'Please enter a connection URL');
-        actions.appendLog(snap.activeTabId, 'Error: No connection URL provided');
+    if (tabId && template) {
+      const currentUrl = localUrl.trim();
+      if (!currentUrl) {
+        actions.setTestStatus(tabId, 'error', 'Please enter a connection URL');
+        actions.appendLog(tabId, 'Error: No connection URL provided');
         return;
       }
+      // Sync values to store before testing
+      actions.setExistingUrl(tabId, localUrl);
+      Object.entries(localFormValues).forEach(([key, value]) => {
+        actions.setFormValue(tabId, key, value);
+      });
       testConnection.mutate({
-        service_id: snap.activeTabId,
-        connection_url: activeTab.existingUrl,
+        service_id: tabId,
+        connection_url: currentUrl,
         health_check: template.health_check,
-        metadata: activeTab.formValues,
+        metadata: localFormValues,
       });
     }
   };
@@ -56,8 +84,9 @@ export const TabExistingForm = () => {
         <input
           type="text"
           className="w-full border-gray-300 rounded-md shadow-sm p-2.5 border bg-white focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
-          value={existingUrl}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleExistingUrlChange(e.target.value)}
+          value={localUrl}
+          onChange={e => handleUrlChange(e.target.value)}
+          onBlur={e => handleUrlBlur(e.target.value)}
           disabled={isDeploying}
           placeholder={template.connection_url_pattern || 'e.g., postgres://user:pass@host:5432/db'}
         />
@@ -76,8 +105,9 @@ export const TabExistingForm = () => {
                 <input
                   type="password"
                   className="w-full border-gray-300 rounded-md shadow-sm p-2 border bg-white focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-xs"
-                  value={formValues[env.key] || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFormChange(env.key, e.target.value)}
+                  value={localFormValues[env.key] ?? activeTab.formValues[env.key] ?? ''}
+                  onChange={e => handleFormChange(env.key, e.target.value)}
+                  onBlur={e => handleFormBlur(env.key, e.target.value)}
                   disabled={isDeploying}
                 />
               </div>
@@ -89,7 +119,7 @@ export const TabExistingForm = () => {
       <div className="flex items-center gap-3">
         <button
           onClick={handleTestConnection}
-          disabled={isDeploying || isTesting || !existingUrl.trim()}
+          disabled={isDeploying || isTesting || !localUrl.trim()}
           className={`flex items-center gap-2 px-4 py-2 rounded-md shadow-sm text-sm font-medium transition-colors ${
             isSuccess 
               ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300' 

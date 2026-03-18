@@ -58,9 +58,10 @@ export const setActiveTab = (tabId: string | null): void => {
 };
 
 export const updateTab = (tabId: string, updates: Partial<TabState>): void => {
-  store.tabs = store.tabs.map(t => 
-    t.id === tabId ? { ...t, ...updates } : t
-  );
+  const tab = store.tabs.find(t => t.id === tabId);
+  if (tab) {
+    Object.assign(tab, updates);
+  }
 };
 
 // === Form State ===
@@ -74,11 +75,9 @@ export const setTabMode = (tabId: string, mode: 'deploy' | 'existing'): void => 
 
 export const setFormValue = (tabId: string, key: string, value: string): void => {
   const tab = store.tabs.find(t => t.id === tabId);
-  if (!tab) return;
-  
-  updateTab(tabId, {
-    formValues: { ...tab.formValues, [key]: value }
-  });
+  if (tab) {
+    tab.formValues[key] = value;
+  }
 };
 
 export const setSelectedHost = (tabId: string, host: string): void => {
