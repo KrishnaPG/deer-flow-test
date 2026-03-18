@@ -98,3 +98,6 @@ const Component = () => {
 5. **WebSocket ONLY** for real-time deployment logs
 6. **TanStack Query ONLY** for all other server data
 
+## Package Manager
+
+Bun

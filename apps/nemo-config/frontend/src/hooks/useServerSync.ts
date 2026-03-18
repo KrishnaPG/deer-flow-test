@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { QueryClient, useQuery } from '@tanstack/react-query';
+import { useSnapshot } from 'valtio';
 import { store } from '../store';
 import * as actions from '../store/actions';
 import {
@@ -22,6 +23,10 @@ export const queryClient = new QueryClient({
 });
 
 export const useServerSync = (): void => {
+  // Use snapshot to track reactive values from Valtio store
+  const snap = useSnapshot(store);
+  const { activeTabId, natsUrl, configs, consoleMode } = snap;
+
   // Templates query
   const templatesQuery = useQuery({
     queryKey: ['templates'],
@@ -37,35 +42,35 @@ export const useServerSync = (): void => {
 
   // Configs query
   const configsQuery = useQuery({
-    queryKey: ['configs', store.natsUrl],
-    queryFn: () => fetchConfigs(store.natsUrl),
-    enabled: !!store.natsUrl,
+    queryKey: ['configs', natsUrl],
+    queryFn: () => fetchConfigs(natsUrl),
+    enabled: !!natsUrl,
   });
 
   // NATS health query
   const natsHealthQuery = useQuery({
-    queryKey: ['natsHealth', store.natsUrl],
-    queryFn: () => checkNatsHealth(store.natsUrl),
+    queryKey: ['natsHealth', natsUrl],
+    queryFn: () => checkNatsHealth(natsUrl),
     refetchInterval: 10000,
-    enabled: !!store.natsUrl,
+    enabled: !!natsUrl,
   });
 
   // Instance details query - fetch for active tab
   const instanceDetailsQuery = useQuery({
-    queryKey: ['instanceDetails', store.activeTabId],
-    queryFn: () => fetchInstanceDetails(store.activeTabId!, store.natsUrl),
-    enabled: !!store.activeTabId && !!store.natsUrl && !!store.configs[`${store.activeTabId}.url`],
+    queryKey: ['instanceDetails', activeTabId],
+    queryFn: () => fetchInstanceDetails(activeTabId!, natsUrl),
+    enabled: !!activeTabId && !!natsUrl && !!configs[`${activeTabId}.url`],
   });
 
   // Container logs query - only for managed services in container mode
   const containerLogsQuery = useQuery({
-    queryKey: ['containerLogs', store.activeTabId],
-    queryFn: () => fetchContainerLogs(store.activeTabId!, store.natsUrl),
+    queryKey: ['containerLogs', activeTabId],
+    queryFn: () => fetchContainerLogs(activeTabId!, natsUrl),
     refetchInterval: 1000,
-    enabled: !!store.activeTabId && 
-              !!store.natsUrl && 
-              !!store.configs[`${store.activeTabId}.url`] &&
-              store.consoleMode[store.activeTabId] === 'container',
+    enabled: !!activeTabId && 
+              !!natsUrl && 
+              !!configs[`${activeTabId}.url`] &&
+              consoleMode[activeTabId] === 'container',
   });
 
   // Sync templates to store
@@ -99,15 +104,23 @@ export const useServerSync = (): void => {
 
   // Sync instance details to store
   useEffect(() => {
-    if (store.activeTabId && instanceDetailsQuery.data) {
-      actions.setInstanceDetails(store.activeTabId, instanceDetailsQuery.data);
+    if (activeTabId && instanceDetailsQuery.data) {
+      actions.setInstanceDetails(activeTabId, instanceDetailsQuery.data);
+      // If this is a managed service, switch to container logs mode
+      if (instanceDetailsQuery.data.metadata?.managedBy === 'nemo') {
+        actions.setConsoleMode(activeTabId, 'container');
+      }
     }
-  }, [instanceDetailsQuery.data, store.activeTabId]);
+  }, [instanceDetailsQuery.data, activeTabId]);
 
   // Sync container logs to store
   useEffect(() => {
-    if (store.activeTabId && containerLogsQuery.data) {
-      store.logs = { ...store.logs, [store.activeTabId]: containerLogsQuery.data };
+    if (activeTabId && containerLogsQuery.data) {
+      store.logs = { ...store.logs, [activeTabId]: containerLogsQuery.data };
+      // Ensure console mode is set to container when we have container logs
+      if (store.consoleMode[activeTabId] !== 'container') {
+        actions.setConsoleMode(activeTabId, 'container');
+      }
     }
-  }, [containerLogsQuery.data, store.activeTabId]);
+  }, [containerLogsQuery.data, activeTabId]);
 };
