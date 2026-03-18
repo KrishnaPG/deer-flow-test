@@ -1,0 +1,370 @@
+import Consul from "consul";
+
+const CONSUL_PREFIX = "nemo";
+
+export interface ServiceMetadata {
+  serviceId: string;
+  containerName: string;
+  managedBy: 'nemo' | 'external';
+  host: string;
+  connectionUrl: string;
+  deployedAt: string;
+  templateId: string;
+}
+
+export interface Template {
+  name: string;
+  id: string;
+  icon: string;
+  default_port: number;
+  env_vars: { key: string; description: string; default?: string; secret?: boolean }[];
+  health_check: { type: string; port: number; path?: string };
+  docker_compose: string;
+  connection_url_pattern?: string;
+  exports?: Record<string, string>;
+}
+
+export interface DeployRequest {
+  target_host: string;
+  service_id: string;
+  template: Template;
+  env_values: Record<string, string>;
+  consul_url: string;
+  mode: 'deploy' | 'existing';
+  deploy_path?: string;
+}
+
+export interface RegisterExistingRequest {
+  service_id: string;
+  connection_url: string;
+  consul_url: string;
+  template: Template;
+  env_values?: Record<string, string>;
+}
+
+export interface ContainerActionRequest {
+  service_id: string;
+  consul_url: string;
+  deploy_path?: string;
+}
+
+export interface InstanceDetails {
+  metadata: ServiceMetadata | null;
+  connectionUrl: string | null;
+  isHealthy: boolean;
+  containerStatus?: 'running' | 'stopped' | 'not_found';
+}
+
+export type LogCallback = (msg: string) => void;
+
+function getConsulClient(consulUrl: string): Consul {
+  // consulUrl can be "10.7.0.4:8500" or "http://10.7.0.4:8500"
+  let url = consulUrl;
+  
+  // Remove protocol if present for host extraction
+  if (url.startsWith('http://')) {
+    url = url.substring(7);
+  } else if (url.startsWith('https://')) {
+    url = url.substring(8);
+  }
+  
+  const [host, portStr] = url.includes(':') 
+    ? url.split(':') 
+    : [url, '8500'];
+  
+  return new Consul({
+    host: host || '10.7.0.4',
+    port: parseInt(portStr || '8500', 10),
+  }) as any;
+}
+
+function makeKey(serviceId: string, subKey: string): string {
+  return `${CONSUL_PREFIX}/${serviceId}/${subKey}`;
+}
+
+function makeMetadataKey(serviceId: string): string {
+  return `${CONSUL_PREFIX}/metadata/${serviceId}`;
+}
+
+export async function updateConsulKV(
+  consulUrl: string,
+  serviceId: string,
+  connectionUrl: string,
+  metadata: ServiceMetadata,
+  exports: Record<string, string>,
+  onLog?: LogCallback
+) {
+  const log = (msg: string) => {
+    console.log(msg);
+    if (onLog) onLog(msg);
+  };
+  
+  log(`[Consul] Connecting to ${consulUrl}`);
+  const consul = getConsulClient(consulUrl);
+
+  try {
+    log(`[Consul] Writing exports for ${serviceId}...`);
+    for (const [key, value] of Object.entries(exports)) {
+      try {
+        // Convert dot notation to path: postgres.url -> nemo/postgres/url
+        const consulKey = key.replace(/\./g, '/');
+        const fullKey = consulKey.startsWith(CONSUL_PREFIX) 
+          ? consulKey 
+          : `${CONSUL_PREFIX}/${consulKey}`;
+        
+        await consul.kv.set(fullKey, value);
+        log(`[Consul] Wrote export ${fullKey} = ${value}`);
+      } catch (err: any) {
+        log(`[Consul] Error writing export ${key}: ${err.message}`);
+      }
+    }
+
+    // Write service URL
+    const urlKey = makeKey(serviceId, 'url');
+    log(`[Consul] Writing service URL: ${urlKey} = ${connectionUrl}`);
+    await consul.kv.set(urlKey, connectionUrl);
+    
+    // Write metadata
+    const metadataKey = makeMetadataKey(serviceId);
+    log(`[Consul] Writing metadata: ${metadataKey}`);
+    await consul.kv.set(metadataKey, JSON.stringify(metadata));
+    
+    log(`[Consul] Successfully stored config for ${serviceId}`);
+  } catch (error: any) {
+    log(`[Consul] Fatal error in updateConsulKV: ${error.message}`);
+    throw error;
+  }
+}
+
+export async function getAllConfigFromConsul(
+  consulUrl: string, 
+  allowedPrefixes?: string[]
+): Promise<Record<string, string>> {
+  console.log(`[Consul] Fetching config from ${consulUrl}`);
+  const consul = getConsulClient(consulUrl);
+  
+  try {
+    const configs: Record<string, string> = {};
+    
+    // If specific prefixes requested, iterate through each
+    const prefixes = allowedPrefixes && allowedPrefixes.length > 0 
+      ? allowedPrefixes 
+      : [`${CONSUL_PREFIX}/`];
+    
+    console.log(`[Consul] Using prefixes:`, prefixes);
+    
+    for (const prefix of prefixes) {
+      try {
+        // Convert NATS-style prefix to Consul-style if needed
+        // postgres.> -> nemo/postgres/
+        let consulPrefix = prefix;
+        if (prefix.includes('.') && !prefix.includes('/')) {
+          // It's in NATS format, convert it
+          consulPrefix = prefix
+            .replace(/\./g, '/')
+            .replace(/>/g, '');
+          if (!consulPrefix.startsWith(CONSUL_PREFIX)) {
+            consulPrefix = `${CONSUL_PREFIX}/${consulPrefix}`;
+          }
+        }
+        
+        // Ensure prefix ends with / for directory-like queries
+        if (!consulPrefix.endsWith('/')) {
+          consulPrefix += '/';
+        }
+        
+        const keys = await consul.kv.keys(consulPrefix);
+        console.log(`[Consul] Found ${keys.length} keys under ${consulPrefix}`);
+        
+        for (const key of keys) {
+          const result = await consul.kv.get(key);
+          if (result && result.Value) {
+            // Consul returns base64 encoded value
+            const value = Buffer.from(result.Value, 'base64').toString();
+            // Convert back to dot notation for API compatibility
+            const dotKey = key.replace(/\//g, '.');
+            configs[dotKey] = value;
+            console.log(`[Consul] Read key ${dotKey}`);
+          }
+        }
+      } catch (err: any) {
+        // If no keys match, Consul returns an empty array or error
+        if (err.message && !err.message.includes('not found')) {
+          console.warn(`[Consul] Warning fetching prefix ${prefix}:`, err.message);
+        }
+      }
+    }
+    
+    return configs;
+  } catch (error: any) {
+    console.error(`[Consul] Error fetching config: ${error.message}`);
+    throw error;
+  }
+}
+
+export async function getInstanceDetailsFromConsul(
+  serviceId: string, 
+  consulUrl: string
+): Promise<InstanceDetails> {
+  const consul = getConsulClient(consulUrl);
+  
+  try {
+    // Get connection URL
+    const urlKey = makeKey(serviceId, 'url');
+    let connectionUrl: string | null = null;
+    
+    try {
+      const urlResult = await consul.kv.get(urlKey);
+      if (urlResult && urlResult.Value) {
+        connectionUrl = Buffer.from(urlResult.Value, 'base64').toString();
+      }
+    } catch (err) {
+      // Key doesn't exist
+    }
+    
+    // Get metadata
+    const metadataKey = makeMetadataKey(serviceId);
+    let metadata: ServiceMetadata | null = null;
+    
+    try {
+      const metadataResult = await consul.kv.get(metadataKey);
+      if (metadataResult && metadataResult.Value) {
+        metadata = JSON.parse(Buffer.from(metadataResult.Value, 'base64').toString());
+      }
+    } catch (err) {
+      // Key doesn't exist or parse error
+    }
+    
+    const isHealthy = !!connectionUrl;
+    
+    return { metadata, connectionUrl, isHealthy, containerStatus: undefined };
+  } catch (error: any) {
+    console.error(`[Consul] Error getting instance details: ${error.message}`);
+    throw error;
+  }
+}
+
+export async function removeServiceConfig(
+  serviceId: string, 
+  consulUrl: string
+): Promise<{ success: boolean; message: string }> {
+  const consul = getConsulClient(consulUrl);
+  
+  try {
+    // Get all keys under this service
+    const servicePrefix = makeKey(serviceId, '');
+    const keys = await consul.kv.keys(servicePrefix);
+    
+    // Also get metadata key
+    const metadataKey = makeMetadataKey(serviceId);
+    
+    // Delete all keys
+    for (const key of keys) {
+      await consul.kv.del(key);
+      console.log(`[Consul] Deleted key: ${key}`);
+    }
+    
+    // Delete metadata if it exists
+    try {
+      await consul.kv.del(metadataKey);
+      console.log(`[Consul] Deleted metadata: ${metadataKey}`);
+    } catch (err) {
+      // May not exist
+    }
+    
+    return { success: true, message: `Removed configuration for ${serviceId}` };
+  } catch (error: any) {
+    console.error(`[Consul] Error removing config: ${error.message}`);
+    throw error;
+  }
+}
+
+export async function getServiceConfigs(
+  serviceId: string,
+  consulUrl: string
+): Promise<Record<string, string>> {
+  const configs = await getAllConfigFromConsul(consulUrl, [`${serviceId}.>`]);
+  
+  // Filter for this service
+  const serviceConfigs: Record<string, string> = {};
+  for (const [key, value] of Object.entries(configs)) {
+    // Check if key matches nemo.<serviceId>.* pattern
+    const parts = key.split('.');
+    if (parts.length >= 2 && parts[1] === serviceId) {
+      serviceConfigs[key] = value;
+    }
+  }
+  
+  return serviceConfigs;
+}
+
+// Export Consul health check
+export async function checkConsulHealth(consulUrl: string): Promise<{ 
+  status: 'healthy' | 'unhealthy'; 
+  connected: boolean;
+  url: string;
+  timestamp: string;
+  error?: string;
+}> {
+  try {
+    const consul = getConsulClient(consulUrl);
+    
+    // Try to get leader status - simple health check
+    await consul.status.leader();
+    
+    return {
+      status: 'healthy',
+      connected: true,
+      url: consulUrl,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error: any) {
+    return {
+      status: 'unhealthy',
+      connected: false,
+      url: consulUrl,
+      timestamp: new Date().toISOString(),
+      error: error.message
+    };
+  }
+}
+
+// Get all services registered in Consul with health status
+export async function getAllServicesHealth(consulUrl: string): Promise<Record<string, any>> {
+  const consul = getConsulClient(consulUrl);
+  
+  try {
+    // Get all service names under our prefix
+    const allConfigs = await getAllConfigFromConsul(consulUrl);
+    
+    // Extract unique service IDs
+    const serviceIds = new Set<string>();
+    for (const key of Object.keys(allConfigs)) {
+      const parts = key.split('.');
+      if (parts.length >= 2 && parts[0] === 'nemo' && parts[1] !== 'metadata' && parts[1]) {
+        serviceIds.add(parts[1]);
+      }
+    }
+    
+    // Get health for each service
+    const health: Record<string, any> = {};
+    for (const serviceId of serviceIds) {
+      const details = await getInstanceDetailsFromConsul(serviceId, consulUrl);
+      health[serviceId] = {
+        serviceId,
+        connectionUrl: details.connectionUrl,
+        isHealthy: details.isHealthy,
+        managedBy: details.metadata?.managedBy || 'unknown',
+        host: details.metadata?.host || 'unknown'
+      };
+    }
+    
+    return health;
+  } catch (error: any) {
+    console.error(`[Consul] Error getting services health: ${error.message}`);
+    throw error;
+  }
+}
+
+// Default consul URL
+export const DEFAULT_CONSUL_URL = '10.7.0.4:8500';

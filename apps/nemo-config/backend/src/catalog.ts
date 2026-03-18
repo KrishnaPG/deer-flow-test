@@ -27,12 +27,12 @@ export async function getCatalogTemplates(): Promise<Template[]> {
 }
 
 /**
- * Returns a list of valid NATS KV key prefixes based on the current catalog.
- * e.g., ["redis.>", "postgres.>", "nemo_metadata.>"]
+ * Returns a list of valid Consul KV key prefixes based on the current catalog.
+ * e.g., ["nemo/redis/", "nemo/postgres/", "nemo/metadata/"]
  */
 export async function getCatalogPrefixes(): Promise<string[]> {
   const templates = await getCatalogTemplates();
-  const prefixes = templates.map(t => `${t.id}.>`);
-  prefixes.push("nemo_metadata.>"); // Always allow internal metadata
+  const prefixes = templates.map(t => `nemo/${t.id}/`);
+  prefixes.push("nemo/metadata/"); // Always allow internal metadata
   return prefixes;
 }

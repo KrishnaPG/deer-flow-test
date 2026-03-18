@@ -3,7 +3,6 @@ import { cors } from "@elysiajs/cors";
 import { readFile } from "fs/promises";
 import { resolve } from "path";
 import { homedir } from "os";
-import { connect } from "nats";
 import { getCatalogTemplates, getCatalogPrefixes } from "./src/catalog";
 import { 
   deployService, 
@@ -19,6 +18,11 @@ import {
   removeServiceConfig,
   type DeployRequest 
 } from "./src/deployer";
+import { 
+  checkConsulHealth,
+  getAllServicesHealth,
+  DEFAULT_CONSUL_URL
+} from "./src/consul-store";
 
 const app = new Elysia()
   .use(cors())
@@ -75,7 +79,7 @@ const app = new Elysia()
       service_id: t.String(),
       template: t.Any(),
       env_values: t.Record(t.String(), t.String()),
-      nats_url: t.String(),
+      consul_url: t.String(),
       mode: t.Literal('deploy'),
       deploy_path: t.Optional(t.String())
     })
@@ -101,7 +105,7 @@ const app = new Elysia()
     body: t.Object({
       service_id: t.String(),
       connection_url: t.String(),
-      nats_url: t.String(),
+      consul_url: t.String(),
       template: t.Any(),
       env_values: t.Optional(t.Record(t.String(), t.String()))
     })
@@ -126,23 +130,23 @@ const app = new Elysia()
       metadata: t.Optional(t.Record(t.String(), t.String()))
     })
   })
-  // Export all config from NATS KV as .env format
+  // Export all config from Consul KV as .env format
   .get("/api/export-env", async ({ query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const prefixes = await getCatalogPrefixes();
-      const configs = await getAllConfigFromNats(natsUrl, prefixes);
+      const configs = await getAllConfigFromNats(consulUrl, prefixes);
       
       // Convert to .env format
       const envLines = Object.entries(configs)
-        .filter(([key]) => !key.startsWith('nemo_metadata.')) // Skip internal metadata
+        .filter(([key]) => !key.includes('metadata')) // Skip internal metadata
         .map(([key, value]) => {
           // Convert key format: service.url -> SERVICE_URL
           const envKey = key.toUpperCase().replace(/\./g, '_');
           return `${envKey}=${value}`;
         });
       
-      return envLines.join('\n') || '# No configurations found in NATS KV store';
+      return envLines.join('\n') || '# No configurations found in Consul KV store';
     } catch (error: any) {
       console.error('[Export] Error:', error);
       return new Response(
@@ -154,25 +158,26 @@ const app = new Elysia()
   // NEW: Get all configs for frontend state
   .get("/api/configs", async ({ query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const prefixes = await getCatalogPrefixes();
-      const configs = await getAllConfigFromNats(natsUrl, prefixes);
+      const configs = await getAllConfigFromNats(consulUrl, prefixes);
       return configs;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
   })
-  // NEW: Get current config from NATS for a specific service
+  // NEW: Get current config from Consul for a specific service
   .get("/api/config/:serviceId", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
-      const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.>`]);
+      const configs = await getAllConfigFromNats(consulUrl, [`${serviceId}.>`]);
       
-      // Filter for this service (already filtered by NATS, but just to be safe)
+      // Filter for this service
       const serviceConfigs: Record<string, string> = {};
       for (const [key, value] of Object.entries(configs)) {
-        if (key.startsWith(serviceId + '.')) {
+        // Check both old format (serviceId.key) and new format (nemo.serviceId.key)
+        if (key.startsWith(serviceId + '.') || key.startsWith('nemo.' + serviceId + '.')) {
           serviceConfigs[key] = value;
         }
       }
@@ -182,44 +187,37 @@ const app = new Elysia()
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
   })
-  // NEW: Health check for NATS connection
-  .get("/api/health/nats", async ({ query }) => {
+  // NEW: Health check for Consul connection
+  .get("/api/health/consul", async ({ query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
-      
-      // Try to connect with a short timeout
-      const nc = await connect({ 
-        servers: natsUrl,
-        timeout: 5000 // 5 second timeout
-      });
-      
-      // Try to get JetStream manager to verify full functionality
-      await nc.jetstreamManager();
-      
-      await nc.drain();
-      
-      return { 
-        status: 'healthy', 
-        connected: true,
-        url: natsUrl,
-        timestamp: new Date().toISOString()
-      };
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
+      return await checkConsulHealth(consulUrl);
     } catch (error: any) {
-      return { 
-        status: 'unhealthy', 
+      return {
+        status: 'unhealthy',
         connected: false,
-        url: query.nats_url,
+        url: query.consul_url,
         error: error.message,
         timestamp: new Date().toISOString()
       };
     }
   })
+  // NEW: Health check for all registered services
+  .get("/api/health/services", async ({ query }) => {
+    try {
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
+      const health = await getAllServicesHealth(consulUrl);
+      return health;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
   // NEW: Get instance details for a service
   .get("/api/services/:serviceId/details", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
-      const details = await getInstanceDetails(serviceId, natsUrl);
+      const details = await getInstanceDetails(serviceId, consulUrl);
       return details;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -228,10 +226,10 @@ const app = new Elysia()
   // NEW: Get container logs for a service
   .get("/api/services/:serviceId/logs", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
       const tail = parseInt((query as any).tail as string) || 100;
-      const logs = await getContainerLogs(serviceId, natsUrl, tail);
+      const logs = await getContainerLogs(serviceId, consulUrl, tail);
       return { logs };
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -240,9 +238,9 @@ const app = new Elysia()
   // NEW: Stop container
   .post("/api/services/:serviceId/stop", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
-      const result = await stopContainer(serviceId, natsUrl);
+      const result = await stopContainer(serviceId, consulUrl);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -251,9 +249,9 @@ const app = new Elysia()
   // NEW: Start container
   .post("/api/services/:serviceId/start", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
-      const result = await startContainer(serviceId, natsUrl);
+      const result = await startContainer(serviceId, consulUrl);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -262,9 +260,9 @@ const app = new Elysia()
   // NEW: Restart container
   .post("/api/services/:serviceId/restart", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
-      const result = await restartContainer(serviceId, natsUrl);
+      const result = await restartContainer(serviceId, consulUrl);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -273,10 +271,10 @@ const app = new Elysia()
   // NEW: Delete container and remove config (for managed services)
   .delete("/api/services/:serviceId/container", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const deployPath = (query as any).deploy_path as string | undefined;
       const serviceId = (params as any).serviceId;
-      const result = await deleteContainer(serviceId, natsUrl, deployPath);
+      const result = await deleteContainer(serviceId, consulUrl, deployPath);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -285,9 +283,9 @@ const app = new Elysia()
   // NEW: Remove config only (for external services)
   .delete("/api/services/:serviceId/config", async ({ params, query }) => {
     try {
-      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const consulUrl = (query.consul_url as string) || DEFAULT_CONSUL_URL;
       const serviceId = (params as any).serviceId;
-      const result = await removeServiceConfig(serviceId, natsUrl);
+      const result = await removeServiceConfig(serviceId, consulUrl);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
