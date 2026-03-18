@@ -138,3 +138,23 @@ ssh 10.7.0.4 "docker ps"
 # Check container status
 ssh 10.7.0.4 "docker inspect nemo-redis --format='{{.State.Status}}'"
 ```
+
+## Data Volume Paths (Verified)
+
+All templates support `DATA_PATH` environment variable for persistent data volumes:
+
+| Service | Volume Path | Notes |
+|---------|-------------|-------|
+| Redis | `/data` | AOF persistence enabled |
+| PostgreSQL | `/var/lib/postgresql/data` | PGDATA environment |
+| MinIO | `/data` | Object storage data |
+| NATS | `/data` | JetStream persistence |
+| ClickHouse | `/var/lib/clickhouse` | OLAP data |
+| Temporal | `/etc/temporal/config` | Config (uses PostgreSQL for data) |
+| LiveKit | `/var/livekit` | Recordings |
+| SigNoz | `/var/otel` | OTEL collector data |
+
+### DATA_PATH Behavior
+- Default: `./data` (relative to deploy path)
+- At runtime: Auto-generated as `{deploy_path}/{serviceId}/data`
+- Volume mount: `{DATA_PATH}:{container_path}`

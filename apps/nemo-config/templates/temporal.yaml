@@ -7,11 +7,15 @@ env_vars:
   - key: POSTGRES_URL
     description: "Postgres Connection string for Temporal"
     default: "postgres://admin:password@localhost:5432/temporal"
+  - key: DATA_PATH
+    description: "Host path for data persistence"
+    default: "./data"
 exports:
   "temporal.url": "${HOST}:7233"
 health_check:
-  type: "tcp"
+  type: "http"
   port: 7233
+  path: "/health"
 docker_compose: |
   services:
     temporal:
@@ -25,3 +29,5 @@ docker_compose: |
       ports:
         - "7233:7233"
         - "8233:8233"
+      volumes:
+        - ${DATA_PATH:-./data}:/etc/temporal/config

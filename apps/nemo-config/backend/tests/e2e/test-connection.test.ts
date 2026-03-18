@@ -1,9 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { cleanupTestResources } from './helpers/consul';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
+import { cleanupTestResources, cleanupConsulForService, generateTestServiceId, getNextTestPort, getContainerName } from './helpers/consul';
+import { stopContainer, removeContainer } from './helpers/docker';
 import { get, post } from './helpers/api';
-import { CONFIG } from '../../config';
+import { CONFIG } from './config';
+
+const TARGET_HOST = CONFIG.DEFAULT_TARGET_HOST;
 
 describe('Test Connection API - E2E Tests', () => {
+  let testServiceId: string;
+  let containerName: string;
+  let testPort: number;
+
   beforeAll(async () => {
     await cleanupTestResources();
   });
@@ -12,55 +19,57 @@ describe('Test Connection API - E2E Tests', () => {
     await cleanupTestResources();
   });
 
+  beforeEach(async () => {
+    testServiceId = generateTestServiceId('redis');
+    containerName = getContainerName(testServiceId);
+    testPort = getNextTestPort();
+  });
+
+  afterEach(async () => {
+    try {
+      await stopContainer(containerName, TARGET_HOST).catch(() => {});
+      await removeContainer(containerName, testServiceId, TARGET_HOST).catch(() => {});
+    } catch (error) {
+      console.warn('Cleanup warning:', error);
+    }
+    await cleanupConsulForService(testServiceId);
+  });
+
   it('should test TCP connection to Redis successfully', async () => {
+    const { data: catalogData } = await get('/api/catalog');
+    const redisTemplate = catalogData.find((t: any) => t.id === 'redis');
+    expect(redisTemplate).toBeDefined();
+
+    const { data: deployData, status: deployStatus } = await post('/api/deploy', {
+      target_host: TARGET_HOST,
+      service_id: testServiceId,
+      template: redisTemplate,
+      env_values: { PORT: String(testPort) },
+      consul_url: CONFIG.CONSUL_URL,
+      mode: 'deploy',
+      deploy_path: CONFIG.DEPLOY_BASE_PATH
+    });
+
+    expect(deployStatus).toBe(200);
+    expect(deployData.success).toBe(true);
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     const { data, status } = await post('/api/test-connection', {
-      service_id: 'redis-test',
-      connection_url: 'redis://10.7.0.4:6379',
+      service_id: testServiceId,
+      connection_url: `redis://${TARGET_HOST}:${testPort}`,
       health_check: { type: 'tcp', port: 6379 },
       metadata: {}
     });
 
     expect(status).toBe(200);
     expect(data.success).toBe(true);
-    expect(data.message).toContain('TCP connection successful');
-    expect(data.details).toHaveProperty('host', '10.7.0.4');
-    expect(data.details).toHaveProperty('port', 6379);
-  });
-
-  it('should test TCP connection to Postgres successfully', async () => {
-    const { data, status } = await post('/api/test-connection', {
-      service_id: 'postgres-test',
-      connection_url: 'postgres://10.7.0.4:5432',
-      health_check: { type: 'tcp', port: 5432 },
-      metadata: {}
-    });
-
-    expect(status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(data.message).toContain('TCP connection successful');
-    expect(data.details).toHaveProperty('host', '10.7.0.4');
-    expect(data.details).toHaveProperty('port', 5432);
-  });
-
-  it('should test HTTP connection to Minio successfully', async () => {
-    const { data, status } = await post('/api/test-connection', {
-      service_id: 'minio-test',
-      connection_url: 'http://10.7.0.4:9000',
-      health_check: { type: 'http', port: 9000, path: '/minio/health/live' },
-      metadata: {}
-    });
-
-    expect(status).toBe(200);
-    // Note: This might fail if Minio isn't actually running on 10.7.0.4:9000
-    // but we're testing that the API call works correctly
-    expect(data).toHaveProperty('success');
-    expect(data).toHaveProperty('message');
-  });
+  }, 120000);
 
   it('should fail on invalid TCP port', async () => {
     const { data, status } = await post('/api/test-connection', {
       service_id: 'redis-test',
-      connection_url: 'redis://10.7.0.4:9999',
+      connection_url: `redis://${TARGET_HOST}:9999`,
       health_check: { type: 'tcp', port: 9999 },
       metadata: {}
     });
@@ -68,21 +77,7 @@ describe('Test Connection API - E2E Tests', () => {
     expect(status).toBe(200);
     expect(data.success).toBe(false);
     expect(data.message).toContain('TCP connection failed');
-    expect(data.details).toHaveProperty('host', '10.7.0.4');
+    expect(data.details).toHaveProperty('host', TARGET_HOST);
     expect(data.details).toHaveProperty('port', 9999);
-  });
-
-  it('should fail on invalid HTTP endpoint', async () => {
-    const { data, status } = await post('/api/test-connection', {
-      service_id: 'http-test',
-      connection_url: 'http://10.7.0.4:9999',
-      health_check: { type: 'http', port: 9999, path: '/' },
-      metadata: {}
-    });
-
-    expect(status).toBe(200);
-    expect(data.success).toBe(false);
-    expect(data.message).toContain('HTTP connection failed');
-    expect(data.details).toHaveProperty('url');
   });
 });

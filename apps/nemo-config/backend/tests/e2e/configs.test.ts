@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { cleanupTestResources, cleanupConsulForService } from './helpers/consul';
-import { get, post, del } from './helpers/api';
-import { generateTestServiceId } from './helpers/consul';
+import { cleanupTestResources, cleanupConsulForService, generateTestServiceId } from './helpers/consul';
+import { get, post } from './helpers/api';
 import { CONFIG } from './config';
+
+const TARGET_HOST = CONFIG.DEFAULT_TARGET_HOST;
 
 describe('Configs API - E2E Tests', () => {
   let testServiceId: string;
@@ -50,7 +51,7 @@ describe('Configs API - E2E Tests', () => {
     const redisTemplate = catalogResponse.data.find((t: any) => t.id === 'redis');
     
     const deployResponse = await post('/api/deploy', {
-      target_host: 'localhost',
+      target_host: TARGET_HOST,
       service_id: testServiceId,
       template: redisTemplate,
       env_values: {},

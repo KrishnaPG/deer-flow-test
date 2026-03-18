@@ -136,6 +136,30 @@ export async function updateConsulKV(
   }
 }
 
+function decodeConsulValue(value: string | Buffer): string {
+  // Handle Buffer from consul client
+  const strValue = typeof value === 'string' ? value : value.toString('utf-8');
+  
+  // Check if value looks like plain text (contains special chars like : / @ =)
+  // If so, it's likely already decoded by the consul client
+  if (/[:/@=]/.test(strValue) || strValue.startsWith('{') || strValue.startsWith('[')) {
+    return strValue;
+  }
+  
+  // Otherwise, try to base64 decode
+  try {
+    const decoded = Buffer.from(strValue, 'base64').toString('utf-8');
+    // Verify it's valid UTF-8 (if it's gibberish, it wasn't base64)
+    if (decoded && !decoded.includes('\ufffd')) {
+      return decoded;
+    }
+  } catch {
+    // Fall through to return original
+  }
+  
+  return strValue;
+}
+
 export async function getAllConfigFromConsul(
   consulUrl: string, 
   allowedPrefixes?: string[]
@@ -168,23 +192,44 @@ export async function getAllConfigFromConsul(
           }
         }
         
-        // Ensure prefix ends with / for directory-like queries
-        if (!consulPrefix.endsWith('/')) {
-          consulPrefix += '/';
-        }
+        // Check if this is a direct key (no wildcard) or directory query
+        const isDirectKey = !prefix.includes('>') && !prefix.endsWith('.');
         
-        const keys = await consul.kv.keys(consulPrefix);
-        console.log(`[Consul] Found ${keys.length} keys under ${consulPrefix}`);
-        
-        for (const key of keys) {
-          const result = await consul.kv.get(key);
-          if (result && result.Value) {
-            // Consul returns base64 encoded value
-            const value = Buffer.from(result.Value, 'base64').toString();
-            // Convert back to dot notation for API compatibility
-            const dotKey = key.replace(/\//g, '.');
-            configs[dotKey] = value;
-            console.log(`[Consul] Read key ${dotKey}`);
+        if (isDirectKey) {
+          // Direct key lookup - don't add trailing slash
+          try {
+            const result = await consul.kv.get(consulPrefix);
+            if (result && result.Value) {
+              // Decode value - consul client may auto-decode some values
+              const value = decodeConsulValue(result.Value);
+              const dotKey = consulPrefix.replace(/\//g, '.');
+              configs[dotKey] = value;
+              console.log(`[Consul] Read direct key ${dotKey}`);
+            }
+          } catch (err: any) {
+            if (err.message && !err.message.includes('not found')) {
+              console.warn(`[Consul] Warning fetching direct key ${consulPrefix}:`, err.message);
+            }
+          }
+        } else {
+          // Directory query - add trailing slash
+          if (!consulPrefix.endsWith('/')) {
+            consulPrefix += '/';
+          }
+          
+          const keys = await consul.kv.keys(consulPrefix);
+          console.log(`[Consul] Found ${keys.length} keys under ${consulPrefix}`);
+          
+          for (const key of keys) {
+            const result = await consul.kv.get(key);
+            if (result && result.Value) {
+              // Decode value - consul client may auto-decode some values
+              const value = decodeConsulValue(result.Value);
+              // Convert back to dot notation for API compatibility
+              const dotKey = key.replace(/\//g, '.');
+              configs[dotKey] = value;
+              console.log(`[Consul] Read key ${dotKey}`);
+            }
           }
         }
       } catch (err: any) {
