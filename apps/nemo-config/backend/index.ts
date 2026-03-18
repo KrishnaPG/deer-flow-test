@@ -67,11 +67,18 @@ const app = new Elysia()
         server?.publish('logs', JSON.stringify({ serviceId: req.service_id, message: msg }));
       };
       
-      // We subscribe all WS clients to the 'logs' topic
       const result = await deployService(req, onLog);
       return result;
     } catch (error: any) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      const errorResponse = {
+        error: error.message || 'Unknown error',
+        details: error.details || null,
+      };
+      console.error(`[API] Deploy error:`, error);
+      return new Response(JSON.stringify(errorResponse), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   }, {
     body: t.Object({

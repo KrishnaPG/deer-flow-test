@@ -172,7 +172,10 @@ export async function deployService(req: DeployRequest, onLog?: LogCallback) {
   log(`[Deploy] Data path: ${dataPath}`);
   log(`[Deploy] Port: ${port}`);
   
-  let composeStr = req.template.docker_compose;
+  let composeStr = req.template.docker_compose || '';
+  if (composeStr.includes('\\n')) {
+    composeStr = composeStr.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r');
+  }
   composeStr = injectContainerName(composeStr, containerName);
   
   for (const [key, value] of Object.entries(vars)) {
@@ -197,29 +200,39 @@ export async function deployService(req: DeployRequest, onLog?: LogCallback) {
     log(`[Deploy] Executing: ${command.replace(/cat .* \//, "cat <template> |")}`);
     
     const { spawn } = await import('child_process');
+    
+    let stdout = '';
+    let stderr = '';
+    
     await new Promise<void>((resolvePromise, reject) => {
       const child = spawn(command, { shell: true });
       
       child.stdout.on('data', (data) => {
         const text = data.toString().trim();
+        stdout += text + '\n';
         if (text) log(`[Docker] ${text}`);
       });
       
       child.stderr.on('data', (data) => {
         const text = data.toString().trim();
+        stderr += text + '\n';
         if (text) log(`[Docker] ${text}`);
       });
       
       child.on('close', (code) => {
         if (code !== 0) {
-          reject(new Error(`Command failed with exit code ${code}`));
+          const combinedOutput = (stderr || stdout).trim();
+          const errorMsg = combinedOutput 
+            ? `Docker compose failed: ${combinedOutput}`
+            : `Command failed with exit code ${code}`;
+          reject(new Error(errorMsg));
         } else {
           resolvePromise();
         }
       });
       
       child.on('error', (err) => {
-        reject(err);
+        reject(new Error(`Failed to execute command: ${err.message}`));
       });
     });
 
