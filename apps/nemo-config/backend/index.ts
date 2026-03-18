@@ -1,10 +1,10 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
-import { readdir, readFile } from "fs/promises";
-import * as yaml from "js-yaml";
+import { readFile } from "fs/promises";
 import { resolve } from "path";
 import { homedir } from "os";
 import { connect } from "nats";
+import { getCatalogTemplates, getCatalogPrefixes } from "./src/catalog";
 import { 
   deployService, 
   registerExistingInstance,
@@ -12,20 +12,6 @@ import {
   testConnection,
   type DeployRequest 
 } from "./src/deployer";
-
-const TEMPLATE_DIR = resolve(import.meta.dir, "../templates");
-
-interface Template {
-  name: string;
-  id: string;
-  icon: string;
-  default_port: number;
-  env_vars: { key: string; description: string; default?: string; secret?: boolean }[];
-  health_check: { type: string; port: number; path?: string };
-  docker_compose: string;
-  connection_url_pattern?: string;
-  exports?: Record<string, string>;
-}
 
 const app = new Elysia()
   .use(cors())
@@ -40,19 +26,7 @@ const app = new Elysia()
   })
   .get("/api/catalog", async () => {
     try {
-      const files = await readdir(TEMPLATE_DIR);
-      const templates: Template[] = [];
-
-      for (const file of files) {
-        if (file.endsWith(".yaml") || file.endsWith(".yml")) {
-          const content = await readFile(resolve(TEMPLATE_DIR, file), "utf-8");
-          const parsed = yaml.load(content) as Template;
-          if (parsed && parsed.id) {
-            templates.push(parsed);
-          }
-        }
-      }
-      return templates;
+      return await getCatalogTemplates();
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
@@ -144,7 +118,8 @@ const app = new Elysia()
   .get("/api/export-env", async ({ query }) => {
     try {
       const natsUrl = query.nats_url || 'nats://localhost:4222';
-      const configs = await getAllConfigFromNats(natsUrl);
+      const prefixes = await getCatalogPrefixes();
+      const configs = await getAllConfigFromNats(natsUrl, prefixes);
       
       // Convert to .env format
       const envLines = Object.entries(configs)
@@ -164,15 +139,26 @@ const app = new Elysia()
       );
     }
   })
+  // NEW: Get all configs for frontend state
+  .get("/api/configs", async ({ query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const prefixes = await getCatalogPrefixes();
+      const configs = await getAllConfigFromNats(natsUrl, prefixes);
+      return configs;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
   // NEW: Get current config from NATS for a specific service
   .get("/api/config/:serviceId", async ({ params, query }) => {
     try {
       const natsUrl = query.nats_url || 'nats://localhost:4222';
-      const configs = await getAllConfigFromNats(natsUrl);
-      
-      // Filter for this service
-      const serviceConfigs: Record<string, string> = {};
       const serviceId = (params as any).serviceId;
+      const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.>`]);
+      
+      // Filter for this service (already filtered by NATS, but just to be safe)
+      const serviceConfigs: Record<string, string> = {};
       for (const [key, value] of Object.entries(configs)) {
         if (key.startsWith(serviceId + '.')) {
           serviceConfigs[key] = value;
