@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import type { Template, ServiceStatus, Mode } from './definitions';
+import type { Template, ServiceStatus, Mode, InstanceDetails } from './definitions';
 import type { TestStatus } from './components/ExistingModeForm';
 type NatsStatus = 'connected' | 'disconnected' | 'checking';
+type ConsoleMode = 'deployment' | 'container';
 import { useNatsUrl } from './hooks/useNatsUrl';
 import { useDeployPath } from './hooks/useDeployPath';
 import { Header } from './components/Header';
@@ -21,8 +22,11 @@ interface TabState {
   selectedHost: string;
   existingUrl: string;
   consoleOutput: string[];
+  consoleMode: ConsoleMode;
   testStatus: TestStatus;
   testMessage?: string;
+  instanceDetails: InstanceDetails | null;
+  isProcessing: boolean;
 }
 
 export default function App() {
@@ -43,10 +47,11 @@ export default function App() {
   const [deployPathInput, setDeployPathInput] = useState(deployPath);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const logPollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  // WebSocket for real-time logs
+  // WebSocket for real-time deployment logs
   useEffect(() => {
-    if (wsRef.current) return; // Prevent duplicate connections in StrictMode
+    if (wsRef.current) return;
 
     const ws = new WebSocket('ws://localhost:3001/ws/logs');
     wsRef.current = ws;
@@ -57,7 +62,7 @@ export default function App() {
         if (data.serviceId && data.message) {
           setTabs(prevTabs => prevTabs.map(tab => 
             tab.id === data.serviceId 
-              ? { ...tab, consoleOutput: [...tab.consoleOutput, `[${new Date().toLocaleTimeString()}] ${data.message}`] }
+              ? { ...tab, consoleOutput: [...tab.consoleOutput, data.message] }
               : tab
           ));
         }
@@ -72,10 +77,90 @@ export default function App() {
     };
   }, []);
 
+  // Poll for container logs when service is healthy
+  const fetchContainerLogs = useCallback(async (serviceId: string) => {
+    try {
+      const res = await axios.get(`${API_URL}/services/${serviceId}/logs`, {
+        params: { nats_url: natsUrl, tail: 100 }
+      });
+      return res.data.logs || [];
+    } catch (err) {
+      console.error('Failed to fetch container logs', err);
+      return [];
+    }
+  }, [natsUrl]);
+
+  // Start/stop log polling based on tab visibility and service status
+  useEffect(() => {
+    if (!activeTabId) {
+      if (logPollingRef.current) {
+        clearInterval(logPollingRef.current);
+        logPollingRef.current = null;
+      }
+      return;
+    }
+
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (!activeTab) return;
+
+    const isHealthy = status[activeTabId] === 'healthy';
+    const isManaged = activeTab.instanceDetails?.metadata?.managedBy === 'nemo';
+
+    if (isHealthy && isManaged) {
+      // Start polling for container logs
+      const pollLogs = async () => {
+        const logs = await fetchContainerLogs(activeTabId);
+        setTabs(prevTabs => prevTabs.map(tab =>
+          tab.id === activeTabId
+            ? { ...tab, consoleOutput: logs, consoleMode: 'container' as ConsoleMode }
+            : tab
+        ));
+      };
+      
+      pollLogs();
+      logPollingRef.current = setInterval(pollLogs, 1000);
+
+      return () => {
+        if (logPollingRef.current) {
+          clearInterval(logPollingRef.current);
+          logPollingRef.current = null;
+        }
+      };
+    } else {
+      if (logPollingRef.current) {
+        clearInterval(logPollingRef.current);
+        logPollingRef.current = null;
+      }
+    }
+  }, [activeTabId, status, tabs, fetchContainerLogs, natsUrl]);
+
+  const fetchData = useCallback(async () => {
+    const [tplRes, hostsRes, configsRes] = await Promise.all([
+      axios.get(`${API_URL}/catalog`),
+      axios.get(`${API_URL}/ssh-hosts`),
+      axios.get(`${API_URL}/configs`, { params: { nats_url: natsUrl } }).catch(() => ({ data: {} }))
+    ]);
+
+    setTemplates(tplRes.data);
+    setHosts(hostsRes.data);
+
+    // Compute status from configs
+    const configs = configsRes.data || {};
+    const newStatus: Record<string, ServiceStatus> = {};
+    
+    tplRes.data.forEach((tpl: Template) => {
+      if (configs[`${tpl.id}.url`]) {
+        newStatus[tpl.id] = 'healthy';
+      }
+    });
+    
+    setStatus(newStatus);
+  }, [natsUrl]);
+
   // Fetch initial data
   useEffect(() => {
     fetchData();
-  }, [natsUrl]);
+  }, [fetchData]);
 
   // Check NATS health
   useEffect(() => {
@@ -95,29 +180,29 @@ export default function App() {
     return () => clearInterval(interval);
   }, [natsUrl]);
 
-  const fetchData = async () => {
-    const [tplRes, hostsRes, configsRes] = await Promise.all([
-      axios.get(`${API_URL}/catalog`),
-      axios.get(`${API_URL}/ssh-hosts`),
-      axios.get(`${API_URL}/configs`, { params: { nats_url: natsUrl } }).catch(() => ({ data: {} }))
-    ]);
-
-    setTemplates(tplRes.data);
-    setHosts(hostsRes.data);
-
-    // Compute status from configs
-    const configs = configsRes.data || {};
-    const newStatus: Record<string, ServiceStatus> = {};
+  // Fetch instance details when tab becomes active and service is healthy
+  useEffect(() => {
+    if (!activeTabId) return;
     
-    tplRes.data.forEach((tpl: Template) => {
-      // If there's a `.url` key in NATS for this service, we consider it healthy/configured
-      if (configs[`${tpl.id}.url`]) {
-        newStatus[tpl.id] = 'healthy';
+    const fetchDetails = async () => {
+      if (status[activeTabId] === 'healthy') {
+        try {
+          const res = await axios.get(`${API_URL}/services/${activeTabId}/details`, {
+            params: { nats_url: natsUrl }
+          });
+          setTabs(prevTabs => prevTabs.map(tab =>
+            tab.id === activeTabId
+              ? { ...tab, instanceDetails: res.data as InstanceDetails }
+              : tab
+          ));
+        } catch (err) {
+          console.error('Failed to fetch instance details', err);
+        }
       }
-    });
+    };
     
-    setStatus(newStatus);
-  };
+fetchDetails();
+  }, [activeTabId, status, natsUrl]);
 
   const openTab = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
@@ -151,8 +236,11 @@ export default function App() {
       selectedHost: 'localhost',
       existingUrl,
       consoleOutput: [],
+      consoleMode: 'deployment',
       testStatus: 'idle',
-      testMessage: undefined
+      testMessage: undefined,
+      instanceDetails: null,
+      isProcessing: false
     };
 
     setTabs([...tabs, newTab]);
@@ -175,7 +263,7 @@ export default function App() {
   const appendConsole = useCallback((tabId: string, message: string) => {
     setTabs(prev => prev.map(t =>
       t.id === tabId
-        ? { ...t, consoleOutput: [...t.consoleOutput, `[${new Date().toLocaleTimeString()}] ${message}`] }
+        ? { ...t, consoleOutput: [...t.consoleOutput, `[${new Date().toLocaleTimeString()}] ${message}`], consoleMode: 'deployment' }
         : t
     ));
   }, []);
@@ -275,12 +363,87 @@ export default function App() {
       }
 
       setStatus(prev => ({ ...prev, [tabId]: 'healthy' }));
+      
+      // Fetch instance details after successful deployment
+      setTimeout(async () => {
+        try {
+          const res = await axios.get(`${API_URL}/services/${tabId}/details`, {
+            params: { nats_url: natsUrl }
+          });
+          updateTab(tabId, { instanceDetails: res.data as InstanceDetails });
+        } catch (err) {
+          console.error('Failed to fetch instance details after deploy', err);
+        }
+      }, 500);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
       appendConsole(tabId, `Error: ${errorMessage}`);
       setStatus(prev => ({ ...prev, [tabId]: 'unconfigured' }));
     } finally {
       setDeploying(null);
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const handleContainerAction = async (tabId: string, action: 'stop' | 'start' | 'restart' | 'delete' | 'removeConfig') => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab) return;
+
+    updateTab(tabId, { isProcessing: true });
+    appendConsole(tabId, `${action.charAt(0).toUpperCase() + action.slice(1)} operation in progress...`);
+
+    try {
+      const endpoint = action === 'removeConfig' 
+        ? `${API_URL}/services/${tabId}/config`
+        : action === 'delete'
+          ? `${API_URL}/services/${tabId}/container`
+          : `${API_URL}/services/${tabId}/${action}`;
+      
+      const method = action === 'delete' || action === 'removeConfig' ? 'delete' : 'post';
+      
+      await axios({
+        method,
+        url: endpoint,
+        params: { nats_url: natsUrl, deploy_path: deployPath }
+      });
+
+      appendConsole(tabId, `${action.charAt(0).toUpperCase() + action.slice(1)} completed successfully`);
+
+      if (action === 'delete' || action === 'removeConfig') {
+        // Clear status and instance details
+        setStatus(prev => {
+          const newStatus = { ...prev };
+          delete newStatus[tabId];
+          return newStatus;
+        });
+        updateTab(tabId, { 
+          instanceDetails: null, 
+          consoleOutput: [],
+          consoleMode: 'deployment'
+        });
+      } else {
+        // Refresh instance details after stop/start/restart
+        setTimeout(async () => {
+          try {
+            const res = await axios.get(`${API_URL}/services/${tabId}/details`, {
+              params: { nats_url: natsUrl }
+            });
+            updateTab(tabId, { instanceDetails: res.data as InstanceDetails });
+          } catch (err) {
+            console.error('Failed to refresh instance details', err);
+          }
+        }, 1000);
+      }
+    } catch (err) {
+      const errorMsg = axios.isAxiosError(err) 
+        ? err.response?.data?.error || err.message 
+        : err instanceof Error ? err.message : 'Operation failed';
+      appendConsole(tabId, `Error: ${errorMsg}`);
+    } finally {
+      updateTab(tabId, { isProcessing: false });
     }
   };
 
@@ -342,11 +505,12 @@ export default function App() {
               existingUrl={activeTab.existingUrl}
               hosts={hosts}
               consoleOutput={activeTab.consoleOutput}
+              consoleMode={activeTab.consoleMode}
               isDeploying={deploying === activeTab.id}
               testStatus={activeTab.testStatus}
               testMessage={activeTab.testMessage}
+              instanceDetails={activeTab.instanceDetails}
               onModeChange={(mode) => {
-                // Reset test status when switching modes
                 const resetTest = mode === 'existing' ? {} : { testStatus: 'idle' as TestStatus, testMessage: undefined };
                 updateTab(activeTab.id, { mode, ...resetTest });
               }}
@@ -355,11 +519,17 @@ export default function App() {
               })}
               onHostChange={(host) => updateTab(activeTab.id, { selectedHost: host })}
               onExistingUrlChange={(url) => {
-                // Reset test status when URL changes
                 updateTab(activeTab.id, { existingUrl: url, testStatus: 'idle', testMessage: undefined });
               }}
               onTestConnection={() => handleTestConnection(activeTab.id)}
               onDeploy={() => handleDeploy(activeTab.id)}
+              onCopy={handleCopy}
+              onStop={() => handleContainerAction(activeTab.id, 'stop')}
+              onStart={() => handleContainerAction(activeTab.id, 'start')}
+              onRestart={() => handleContainerAction(activeTab.id, 'restart')}
+              onDelete={() => handleContainerAction(activeTab.id, 'delete')}
+              onRemoveConfig={() => handleContainerAction(activeTab.id, 'removeConfig')}
+              isProcessing={activeTab.isProcessing}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center bg-gray-50">

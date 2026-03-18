@@ -10,6 +10,13 @@ import {
   registerExistingInstance,
   getAllConfigFromNats,
   testConnection,
+  getInstanceDetails,
+  getContainerLogs,
+  stopContainer,
+  startContainer,
+  restartContainer,
+  deleteContainer,
+  removeServiceConfig,
   type DeployRequest 
 } from "./src/deployer";
 
@@ -200,6 +207,85 @@ const app = new Elysia()
         error: error.message,
         timestamp: new Date().toISOString()
       };
+    }
+  })
+  // NEW: Get instance details for a service
+  .get("/api/services/:serviceId/details", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const serviceId = (params as any).serviceId;
+      const details = await getInstanceDetails(serviceId, natsUrl);
+      return details;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
+  // NEW: Get container logs for a service
+  .get("/api/services/:serviceId/logs", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const serviceId = (params as any).serviceId;
+      const tail = parseInt((query as any).tail as string) || 100;
+      const logs = await getContainerLogs(serviceId, natsUrl, tail);
+      return { logs };
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
+  // NEW: Stop container
+  .post("/api/services/:serviceId/stop", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const serviceId = (params as any).serviceId;
+      const result = await stopContainer(serviceId, natsUrl);
+      return result;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
+  // NEW: Start container
+  .post("/api/services/:serviceId/start", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const serviceId = (params as any).serviceId;
+      const result = await startContainer(serviceId, natsUrl);
+      return result;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
+  // NEW: Restart container
+  .post("/api/services/:serviceId/restart", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const serviceId = (params as any).serviceId;
+      const result = await restartContainer(serviceId, natsUrl);
+      return result;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
+  // NEW: Delete container and remove config (for managed services)
+  .delete("/api/services/:serviceId/container", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const deployPath = (query as any).deploy_path as string | undefined;
+      const serviceId = (params as any).serviceId;
+      const result = await deleteContainer(serviceId, natsUrl, deployPath);
+      return result;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+  })
+  // NEW: Remove config only (for external services)
+  .delete("/api/services/:serviceId/config", async ({ params, query }) => {
+    try {
+      const natsUrl = query.nats_url || 'nats://localhost:4222';
+      const serviceId = (params as any).serviceId;
+      const result = await removeServiceConfig(serviceId, natsUrl);
+      return result;
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
   })
   .listen(3001);
