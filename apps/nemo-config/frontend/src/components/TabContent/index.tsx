@@ -65,7 +65,7 @@ export const TabContent = () => {
 
 // DeployButton component inline since it's small
 import { Play, Link2, Activity } from 'lucide-react';
-import * as apiActions from '../../store/api-actions';
+import { useMutations } from '../../hooks/useMutations';
 import { selectCanRegisterExisting } from '../../store/selectors';
 
 const DeployButton = () => {
@@ -75,12 +75,13 @@ const DeployButton = () => {
   const isDeploying = snap.deploying === snap.activeTabId;
   const isHealthy = !!snap.configs[`${snap.activeTabId}.url`];
   const canRegisterExisting = selectCanRegisterExisting(snap, snap.activeTabId);
-  
+  const { executeDeploy } = useMutations();
+
   if (!activeTab || !template) return null;
-  
+
   const handleDeploy = () => {
     if (snap.activeTabId) {
-      apiActions.deploy(snap.activeTabId);
+      executeDeploy.mutate(snap.activeTabId);
     }
   };
   
@@ -115,7 +116,7 @@ const DeployButton = () => {
     );
   };
   
-  const isDisabled = isDeploying || (activeTab.mode === 'existing' && !canRegisterExisting && !isHealthy);
+  const isDisabled = executeDeploy.isPending || (activeTab.mode === 'existing' && !canRegisterExisting && !isHealthy);
   
   return (
     <div className="pt-4">

@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import { store } from '../store';
-import * as apiActions from '../store/api-actions';
+import * as actions from '../store/actions';
 import {
   fetchTemplates,
   fetchHosts,
   fetchConfigs,
   checkNatsHealth,
+  fetchInstanceDetails,
+  fetchContainerLogs,
 } from '../api/services';
 
 export const queryClient = new QueryClient({
@@ -48,25 +50,43 @@ export const useServerSync = (): void => {
     enabled: !!store.natsUrl,
   });
 
+  // Instance details query - fetch for active tab
+  const instanceDetailsQuery = useQuery({
+    queryKey: ['instanceDetails', store.activeTabId],
+    queryFn: () => fetchInstanceDetails(store.activeTabId!, store.natsUrl),
+    enabled: !!store.activeTabId && !!store.natsUrl && !!store.configs[`${store.activeTabId}.url`],
+  });
+
+  // Container logs query - only for managed services in container mode
+  const containerLogsQuery = useQuery({
+    queryKey: ['containerLogs', store.activeTabId],
+    queryFn: () => fetchContainerLogs(store.activeTabId!, store.natsUrl),
+    refetchInterval: 1000,
+    enabled: !!store.activeTabId && 
+              !!store.natsUrl && 
+              !!store.configs[`${store.activeTabId}.url`] &&
+              store.consoleMode[store.activeTabId] === 'container',
+  });
+
   // Sync templates to store
   useEffect(() => {
-    apiActions.setTemplates(templatesQuery.data || []);
-    apiActions.setLoadingTemplates(templatesQuery.isLoading);
-    apiActions.setTemplatesError(templatesQuery.error?.message || null);
+    store.templates = templatesQuery.data || [];
+    store.isLoadingTemplates = templatesQuery.isLoading;
+    store.templatesError = templatesQuery.error?.message || null;
   }, [templatesQuery.data, templatesQuery.isLoading, templatesQuery.error]);
 
   // Sync hosts to store
   useEffect(() => {
     if (hostsQuery.data) {
-      apiActions.setHosts(hostsQuery.data);
+      store.hosts = hostsQuery.data;
     }
   }, [hostsQuery.data]);
 
   // Sync configs to store
   useEffect(() => {
-    apiActions.setConfigs(configsQuery.data || {});
-    apiActions.setLoadingConfigs(configsQuery.isLoading);
-    apiActions.setConfigsError(configsQuery.error?.message || null);
+    store.configs = configsQuery.data || {};
+    store.isLoadingConfigs = configsQuery.isLoading;
+    store.configsError = configsQuery.error?.message || null;
   }, [configsQuery.data, configsQuery.isLoading, configsQuery.error]);
 
   // Sync NATS status to store
@@ -74,6 +94,20 @@ export const useServerSync = (): void => {
     const status = natsHealthQuery.isLoading ? 'checking' 
       : natsHealthQuery.data ? 'connected' 
       : 'disconnected';
-    apiActions.setNatsStatus(status);
+    store.natsStatus = status;
   }, [natsHealthQuery.data, natsHealthQuery.isLoading]);
+
+  // Sync instance details to store
+  useEffect(() => {
+    if (store.activeTabId && instanceDetailsQuery.data) {
+      actions.setInstanceDetails(store.activeTabId, instanceDetailsQuery.data);
+    }
+  }, [instanceDetailsQuery.data, store.activeTabId]);
+
+  // Sync container logs to store
+  useEffect(() => {
+    if (store.activeTabId && containerLogsQuery.data) {
+      store.logs = { ...store.logs, [store.activeTabId]: containerLogsQuery.data };
+    }
+  }, [containerLogsQuery.data, store.activeTabId]);
 };
