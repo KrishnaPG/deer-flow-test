@@ -2,32 +2,23 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { resolve } from "path";
 import { writeFile, unlink } from "fs/promises";
-import { connect, StringCodec } from "nats";
 import * as net from "net";
 import { loadHealthChecker } from "./health-checks";
 import { interpolate } from "./interpolate";
+import {
+  updateConsulKV,
+  getAllConfigFromConsul,
+  removeServiceConfig,
+  type ServiceMetadata,
+  type InstanceDetails,
+  type LogCallback
+} from "./consul-store";
 
 const execAsync = promisify(exec);
-const sc = StringCodec();
 
-const KV_BUCKET = "nemo_config";
-
-export interface ServiceMetadata {
-  serviceId: string;
-  containerName: string;
-  managedBy: 'nemo' | 'external';
-  host: string;
-  connectionUrl: string;
-  deployedAt: string;
-  templateId: string;
-}
-
-export interface InstanceDetails {
-  metadata: ServiceMetadata | null;
-  connectionUrl: string | null;
-  isHealthy: boolean;
-  containerStatus?: 'running' | 'stopped' | 'not_found';
-}
+// Re-export from consul-store for backward compatibility
+export type { ServiceMetadata, InstanceDetails, LogCallback } from "./consul-store";
+export { removeServiceConfig } from "./consul-store";
 
 export interface Template {
   name: string;
@@ -46,7 +37,7 @@ export interface DeployRequest {
   service_id: string;
   template: Template;
   env_values: Record<string, string>;
-  nats_url: string;
+  consul_url: string;
   mode: 'deploy' | 'existing';
   deploy_path?: string;
 }
@@ -54,18 +45,16 @@ export interface DeployRequest {
 export interface RegisterExistingRequest {
   service_id: string;
   connection_url: string;
-  nats_url: string;
+  consul_url: string;
   template: Template;
   env_values?: Record<string, string>;
 }
 
 export interface ContainerActionRequest {
   service_id: string;
-  nats_url: string;
+  consul_url: string;
   deploy_path?: string;
 }
-
-export type LogCallback = (msg: string) => void;
 
 function generateContainerName(serviceId: string): string {
   return `nemo-${serviceId}`;
@@ -96,16 +85,16 @@ function injectContainerName(composeStr: string, containerName: string): string 
   return result.join('\n');
 }
 
-export async function getInstanceDetails(serviceId: string, natsUrl: string): Promise<InstanceDetails> {
-  const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.>`, `nemo_metadata.${serviceId}`]);
-  const connectionUrl = configs[`${serviceId}.url`] || null;
-  const metadataRaw = configs[`nemo_metadata.${serviceId}`];
+export async function getInstanceDetails(serviceId: string, consulUrl: string): Promise<InstanceDetails> {
+  const configs = await getAllConfigFromConsul(consulUrl, [`${serviceId}.>`, `nemo_metadata.${serviceId}`]);
+  const connectionUrl = configs[`nemo.${serviceId}.url`] || configs[`${serviceId}.url`] || null;
+  const metadataRaw = configs[`nemo.metadata.${serviceId}`] || configs[`nemo_metadata.${serviceId}`];
   let metadata: ServiceMetadata | null = null;
   if (metadataRaw) {
     try {
       metadata = JSON.parse(metadataRaw);
     } catch {
-      const host = configs[`nemo_metadata.${serviceId}_last_host`];
+      const host = configs[`nemo.metadata.${serviceId}_last_host`] || configs[`nemo_metadata.${serviceId}_last_host`];
       if (host && connectionUrl) {
         metadata = {
           serviceId,
@@ -233,7 +222,7 @@ export async function deployService(req: DeployRequest, onLog?: LogCallback) {
       templateId: req.template.id
     };
     
-    await updateNatsKV(req.nats_url, req.service_id, connectionUrl, metadata, exports, onLog);
+    await updateConsulKV(req.consul_url, req.service_id, connectionUrl, metadata, exports, onLog);
 
     log(`[Deploy] Successfully deployed ${req.service_id}`);
     return { success: true, message: `Deployed ${req.service_id} to ${req.target_host}` };
@@ -267,8 +256,8 @@ export async function registerExistingInstance(req: RegisterExistingRequest, onL
     templateId: req.template.id
   };
   
-  await updateNatsKV(
-    req.nats_url, 
+  await updateConsulKV(
+    req.consul_url, 
     req.service_id, 
     req.connection_url, 
     metadata,
@@ -280,8 +269,8 @@ export async function registerExistingInstance(req: RegisterExistingRequest, onL
   return { success: true, message: `Registered existing ${req.service_id}` };
 }
 
-export async function getContainerLogs(serviceId: string, natsUrl: string, tail: number = 100): Promise<string[]> {
-  const details = await getInstanceDetails(serviceId, natsUrl);
+export async function getContainerLogs(serviceId: string, consulUrl: string, tail: number = 100): Promise<string[]> {
+  const details = await getInstanceDetails(serviceId, consulUrl);
   if (!details.metadata || details.metadata.managedBy !== 'nemo') {
     throw new Error('Cannot get logs: service is not managed by nemo');
   }
@@ -303,8 +292,8 @@ export async function getContainerLogs(serviceId: string, natsUrl: string, tail:
   }
 }
 
-export async function stopContainer(serviceId: string, natsUrl: string): Promise<{ success: boolean; message: string }> {
-  const details = await getInstanceDetails(serviceId, natsUrl);
+export async function stopContainer(serviceId: string, consulUrl: string): Promise<{ success: boolean; message: string }> {
+  const details = await getInstanceDetails(serviceId, consulUrl);
   if (!details.metadata || details.metadata.managedBy !== 'nemo') {
     throw new Error('Cannot stop: service is not managed by nemo');
   }
@@ -326,8 +315,8 @@ export async function stopContainer(serviceId: string, natsUrl: string): Promise
   }
 }
 
-export async function startContainer(serviceId: string, natsUrl: string): Promise<{ success: boolean; message: string }> {
-  const details = await getInstanceDetails(serviceId, natsUrl);
+export async function startContainer(serviceId: string, consulUrl: string): Promise<{ success: boolean; message: string }> {
+  const details = await getInstanceDetails(serviceId, consulUrl);
   if (!details.metadata || details.metadata.managedBy !== 'nemo') {
     throw new Error('Cannot start: service is not managed by nemo');
   }
@@ -349,8 +338,8 @@ export async function startContainer(serviceId: string, natsUrl: string): Promis
   }
 }
 
-export async function restartContainer(serviceId: string, natsUrl: string): Promise<{ success: boolean; message: string }> {
-  const details = await getInstanceDetails(serviceId, natsUrl);
+export async function restartContainer(serviceId: string, consulUrl: string): Promise<{ success: boolean; message: string }> {
+  const details = await getInstanceDetails(serviceId, consulUrl);
   if (!details.metadata || details.metadata.managedBy !== 'nemo') {
     throw new Error('Cannot restart: service is not managed by nemo');
   }
@@ -372,8 +361,8 @@ export async function restartContainer(serviceId: string, natsUrl: string): Prom
   }
 }
 
-export async function deleteContainer(serviceId: string, natsUrl: string, deployPath?: string): Promise<{ success: boolean; message: string }> {
-  const details = await getInstanceDetails(serviceId, natsUrl);
+export async function deleteContainer(serviceId: string, consulUrl: string, deployPath?: string): Promise<{ success: boolean; message: string }> {
+  const details = await getInstanceDetails(serviceId, consulUrl);
   if (!details.metadata || details.metadata.managedBy !== 'nemo') {
     throw new Error('Cannot delete: service is not managed by nemo');
   }
@@ -401,7 +390,7 @@ export async function deleteContainer(serviceId: string, natsUrl: string, deploy
       await execAsync(cmd);
     }
     
-    await removeServiceConfig(serviceId, natsUrl);
+    await removeServiceConfig(serviceId, consulUrl);
     
     return { success: true, message: `Deleted container ${containerName} and removed config` };
   } catch (error: any) {
@@ -409,38 +398,7 @@ export async function deleteContainer(serviceId: string, natsUrl: string, deploy
   }
 }
 
-export async function removeServiceConfig(serviceId: string, natsUrl: string): Promise<{ success: boolean; message: string }> {
-  const nc = await connect({ servers: natsUrl });
-  const js = nc.jetstream();
-  const kv = await js.views.kv(KV_BUCKET);
-  
-  const prefixes = [`${serviceId}.>`, `nemo_metadata.${serviceId}.>`, `nemo_metadata.${serviceId}_`];
-  
-  try {
-    for (const prefix of prefixes) {
-      try {
-        const keysIter = await kv.keys(prefix);
-        for await (const key of keysIter) {
-          if (key.startsWith(serviceId + '.') || key.startsWith(`nemo_metadata.${serviceId}`)) {
-            await kv.delete(key);
-            console.log(`[NATS] Deleted key: ${key}`);
-          }
-        }
-      } catch (err: any) {
-        if (!err.message?.includes('no keys')) {
-          throw err;
-        }
-      }
-    }
-  } catch (err: any) {
-    if (!err.message?.includes('no keys')) {
-      throw err;
-    }
-  }
-  
-  await nc.drain();
-  return { success: true, message: `Removed configuration for ${serviceId}` };
-}
+
 
 function buildConnectionUrl(template: Template, vars: Record<string, string>): string {
   if (!template.connection_url_pattern) {
@@ -462,100 +420,8 @@ function getExports(template: Template, vars: Record<string, string>): Record<st
   return result;
 }
 
-export async function getAllConfigFromNats(natsUrl: string, allowedPrefixes?: string[]): Promise<Record<string, string>> {
-  console.log(`[NATS] Fetching config from ${natsUrl}`);
-  const nc = await connect({ servers: natsUrl });
-  const js = nc.jetstream();
-  
-  try {
-    const kv = await js.views.kv(KV_BUCKET);
-    const configs: Record<string, string> = {};
-    
-    // If specific prefixes requested, iterate through each
-    const prefixes = allowedPrefixes && allowedPrefixes.length > 0 ? allowedPrefixes : [">"];
-    console.log(`[DEBUG] using prefixes:`, prefixes);
-    
-    for (const prefix of prefixes) {
-      try {
-        const keysIter = await kv.keys(prefix);
-        for await (const key of keysIter) {
-          console.log(`[DEBUG] Got key from NATS: ${key}`);
-          const entry = await kv.get(key);
-          if (entry && entry.operation !== "DEL" && entry.operation !== "PURGE") {
-            try {
-              configs[key] = sc.decode(entry.value);
-              console.log(`[DEBUG] Decoded key ${key} = ${configs[key]}`);
-            } catch (decodeErr) {
-              console.warn(`[NATS] Failed to decode key ${key}:`, decodeErr);
-            }
-          } else {
-            console.log(`[DEBUG] Skipped key ${key} due to operation ${entry?.operation}`);
-          }
-        }
-      } catch (err: any) {
-        // If no keys match filter, it might throw a 404 No Messages error
-        if (!err.message?.includes("no messages")) {
-          throw err;
-        }
-      }
-    }
-    
-    await nc.drain();
-    return configs;
-  } catch (error: any) {
-    await nc.drain();
-    if (error.message?.includes("bucket not found")) {
-      return {};
-    }
-    throw error;
-  }
-}
-
-async function updateNatsKV(
-  natsUrl: string,
-  serviceId: string,
-  connectionUrl: string,
-  metadata: ServiceMetadata,
-  exports: Record<string, string>,
-  onLog?: LogCallback
-) {
-  const log = (msg: string) => {
-    console.log(msg);
-    if (onLog) onLog(msg);
-  };
-  
-  log(`[NATS] Connecting to ${natsUrl}`);
-  const nc = await connect({ servers: natsUrl });
-  const js = nc.jetstream();
-
-  try {
-    const kv = await js.views.kv(KV_BUCKET);
-    
-    log(`[NATS] Writing exports for ${serviceId}...`);
-    for (const [key, value] of Object.entries(exports)) {
-      try {
-        await kv.put(key, sc.encode(value));
-        log(`[NATS] Wrote export ${key} = ${value}`);
-      } catch (err: any) {
-        log(`[NATS] Error writing export ${key}: ${err.message}`);
-      }
-    }
-
-    log(`[NATS] Writing service URL: ${serviceId}.url = ${connectionUrl}`);
-    await kv.put(`${serviceId}.url`, sc.encode(connectionUrl));
-    
-    log(`[NATS] Writing metadata: nemo_metadata.${serviceId}`);
-    await kv.put(`nemo_metadata.${serviceId}`, sc.encode(JSON.stringify(metadata)));
-    
-    log(`[NATS] Syncing...`);
-  } catch (error: any) {
-    log(`[NATS] Fatal error in updateNatsKV: ${error.message}`);
-    throw error;
-  } finally {
-    await nc.drain();
-    log(`[NATS] Connection closed`);
-  }
-}
+// Re-export getAllConfigFromConsul for backward compatibility
+export { getAllConfigFromConsul as getAllConfigFromNats } from "./consul-store";
 
 interface HealthCheck {
   type: 'tcp' | 'http';
