@@ -528,20 +528,33 @@ async function updateNatsKV(
   const nc = await connect({ servers: natsUrl });
   const js = nc.jetstream();
 
-  const kv = await js.views.kv(KV_BUCKET);
-  
-  for (const [key, value] of Object.entries(exports)) {
-    await kv.put(key, sc.encode(value));
-    log(`[NATS] Wrote ${key} = ${value}`);
-  }
+  try {
+    const kv = await js.views.kv(KV_BUCKET);
+    
+    log(`[NATS] Writing exports for ${serviceId}...`);
+    for (const [key, value] of Object.entries(exports)) {
+      try {
+        await kv.put(key, sc.encode(value));
+        log(`[NATS] Wrote export ${key} = ${value}`);
+      } catch (err: any) {
+        log(`[NATS] Error writing export ${key}: ${err.message}`);
+      }
+    }
 
-  await kv.put(`${serviceId}.url`, sc.encode(connectionUrl));
-  log(`[NATS] Wrote ${serviceId}.url = ${connectionUrl}`);
-  
-  await kv.put(`nemo_metadata.${serviceId}`, sc.encode(JSON.stringify(metadata)));
-  log(`[NATS] Wrote nemo_metadata.${serviceId}`);
-  
-  await nc.drain();
+    log(`[NATS] Writing service URL: ${serviceId}.url = ${connectionUrl}`);
+    await kv.put(`${serviceId}.url`, sc.encode(connectionUrl));
+    
+    log(`[NATS] Writing metadata: nemo_metadata.${serviceId}`);
+    await kv.put(`nemo_metadata.${serviceId}`, sc.encode(JSON.stringify(metadata)));
+    
+    log(`[NATS] Syncing...`);
+  } catch (error: any) {
+    log(`[NATS] Fatal error in updateNatsKV: ${error.message}`);
+    throw error;
+  } finally {
+    await nc.drain();
+    log(`[NATS] Connection closed`);
+  }
 }
 
 interface HealthCheck {

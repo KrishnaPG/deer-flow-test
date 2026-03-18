@@ -87,10 +87,15 @@ const app = new Elysia()
         server?.publish('logs', JSON.stringify({ serviceId: body.service_id, message: msg }));
       };
       
+      console.log(`[API] Registering existing ${body.service_id}`);
       const result = await registerExistingInstance(body as any, onLog);
       return result;
     } catch (error: any) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      console.error(`[API] Error registering existing ${body.service_id}:`, error);
+      return new Response(JSON.stringify({ error: error.message, stack: error.stack }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   }, {
     body: t.Object({
