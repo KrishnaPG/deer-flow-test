@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSnapshot } from 'valtio';
-import { store, selectActiveTab } from '../store';
+import { store, selectActiveTab, selectIsServiceManaged } from '../store';
 import * as actions from '../store/actions';
 
 export const useInstanceDetailsLoader = (): void => {
@@ -9,6 +9,8 @@ export const useInstanceDetailsLoader = (): void => {
   const activeTab = selectActiveTab(snap);
   const isHealthy = activeTabId ? !!snap.configs[`${activeTabId}.url`] : false;
   const hasInstanceDetails = !!activeTab?.instanceDetails;
+  const isManaged = selectIsServiceManaged(snap, activeTabId);
+  const hasLogs = activeTabId ? (snap.logs[activeTabId]?.length ?? 0) > 0 : false;
   const natsUrl = snap.natsUrl;
 
   useEffect(() => {
@@ -25,4 +27,19 @@ export const useInstanceDetailsLoader = (): void => {
 
     loadDetails();
   }, [activeTabId, isHealthy, hasInstanceDetails, natsUrl]);
+
+  useEffect(() => {
+    // Load container logs for managed services
+    if (!activeTabId || !isHealthy || !isManaged || hasLogs) return;
+
+    const loadLogs = async () => {
+      try {
+        await actions.loadContainerLogs(activeTabId, natsUrl);
+      } catch (err) {
+        console.error('Failed to load container logs:', err);
+      }
+    };
+
+    loadLogs();
+  }, [activeTabId, isHealthy, isManaged, hasLogs, natsUrl]);
 };
