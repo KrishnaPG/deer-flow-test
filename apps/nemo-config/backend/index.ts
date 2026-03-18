@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
+import { websocket } from "@elysiajs/websocket";
 import { readdir, readFile } from "fs/promises";
 import * as yaml from "js-yaml";
 import { resolve } from "path";
@@ -23,11 +24,22 @@ interface Template {
   env_vars: { key: string; description: string; default?: string; secret?: boolean }[];
   health_check: { type: string; port: number; path?: string };
   docker_compose: string;
-  connection_url_pattern?: string; // NEW: Pattern for existing instance URLs
+  connection_url_pattern?: string;
+  exports?: Record<string, string>;
 }
 
 const app = new Elysia()
   .use(cors())
+  .use(websocket())
+  .ws('/ws/logs', {
+    message(ws, message) {
+      // Clients just listen to a global firehose, no actions needed
+    },
+    open(ws) {
+      console.log('Frontend connected to logs websocket');
+      ws.subscribe('logs');
+    }
+  })
   .get("/api/catalog", async () => {
     try {
       const files = await readdir(TEMPLATE_DIR);
@@ -65,10 +77,15 @@ const app = new Elysia()
     }
   })
   // Deploy new Docker instance
-  .post("/api/deploy", async ({ body }) => {
+  .post("/api/deploy", async ({ body, server }) => {
     try {
       const req = body as DeployRequest;
-      const result = await deployService(req);
+      const onLog = (msg: string) => {
+        server?.publish('logs', JSON.stringify({ serviceId: req.service_id, message: msg }));
+      };
+      
+      // We subscribe all WS clients to the 'logs' topic
+      const result = await deployService(req, onLog);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -80,13 +97,18 @@ const app = new Elysia()
       template: t.Any(),
       env_values: t.Record(t.String(), t.String()),
       nats_url: t.String(),
-      mode: t.Literal('deploy') // Only accept deploy mode here
+      mode: t.Literal('deploy'),
+      deploy_path: t.Optional(t.String())
     })
   })
   // NEW: Register existing instance
-  .post("/api/register-existing", async ({ body }) => {
+  .post("/api/register-existing", async ({ body, server }) => {
     try {
-      const result = await registerExistingInstance(body as any);
+      const onLog = (msg: string) => {
+        server?.publish('logs', JSON.stringify({ serviceId: body.service_id, message: msg }));
+      };
+      
+      const result = await registerExistingInstance(body as any, onLog);
       return result;
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -96,7 +118,8 @@ const app = new Elysia()
       service_id: t.String(),
       connection_url: t.String(),
       nats_url: t.String(),
-      metadata: t.Optional(t.Record(t.String(), t.String()))
+      template: t.Any(),
+      env_values: t.Optional(t.Record(t.String(), t.String()))
     })
   })
   // NEW: Test connection to existing instance
@@ -151,8 +174,9 @@ const app = new Elysia()
       
       // Filter for this service
       const serviceConfigs: Record<string, string> = {};
+      const serviceId = (params as any).serviceId;
       for (const [key, value] of Object.entries(configs)) {
-        if (key.startsWith(params.serviceId + '.')) {
+        if (key.startsWith(serviceId + '.')) {
           serviceConfigs[key] = value;
         }
       }

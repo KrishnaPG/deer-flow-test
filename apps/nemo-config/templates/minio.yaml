@@ -10,6 +10,10 @@ env_vars:
   - key: MINIO_ROOT_PASSWORD
     description: "Root Password"
     secret: true
+exports:
+  "minio.url": "http://${HOST}:9000"
+  "minio.access_key": "${MINIO_ROOT_USER:-admin}"
+  "minio.secret_key": "${MINIO_ROOT_PASSWORD:-password}"
 health_check:
   type: "http"
   port: 9000

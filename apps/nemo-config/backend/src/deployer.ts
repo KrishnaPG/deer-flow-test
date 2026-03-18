@@ -2,39 +2,65 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { resolve } from "path";
 import { writeFile, unlink } from "fs/promises";
-import * as yaml from "js-yaml";
 import { connect, StringCodec } from "nats";
+import * as net from "net";
+import { loadHealthChecker } from "./health-checks";
+import { interpolate } from "./interpolate";
 
 const execAsync = promisify(exec);
 const sc = StringCodec();
 
 const KV_BUCKET = "deer_flow_config";
 
+export interface Template {
+  name: string;
+  id: string;
+  icon: string;
+  default_port: number;
+  env_vars: { key: string; description: string; default?: string; secret?: boolean }[];
+  health_check: { type: string; port: number; path?: string };
+  docker_compose: string;
+  connection_url_pattern?: string;
+  exports?: Record<string, string>;
+}
+
 export interface DeployRequest {
   target_host: string;
   service_id: string;
-  template: any;
+  template: Template;
   env_values: Record<string, string>;
   nats_url: string;
-  mode: 'deploy' | 'existing'; // NEW: deploy = docker, existing = register URL
+  mode: 'deploy' | 'existing';
+  deploy_path?: string;
 }
 
 export interface RegisterExistingRequest {
   service_id: string;
   connection_url: string;
   nats_url: string;
-  metadata?: Record<string, string>; // For extra fields like access_key/secret_key
+  template: Template;
+  env_values?: Record<string, string>;
 }
 
-export async function deployService(req: DeployRequest) {
+export type LogCallback = (msg: string) => void;
+
+export async function deployService(req: DeployRequest, onLog?: LogCallback) {
+  const log = (msg: string) => {
+    console.log(msg);
+    if (onLog) onLog(msg);
+  };
+
   if (req.mode === 'existing') {
     throw new Error("Use registerExistingInstance for existing mode");
   }
 
-  console.log(`[Deploy] Initiating deploy for ${req.service_id} to ${req.target_host}`);
+  log(`[Deploy] Initiating deploy for ${req.service_id} to ${req.target_host}`);
+  
+  const ip = req.target_host === "localhost" ? "127.0.0.1" : req.target_host;
+  const vars = { ...req.env_values, HOST: ip };
   
   let composeStr = req.template.docker_compose;
-  for (const [key, value] of Object.entries(req.env_values)) {
+  for (const [key, value] of Object.entries(vars)) {
     composeStr = composeStr.replace(new RegExp(`\\$\\{${key}\\}`, "g"), value);
   }
 
@@ -43,27 +69,57 @@ export async function deployService(req: DeployRequest) {
   try {
     await writeFile(tmpFile, composeStr);
     
-    const remoteDir = `/opt/nemo/${req.service_id}`;
+    const baseDir = req.deploy_path || '~/workspace/nemo';
+    const remoteDir = `${baseDir}/${req.service_id}`;
     let command = "";
     
     if (req.target_host === "localhost") {
-      command = `mkdir -p ${remoteDir} && cp ${tmpFile} ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d`;
+      // Expand ~ to the actual home directory for localhost since we don't use ssh
+      const expandedDir = remoteDir.replace(/^~/, process.env.HOME || '');
+      command = `mkdir -p ${expandedDir} && cp ${tmpFile} ${expandedDir}/docker-compose.yml && cd ${expandedDir} && docker compose up -d`;
     } else {
       command = `cat ${tmpFile} | ssh ${req.target_host} "mkdir -p ${remoteDir} && cat > ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d"`;
     }
 
-    console.log(`[Deploy] Executing: ${command.replace(/cat .* \\/, "cat <template> |")}`);
+    log(`[Deploy] Executing: ${command.replace(/cat .* \\/, "cat <template> |")}`);
     
-    const { stdout, stderr } = await execAsync(command);
-    console.log(`[Deploy] Success output: ${stdout}`);
-    if (stderr) console.warn(`[Deploy] Warning output: ${stderr}`);
+    // Instead of simple exec, we spawn to capture real-time output
+    const { spawn } = await import('child_process');
+    await new Promise<void>((resolvePromise, reject) => {
+      const child = spawn(command, { shell: true });
+      
+      child.stdout.on('data', (data) => {
+        const text = data.toString().trim();
+        if (text) log(`[Docker] ${text}`);
+      });
+      
+      child.stderr.on('data', (data) => {
+        const text = data.toString().trim();
+        if (text) log(`[Docker] ${text}`);
+      });
+      
+      child.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Command failed with exit code ${code}`));
+        } else {
+          resolvePromise();
+        }
+      });
+      
+      child.on('error', (err) => {
+        reject(err);
+      });
+    });
 
-    // Build connection URL from deployed service
-    const connectionUrl = buildConnectionUrl(req.service_id, req.target_host, req.env_values);
-    await updateNatsKV(req.nats_url, req.service_id, connectionUrl, req.target_host, req.env_values);
+    const connectionUrl = buildConnectionUrl(req.template, vars);
+    const exports = getExports(req.template, vars);
+    
+    await updateNatsKV(req.nats_url, req.service_id, connectionUrl, req.target_host, exports, onLog);
 
+    log(`[Deploy] Successfully deployed ${req.service_id}`);
     return { success: true, message: `Deployed ${req.service_id} to ${req.target_host}` };
   } catch (error: any) {
+    if (onLog) onLog(`[Deploy] Error: ${error.message}`);
     console.error(`[Deploy] Error: ${error.message}`);
     throw error;
   } finally {
@@ -71,18 +127,51 @@ export async function deployService(req: DeployRequest) {
   }
 }
 
-export async function registerExistingInstance(req: RegisterExistingRequest) {
-  console.log(`[Register] Registering existing ${req.service_id} at ${req.connection_url}`);
+export async function registerExistingInstance(req: RegisterExistingRequest, onLog?: LogCallback) {
+  const log = (msg: string) => {
+    console.log(msg);
+    if (onLog) onLog(msg);
+  };
+  
+  log(`[Register] Registering existing ${req.service_id} at ${req.connection_url}`);
+  
+  const ip = 'external';
+  const vars = { ...req.env_values, HOST: ip };
+  const exports = getExports(req.template, vars);
+  
+  exports[`${req.service_id}.url`] = req.connection_url;
   
   await updateNatsKV(
     req.nats_url, 
     req.service_id, 
     req.connection_url, 
     'external', 
-    req.metadata || {}
+    exports,
+    onLog
   );
 
+  log(`[Register] Successfully registered ${req.service_id}`);
   return { success: true, message: `Registered existing ${req.service_id}` };
+}
+
+function buildConnectionUrl(template: Template, vars: Record<string, string>): string {
+  if (!template.connection_url_pattern) {
+    const ip = vars.HOST || 'localhost';
+    return `${ip}:${template.default_port}`;
+  }
+  return interpolate(template.connection_url_pattern, vars);
+}
+
+function getExports(template: Template, vars: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  
+  if (template.exports) {
+    for (const [key, pattern] of Object.entries(template.exports)) {
+      result[key] = interpolate(pattern, vars);
+    }
+  }
+  
+  return result;
 }
 
 export async function getAllConfigFromNats(natsUrl: string): Promise<Record<string, string>> {
@@ -94,7 +183,6 @@ export async function getAllConfigFromNats(natsUrl: string): Promise<Record<stri
     const kv = await js.views.kv(KV_BUCKET);
     const configs: Record<string, string> = {};
     
-    // Watch all keys and collect them
     const iter = await kv.watch();
     for await (const entry of iter) {
       if (entry.operation === "PUT") {
@@ -107,38 +195,9 @@ export async function getAllConfigFromNats(natsUrl: string): Promise<Record<stri
   } catch (error: any) {
     await nc.drain();
     if (error.message?.includes("bucket not found")) {
-      return {}; // Bucket doesn't exist yet
+      return {};
     }
     throw error;
-  }
-}
-
-function buildConnectionUrl(
-  serviceId: string, 
-  targetHost: string, 
-  envValues: Record<string, string>
-): string {
-  const ip = targetHost === "localhost" ? "127.0.0.1" : targetHost;
-  
-  switch (serviceId) {
-    case 'postgres':
-      return `postgres://${envValues.POSTGRES_USER}:${envValues.POSTGRES_PASSWORD}@${ip}:5432/state_server`;
-    case 'minio':
-      return `http://${ip}:9000`;
-    case 'redis':
-      return `redis://${ip}:6379`;
-    case 'nats':
-      return `nats://${ip}:4222`;
-    case 'clickhouse':
-      return `http://${ip}:8123`;
-    case 'temporal':
-      return `${ip}:7233`;
-    case 'livekit':
-      return `wss://${ip}:7880`;
-    case 'signoz':
-      return `http://${ip}:3301`;
-    default:
-      return `${ip}:${envValues.PORT || 'unknown'}`;
   }
 }
 
@@ -147,47 +206,28 @@ async function updateNatsKV(
   serviceId: string,
   connectionUrl: string,
   targetHost: string,
-  envValues: Record<string, string>
+  exports: Record<string, string>,
+  onLog?: LogCallback
 ) {
-  console.log(`[NATS] Connecting to ${natsUrl}`);
+  const log = (msg: string) => {
+    console.log(msg);
+    if (onLog) onLog(msg);
+  };
+  
+  log(`[NATS] Connecting to ${natsUrl}`);
   const nc = await connect({ servers: natsUrl });
-  const jsm = await nc.jetstreamManager();
   const js = nc.jetstream();
-
-  // Ensure Bucket Exists
-  try {
-    await jsm.kv.create({ name: KV_BUCKET });
-    console.log(`[NATS] KV Bucket ${KV_BUCKET} ensured.`);
-  } catch (e: any) {
-    if (!e.message.includes("already exists")) {
-      throw e;
-    }
-  }
 
   const kv = await js.views.kv(KV_BUCKET);
   
-  // Store the connection URL
-  const urlKey = `${serviceId}.url`;
-  await kv.put(urlKey, sc.encode(connectionUrl));
-  console.log(`[NATS] Wrote ${urlKey} = ${connectionUrl}`);
-
-  // Store extra credentials if needed
-  if (serviceId === 'minio') {
-    if (envValues.MINIO_ROOT_USER) {
-      await kv.put("minio.access_key", sc.encode(envValues.MINIO_ROOT_USER));
-    }
-    if (envValues.MINIO_ROOT_PASSWORD) {
-      await kv.put("minio.secret_key", sc.encode(envValues.MINIO_ROOT_PASSWORD));
-    }
+  for (const [key, value] of Object.entries(exports)) {
+    await kv.put(key, sc.encode(value));
+    log(`[NATS] Wrote ${key} = ${value}`);
   }
+
+  // Double check the main URL is written
+  await kv.put(`${serviceId}.url`, sc.encode(connectionUrl));
   
-  if (serviceId === 'postgres') {
-    await kv.put("postgres.user", sc.encode(envValues.POSTGRES_USER || 'admin'));
-    await kv.put("postgres.password", sc.encode(envValues.POSTGRES_PASSWORD || 'password'));
-    await kv.put("postgres.database", sc.encode(envValues.POSTGRES_DB || 'state_server'));
-  }
-
-  // Remember the last used host
   await kv.put(`nemo_metadata.${serviceId}_last_host`, sc.encode(targetHost));
   
   await nc.drain();
@@ -209,68 +249,79 @@ export interface TestConnectionRequest {
 export async function testConnection(req: TestConnectionRequest): Promise<{ success: boolean; message: string; details?: any }> {
   console.log(`[Test] Testing connection to ${req.service_id} at ${req.connection_url}`);
   
-  const { host, port } = parseHostPortFromUrl(req.connection_url);
-  const healthCheck = req.health_check;
+  const healthChecker = await loadHealthChecker(req.service_id);
   
-  try {
-    if (healthCheck.type === 'tcp') {
-      return await testTcpConnection(host, healthCheck.port);
-    } else if (healthCheck.type === 'http') {
-      const path = healthCheck.path || '/';
-      // Build HTTP URL from connection URL
-      let httpUrl: string;
-      if (req.connection_url.startsWith('http://') || req.connection_url.startsWith('https://')) {
-        // Replace the port and path in the URL
-        const parsed = new URL(req.connection_url);
-        parsed.port = healthCheck.port.toString();
-        parsed.pathname = path;
-        httpUrl = parsed.toString();
-      } else {
-        // Default to http if no protocol specified
-        httpUrl = `http://${host}:${healthCheck.port}${path}`;
-      }
-      return await testHttpConnection(httpUrl);
-    } else {
-      throw new Error(`Unknown health check type: ${healthCheck.type}`);
-    }
-  } catch (error: any) {
-    console.error(`[Test] Connection test failed: ${error.message}`);
-    return { 
-      success: false, 
-      message: `Connection test failed: ${error.message}`,
-      details: { error: error.message }
-    };
+  if (healthChecker) {
+    console.log(`[Test] Using service-specific health checker for ${req.service_id}`);
+    return healthChecker(req.connection_url, req.metadata);
   }
+  
+  console.log(`[Test] No service-specific health checker for ${req.service_id}, using fallback`);
+  return fallbackHealthCheck(req.service_id, req.connection_url, req.health_check);
+}
+
+async function fallbackHealthCheck(
+  serviceId: string,
+  connectionUrl: string,
+  healthCheck: { type: string; port: number; path?: string }
+): Promise<{ success: boolean; message: string; details?: any }> {
+  const { host, port } = parseHostPortFromUrl(connectionUrl);
+  const checkPort = healthCheck.port || port || 0;
+  
+  if (healthCheck.type === 'http') {
+    const path = healthCheck.path || '/';
+    let httpUrl: string;
+    if (connectionUrl.startsWith('http://') || connectionUrl.startsWith('https://')) {
+      const parsed = new URL(connectionUrl);
+      parsed.port = checkPort.toString();
+      parsed.pathname = path;
+      httpUrl = parsed.toString();
+    } else {
+      httpUrl = `http://${host}:${checkPort}${path}`;
+    }
+    return testHttpConnection(httpUrl);
+  }
+  
+  return testTcpConnection(host, checkPort);
 }
 
 async function testTcpConnection(host: string, port: number): Promise<{ success: boolean; message: string; details?: any }> {
-  try {
-    // Use netcat (nc) to test TCP connection
-    const command = `nc -z -w 5 ${host} ${port}`;
-    await execAsync(command);
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timeout = 5000;
     
-    return { 
-      success: true, 
-      message: `TCP connection successful to ${host}:${port}`,
-      details: { host, port, command }
-    };
-  } catch (error: any) {
-    return { 
-      success: false, 
-      message: `TCP connection failed to ${host}:${port}: ${error.message}`,
-      details: { host, port, error: error.message }
-    };
-  }
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve({ 
+        success: false, 
+        message: `TCP connection timed out to ${host}:${port}`,
+        details: { host, port, error: 'Connection timed out' }
+      });
+    }, timeout);
+    
+    socket.connect(port, host, () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve({ 
+        success: true, 
+        message: `TCP connection successful to ${host}:${port}`,
+        details: { host, port }
+      });
+    });
+    
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({ 
+        success: false, 
+        message: `TCP connection failed to ${host}:${port}: ${err.message}`,
+        details: { host, port, error: err.message }
+      });
+    });
+  });
 }
 
 async function testHttpConnection(url: string): Promise<{ success: boolean; message: string; details?: any }> {
   try {
-    // Use curl to test HTTP connection
-    // -f flag makes curl return error on HTTP error codes (4xx, 5xx)
-    // -s silent mode
-    // -o /dev/null discard output
-    // --connect-timeout 5 connection timeout
-    // --max-time 10 max time for request
     const command = `curl -f -s -o /dev/null --connect-timeout 5 --max-time 10 "${url}"`;
     await execAsync(command);
     
@@ -280,8 +331,6 @@ async function testHttpConnection(url: string): Promise<{ success: boolean; mess
       details: { url, command }
     };
   } catch (error: any) {
-    // curl returns non-zero exit code even if server responds with error status
-    // but we're using -f so any HTTP error is treated as failure
     return { 
       success: false, 
       message: `HTTP connection failed to ${url}: ${error.message}`,
@@ -290,7 +339,12 @@ async function testHttpConnection(url: string): Promise<{ success: boolean; mess
   }
 }
 
-function parseHostPortFromUrl(url: string): { host: string; port?: number } {
+export interface ParsedHostPort {
+  host: string;
+  port?: number;
+}
+
+function parseHostPortFromUrl(url: string): ParsedHostPort {
   try {
     const parsed = new URL(url);
     return {
@@ -298,17 +352,15 @@ function parseHostPortFromUrl(url: string): { host: string; port?: number } {
       port: parsed.port ? parseInt(parsed.port, 10) : undefined
     };
   } catch {
-    // Fallback for URLs that might not parse with URL constructor
-    // Try to extract host:port from various URL formats
     const patterns = [
-      /@([^:]+):(\d+)\//,  // postgres://user:pass@host:port/db
-      /:\/\/([^:]+):(\d+)/, // protocol://host:port
-      /^([^:]+):(\d+)$/     // host:port
+      /@([^:]+):(\d+)\//,
+      /:\/\/([^:]+):(\d+)/,
+      /^([^:]+):(\d+)$/
     ];
     
     for (const pattern of patterns) {
       const match = url.match(pattern);
-      if (match) {
+      if (match && match[1] && match[2]) {
         return {
           host: match[1],
           port: parseInt(match[2], 10)
