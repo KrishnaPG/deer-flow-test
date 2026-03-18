@@ -4,6 +4,7 @@ import { resolve } from "path";
 import { type Template } from "./deployer";
 
 const TEMPLATE_DIR = resolve(import.meta.dir, "../../templates");
+console.log(`[CATALOG] Loading templates from: ${TEMPLATE_DIR}`);
 
 /**
  * Reads and parses all service templates from the catalog directory.
