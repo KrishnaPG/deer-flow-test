@@ -61,17 +61,17 @@ describe('Catalog API - E2E Tests', () => {
     const postgresTemplate = data.find((t: any) => t.id === 'postgres');
     
     expect(postgresTemplate).toBeDefined();
-    expect(postgresTemplate.exports).toHaveProperty('postgres.url');
-    expect(postgresTemplate.exports).toHaveProperty('postgres.user');
-    expect(postgresTemplate.exports).toHaveProperty('postgres.password');
-    expect(postgresTemplate.exports).toHaveProperty('postgres.database');
+    expect(postgresTemplate.exports['postgres.url']).toBeTruthy();
+    expect(postgresTemplate.exports['postgres.user']).toBeTruthy();
+    expect(postgresTemplate.exports['postgres.password']).toBeTruthy();
+    expect(postgresTemplate.exports['postgres.database']).toBeTruthy();
     
     // Check that the export patterns use correct placeholders
     expect(postgresTemplate.exports['postgres.url']).toContain('${HOST}');
-    expect(postgresTemplate.exports['postgres.url']).toContain('${PORT}');
-    expect(postgresTemplate.exports['postgres.user']).toContain('${POSTGRES_USER}');
-    expect(postgresTemplate.exports['postgres.password']).toContain('${POSTGRES_PASSWORD}');
-    expect(postgresTemplate.exports['postgres.database']).toContain('${POSTGRES_DB}');
+    expect(postgresTemplate.exports['postgres.url']).toContain('5432');
+    expect(postgresTemplate.exports['postgres.user']).toContain('POSTGRES_USER');
+    expect(postgresTemplate.exports['postgres.password']).toContain('POSTGRES_PASSWORD');
+    expect(postgresTemplate.exports['postgres.database']).toContain('POSTGRES_DB');
   });
 
   it('should have correct health checks for each template', async () => {

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { cleanupTestResources, cleanupConsulForService, getContainerName } from '../../helpers/consul';
-import { getContainerLogs } from '../../helpers/docker';
-import { get, post } from '../../helpers/api';
-import { generateTestServiceId } from '../../helpers/consul';
+import { cleanupTestResources, cleanupConsulForService, getContainerName } from './helpers/consul';
+import { getContainerLogs } from './helpers/docker';
+import { get, post } from './helpers/api';
+import { generateTestServiceId } from './helpers/consul';
 import { CONFIG } from '../../config';
 
 describe('Service Logs API - E2E Tests', () => {
