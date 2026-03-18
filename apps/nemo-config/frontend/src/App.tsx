@@ -75,7 +75,7 @@ export default function App() {
   // Fetch initial data
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [natsUrl]);
 
   // Check NATS health
   useEffect(() => {
@@ -96,13 +96,27 @@ export default function App() {
   }, [natsUrl]);
 
   const fetchData = async () => {
-    const [tplRes, hostsRes] = await Promise.all([
+    const [tplRes, hostsRes, configsRes] = await Promise.all([
       axios.get(`${API_URL}/catalog`),
-      axios.get(`${API_URL}/ssh-hosts`)
+      axios.get(`${API_URL}/ssh-hosts`),
+      axios.get(`${API_URL}/configs`, { params: { nats_url: natsUrl } }).catch(() => ({ data: {} }))
     ]);
 
     setTemplates(tplRes.data);
     setHosts(hostsRes.data);
+
+    // Compute status from configs
+    const configs = configsRes.data || {};
+    const newStatus: Record<string, ServiceStatus> = {};
+    
+    tplRes.data.forEach((tpl: Template) => {
+      // If there's a `.url` key in NATS for this service, we consider it healthy/configured
+      if (configs[`${tpl.id}.url`]) {
+        newStatus[tpl.id] = 'healthy';
+      }
+    });
+    
+    setStatus(newStatus);
   };
 
   const openTab = (templateId: string) => {

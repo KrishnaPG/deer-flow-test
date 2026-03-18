@@ -10,7 +10,7 @@ import { interpolate } from "./interpolate";
 const execAsync = promisify(exec);
 const sc = StringCodec();
 
-const KV_BUCKET = "deer_flow_config";
+const KV_BUCKET = "nemo_config";
 
 export interface Template {
   name: string;
@@ -174,8 +174,8 @@ function getExports(template: Template, vars: Record<string, string>): Record<st
   return result;
 }
 
-export async function getAllConfigFromNats(natsUrl: string): Promise<Record<string, string>> {
-  console.log(`[NATS] Fetching all config from ${natsUrl}`);
+export async function getAllConfigFromNats(natsUrl: string, allowedPrefixes?: string[]): Promise<Record<string, string>> {
+  console.log(`[NATS] Fetching config from ${natsUrl}`);
   const nc = await connect({ servers: natsUrl });
   const js = nc.jetstream();
   
@@ -183,10 +183,28 @@ export async function getAllConfigFromNats(natsUrl: string): Promise<Record<stri
     const kv = await js.views.kv(KV_BUCKET);
     const configs: Record<string, string> = {};
     
-    const iter = await kv.watch();
-    for await (const entry of iter) {
-      if (entry.operation === "PUT") {
-        configs[entry.key] = sc.decode(entry.value);
+    const filters = allowedPrefixes && allowedPrefixes.length > 0 ? allowedPrefixes : [">"];
+    console.log(`[DEBUG] using filters:`, filters);
+    try {
+      const keysIter = await kv.keys(filters);
+      for await (const key of keysIter) {
+        console.log(`[DEBUG] Got key from NATS: ${key}`);
+        const entry = await kv.get(key);
+        if (entry && entry.operation !== "DEL" && entry.operation !== "PURGE") {
+          try {
+            configs[key] = sc.decode(entry.value);
+            console.log(`[DEBUG] Decoded key ${key} = ${configs[key]}`);
+          } catch (decodeErr) {
+            console.warn(`[NATS] Failed to decode key ${key}:`, decodeErr);
+          }
+        } else {
+          console.log(`[DEBUG] Skipped key ${key} due to operation ${entry?.operation}`);
+        }
+      }
+    } catch (err: any) {
+      // If no keys match filter, it might throw a 404 No Messages error
+      if (!err.message?.includes("no messages")) {
+        throw err;
       }
     }
     
