@@ -4,6 +4,8 @@ icon: "activity"
 default_port: 6379
 connection_url_pattern: "redis://${HOST}:6379"
 env_vars: []
+exports:
+  "redis.url": "redis://${HOST}:6379"
 health_check:
   type: "tcp"
   port: 6379

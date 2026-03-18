@@ -2,7 +2,7 @@ name: "ClickHouse (OLAP View)"
 id: "clickhouse"
 icon: "database"
 default_port: 8123
-connection_url_pattern: "http://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${HOST}:8123"
+connection_url_pattern: "http://${CLICKHOUSE_USER:-default}:${CLICKHOUSE_PASSWORD:-}@${HOST}:8123"
 env_vars:
   - key: CLICKHOUSE_USER
     description: "Database User"
@@ -10,6 +10,10 @@ env_vars:
   - key: CLICKHOUSE_PASSWORD
     description: "Database Password"
     secret: true
+exports:
+  "clickhouse.url": "http://${CLICKHOUSE_USER:-default}:${CLICKHOUSE_PASSWORD:-}@${HOST}:8123"
+  "clickhouse.user": "${CLICKHOUSE_USER:-default}"
+  "clickhouse.password": "${CLICKHOUSE_PASSWORD:-}"
 health_check:
   type: "http"
   port: 8123

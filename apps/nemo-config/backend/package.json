@@ -4,24 +4,28 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun index.ts"
+    "dev": "bun --hot run index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.5.0"
+    "@types/node": "^25.5.0",
+    "@types/pg": "^8.11.10"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/websocket": "^0.2.8",
     "@nats-io/kv": "^3.3.1",
     "@nats-io/transport-node": "^3.3.1",
     "cors": "^2.8.6",
     "elysia": "^1.4.28",
+    "ioredis": "^5.10.0",
     "js-yaml": "^4.1.1",
     "nats": "^2.29.3",
+    "pg": "^8.20.0",
     "yaml": "^2.8.2"
   }
 }

@@ -4,6 +4,8 @@ icon: "message-square"
 default_port: 4222
 connection_url_pattern: "nats://${HOST}:4222"
 env_vars: []
+exports:
+  "nats.url": "nats://${HOST}:4222"
 health_check:
   type: "tcp"
   port: 4222

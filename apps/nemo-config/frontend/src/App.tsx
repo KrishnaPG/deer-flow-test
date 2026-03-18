@@ -4,6 +4,7 @@ import type { Template, ServiceStatus, Mode } from './definitions';
 import type { TestStatus } from './components/ExistingModeForm';
 type NatsStatus = 'connected' | 'disconnected' | 'checking';
 import { useNatsUrl } from './hooks/useNatsUrl';
+import { useDeployPath } from './hooks/useDeployPath';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
@@ -35,9 +36,35 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   const { natsUrl, setNatsUrl } = useNatsUrl();
+  const { deployPath, setDeployPath } = useDeployPath();
   const [natsStatus, setNatsStatus] = useState<NatsStatus>('checking');
   const [showSettings, setShowSettings] = useState(false);
   const [natsUrlInput, setNatsUrlInput] = useState(natsUrl);
+  const [deployPathInput, setDeployPathInput] = useState(deployPath);
+
+  // WebSocket for real-time logs
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:3001/ws/logs');
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.serviceId && data.message) {
+          setTabs(prevTabs => prevTabs.map(tab => 
+            tab.id === data.serviceId 
+              ? { ...tab, consoleOutput: [...tab.consoleOutput, `[${new Date().toLocaleTimeString()}] ${data.message}`] }
+              : tab
+          ));
+        }
+      } catch (err) {
+        console.error('Failed to parse WebSocket message', err);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
 
   // Fetch initial data
   useEffect(() => {
@@ -204,7 +231,8 @@ export default function App() {
           service_id: tabId,
           connection_url: tab.existingUrl,
           nats_url: natsUrl,
-          metadata: tab.formValues
+          template,
+          env_values: tab.formValues
         });
         appendConsole(tabId, 'Successfully registered existing instance');
       } else {
@@ -214,7 +242,8 @@ export default function App() {
           template,
           env_values: tab.formValues,
           nats_url: natsUrl,
-          mode: 'deploy'
+          mode: 'deploy',
+          deploy_path: deployPath
         });
         appendConsole(tabId, 'Deployment completed successfully');
       }
@@ -255,6 +284,7 @@ export default function App() {
         natsStatus={natsStatus}
         onSettingsClick={() => {
           setNatsUrlInput(natsUrl);
+          setDeployPathInput(deployPath);
           setShowSettings(true);
         }}
         onExport={handleExport}
@@ -316,9 +346,12 @@ export default function App() {
       {showSettings && (
         <Settings
           natsUrl={natsUrlInput}
-          onChange={setNatsUrlInput}
+          deployPath={deployPathInput}
+          onNatsUrlChange={setNatsUrlInput}
+          onDeployPathChange={setDeployPathInput}
           onSave={() => {
             setNatsUrl(natsUrlInput);
+            setDeployPath(deployPathInput);
             setShowSettings(false);
           }}
           onCancel={() => setShowSettings(false)}

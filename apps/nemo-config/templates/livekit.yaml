@@ -11,6 +11,10 @@ env_vars:
     description: "API Secret"
     secret: true
     default: "secret"
+exports:
+  "livekit.url": "wss://${HOST}:7880"
+  "livekit.api_key": "${LIVEKIT_API_KEY:-devkey}"
+  "livekit.api_secret": "${LIVEKIT_API_SECRET:-secret}"
 health_check:
   type: "http"
   port: 7880

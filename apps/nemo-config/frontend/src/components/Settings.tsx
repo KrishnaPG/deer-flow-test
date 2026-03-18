@@ -1,11 +1,20 @@
 interface SettingsProps {
   natsUrl: string;
-  onChange: (url: string) => void;
+  deployPath: string;
+  onNatsUrlChange: (url: string) => void;
+  onDeployPathChange: (path: string) => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
-export function Settings({ natsUrl, onChange, onSave, onCancel }: SettingsProps) {
+export function Settings({ 
+  natsUrl, 
+  deployPath, 
+  onNatsUrlChange, 
+  onDeployPathChange, 
+  onSave, 
+  onCancel 
+}: SettingsProps) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-6 w-full max-w-lg">
@@ -19,11 +28,26 @@ export function Settings({ natsUrl, onChange, onSave, onCancel }: SettingsProps)
               type="text"
               className="w-full border-gray-300 rounded-md shadow-sm p-2.5 border bg-white focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
               value={natsUrl}
-              onChange={e => onChange(e.target.value)}
+              onChange={e => onNatsUrlChange(e.target.value)}
               placeholder="nats://localhost:4222"
             />
             <p className="text-xs text-gray-500 mt-1">
               Connection string to your NATS JetStream server
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Deployment Directory
+            </label>
+            <input
+              type="text"
+              className="w-full border-gray-300 rounded-md shadow-sm p-2.5 border bg-white focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+              value={deployPath}
+              onChange={e => onDeployPathChange(e.target.value)}
+              placeholder="~/workspace/nemo"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Base directory on the target host for docker-compose files and data
             </p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
