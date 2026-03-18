@@ -13,6 +13,9 @@ env_vars:
   - key: POSTGRES_DB
     description: "Database Name"
     default: "state_server"
+  - key: DATA_PATH
+    description: "Host path for data persistence"
+    default: "./data"
 exports:
   "postgres.url": "postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@${HOST}:5432/${POSTGRES_DB:-state_server}"
   "postgres.user": "${POSTGRES_USER:-admin}"
@@ -32,6 +35,4 @@ docker_compose: |
       ports:
         - "5432:5432"
       volumes:
-        - pg_data:/var/lib/postgresql/data
-  volumes:
-    pg_data:
+        - ${DATA_PATH:-./data}:/var/lib/postgresql/data

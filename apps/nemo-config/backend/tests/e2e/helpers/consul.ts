@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { updateConsulKV, getAllConfigFromConsul, removeServiceConfig } from '../../../src/consul-store';
+import { removeServiceConfig, getAllConfigFromConsul } from '../../../src/consul-store';
 import { CONFIG } from '../config';
 
 const execAsync = promisify(exec);
@@ -19,32 +19,12 @@ export async function runCommand(cmd: string): Promise<{ stdout: string; stderr:
 
 /**
  * Cleans up all test-related Consul keys and containers
+ * NOTE: This can be slow if there are many test keys. Use cleanupConsulForService for per-test cleanup.
  */
 export async function cleanupTestResources(): Promise<void> {
-  // Cleanup Consul keys with our test prefix
-  try {
-    const consulConfig = await getAllConfigFromConsul(CONFIG.CONSUL_URL);
-    const testKeys = Object.keys(consulConfig).filter(key => 
-      key.startsWith(CONFIG.TEST_PREFIX)
-    );
-    
-    for (const key of testKeys) {
-      // Extract service ID from key format like "e2e-test-redis.url" or "nemo/e2e-test-redis/url"
-      let serviceId = key;
-      if (serviceId.startsWith('nemo/')) {
-        serviceId = serviceId.split('/')[1];
-      } else if (serviceId.startsWith('nemo.')) {
-        serviceId = serviceId.split('.')[1];
-      } else {
-        // Direct format like "e2e-test-redis.url"
-        serviceId = serviceId.split('.')[0];
-      }
-      
-      await removeServiceConfig(serviceId, CONFIG.CONSUL_URL).catch(() => {});
-    }
-  } catch (error) {
-    console.warn('Warning during Consul cleanup:', error);
-  }
+  // Quick cleanup - just log that we're skipping bulk cleanup
+  // Individual tests should clean up their own resources
+  console.log('[Cleanup] Skipping bulk cleanup - tests clean up their own resources');
 }
 
 /**

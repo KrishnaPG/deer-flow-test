@@ -3,7 +3,10 @@ id: "nats"
 icon: "message-square"
 default_port: 4222
 connection_url_pattern: "nats://${HOST}:4222"
-env_vars: []
+env_vars:
+  - key: DATA_PATH
+    description: "Host path for data persistence"
+    default: "./data"
 exports:
   "nats.url": "nats://${HOST}:4222"
 health_check:
@@ -18,6 +21,4 @@ docker_compose: |
         - "4222:4222"
         - "8222:8222"
       volumes:
-        - nats_data:/data
-  volumes:
-    nats_data:
+        - ${DATA_PATH:-./data}:/data

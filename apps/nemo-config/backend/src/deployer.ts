@@ -155,7 +155,20 @@ export async function deployService(req: DeployRequest, onLog?: LogCallback) {
   log(`[Deploy] Using container name: ${containerName}`);
   
   const ip = req.target_host === "localhost" ? "127.0.0.1" : req.target_host;
-  const vars = { ...req.env_values, HOST: ip, CONTAINER_NAME: containerName };
+  const baseDir = req.deploy_path || '~/workspace/nemo';
+  const remoteDir = `${baseDir}/${req.service_id}`;
+  
+  // Auto-generate DATA_PATH if the template uses it and no value is provided
+  const dataPath = req.env_values.DATA_PATH || `${remoteDir}/data`;
+  
+  const vars = { 
+    ...req.env_values, 
+    HOST: ip, 
+    CONTAINER_NAME: containerName,
+    DATA_PATH: dataPath
+  };
+  
+  log(`[Deploy] Data path: ${dataPath}`);
   
   let composeStr = req.template.docker_compose;
   composeStr = injectContainerName(composeStr, containerName);
@@ -164,21 +177,20 @@ export async function deployService(req: DeployRequest, onLog?: LogCallback) {
     composeStr = composeStr.replace(new RegExp(`\\$\\{${key}\\}`, "g"), value);
   }
 
-  const tmpFile = resolve(import.meta.dir, `../../.tmp_${req.service_id}.yml`);
-  
-  try {
-    await writeFile(tmpFile, composeStr);
+    const tmpFile = resolve(import.meta.dir, `../../.tmp_${req.service_id}.yml`);
     
-    const baseDir = req.deploy_path || '~/workspace/nemo';
-    const remoteDir = `${baseDir}/${req.service_id}`;
-    let command = "";
-    
-    if (req.target_host === "localhost") {
-      const expandedDir = remoteDir.replace(/^~/, process.env.HOME || '');
-      command = `mkdir -p ${expandedDir} && cp ${tmpFile} ${expandedDir}/docker-compose.yml && cd ${expandedDir} && docker compose up -d`;
-    } else {
-      command = `cat ${tmpFile} | ssh ${req.target_host} "mkdir -p ${remoteDir} && cat > ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d"`;
-    }
+    try {
+      await writeFile(tmpFile, composeStr);
+      
+      let command = "";
+      
+      if (req.target_host === "localhost") {
+        const expandedDir = remoteDir.replace(/^~/, process.env.HOME || '');
+        const expandedDataPath = dataPath.replace(/^~/, process.env.HOME || '');
+        command = `mkdir -p ${expandedDir} ${expandedDataPath} && cp ${tmpFile} ${expandedDir}/docker-compose.yml && cd ${expandedDir} && docker compose up -d`;
+      } else {
+        command = `cat ${tmpFile} | ssh ${req.target_host} "mkdir -p ${remoteDir} ${dataPath} && cat > ${remoteDir}/docker-compose.yml && cd ${remoteDir} && docker compose up -d"`;
+      }
 
     log(`[Deploy] Executing: ${command.replace(/cat .* \//, "cat <template> |")}`);
     

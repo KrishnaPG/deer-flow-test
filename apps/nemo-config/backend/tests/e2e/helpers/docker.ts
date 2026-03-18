@@ -20,10 +20,12 @@ export async function runCommand(cmd: string): Promise<{ stdout: string; stderr:
  * Checks if a container exists on a host
  */
 export async function containerExists(containerName: string, host: string = 'localhost'): Promise<boolean> {
-  const cmd = host === 'localhost' 
-    ? `docker ps -a --filter name=${containerName} --format '{{.Names}}'`
-    : `ssh ${host} "docker ps -a --filter name=${containerName} --format '{{.Names}}'"`;
-    
+  if (host === 'localhost' || host === '127.0.0.1') {
+    const cmd = `docker ps -a --filter name=${containerName} --format '{{.Names}}'`;
+    const result = await runCommand(cmd);
+    return result.stdout.trim() === containerName;
+  }
+  const cmd = `ssh ${host} 'docker ps -a --filter name=${containerName} --format "{{.Names}}"'`;
   const result = await runCommand(cmd);
   return result.stdout.trim() === containerName;
 }
@@ -32,10 +34,12 @@ export async function containerExists(containerName: string, host: string = 'loc
  * Checks if a container is running on a host
  */
 export async function containerIsRunning(containerName: string, host: string = 'localhost'): Promise<boolean> {
-  const cmd = host === 'localhost'
-    ? `docker ps --filter name=${containerName} --filter status=running --format '{{.Names}}'`
-    : `ssh ${host} "docker ps --filter name=${containerName} --filter status=running --format '{{.Names}}'\"`;
-    
+  if (host === 'localhost' || host === '127.0.0.1') {
+    const cmd = `docker ps --filter name=${containerName} --filter status=running --format '{{.Names}}'`;
+    const result = await runCommand(cmd);
+    return result.stdout.trim() === containerName;
+  }
+  const cmd = `ssh ${host} 'docker ps --filter name=${containerName} --filter status=running --format "{{.Names}}"'`;
   const result = await runCommand(cmd);
   return result.stdout.trim() === containerName;
 }
@@ -44,12 +48,15 @@ export async function containerIsRunning(containerName: string, host: string = '
  * Gets container logs from a host
  */
 export async function getContainerLogs(containerName: string, host: string = 'localhost', tail: number = 100): Promise<string[]> {
-  const cmd = host === 'localhost'
-    ? `docker logs --tail ${tail} ${containerName} 2>&1`
-    : `ssh ${host} "docker logs --tail ${tail} ${containerName} 2>&1\"`;
-    
+  let cmd: string;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    cmd = `docker logs --tail ${tail} ${containerName} 2>&1`;
+  } else {
+    cmd = `ssh ${host} 'docker logs --tail ${tail} ${containerName} 2>&1'`;
+  }
+  
   const result = await runCommand(cmd);
-  if (result.exitCode !== 0) {
+  if (result.exitCode !== 0 && !result.stdout) {
     throw new Error(`Failed to get logs: ${result.stderr}`);
   }
   return result.stdout.split('\n').filter(line => line.trim() !== '');
@@ -74,18 +81,22 @@ export async function waitForContainerStatus(
       // Container might not exist yet
     }
     
-    const isExited = !isRunning && await containerExists(containerName, host);
+    let exists = false;
+    try {
+      exists = await containerExists(containerName, host);
+    } catch (error) {
+      // Container might not exist
+    }
     
     if (
       (expectedStatus === 'running' && isRunning) ||
-      (expectedStatus === 'stopped' && !isRunning && await containerExists(containerName, host)) ||
-      (expectedStatus === 'exited' && isExited)
+      (expectedStatus === 'stopped' && !isRunning && exists) ||
+      (expectedStatus === 'exited' && !isRunning && exists)
     ) {
       return true;
     }
     
-    // Wait a bit before checking again
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
   
   return false;
@@ -95,10 +106,13 @@ export async function waitForContainerStatus(
  * Stops a container on a host
  */
 export async function stopContainer(containerName: string, host: string = 'localhost'): Promise<void> {
-  const cmd = host === 'localhost'
-    ? `docker stop ${containerName}`
-    : `ssh ${host} "docker stop ${containerName}\"`;
-    
+  let cmd: string;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    cmd = `docker stop ${containerName}`;
+  } else {
+    cmd = `ssh ${host} 'docker stop ${containerName}'`;
+  }
+  
   const result = await runCommand(cmd);
   if (result.exitCode !== 0) {
     throw new Error(`Failed to stop container: ${result.stderr}`);
@@ -109,10 +123,13 @@ export async function stopContainer(containerName: string, host: string = 'local
  * Starts a container on a host
  */
 export async function startContainer(containerName: string, host: string = 'localhost'): Promise<void> {
-  const cmd = host === 'localhost'
-    ? `docker start ${containerName}`
-    : `ssh ${host} "docker start ${containerName}\"`;
-    
+  let cmd: string;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    cmd = `docker start ${containerName}`;
+  } else {
+    cmd = `ssh ${host} 'docker start ${containerName}'`;
+  }
+  
   const result = await runCommand(cmd);
   if (result.exitCode !== 0) {
     throw new Error(`Failed to start container: ${result.stderr}`);
@@ -123,17 +140,13 @@ export async function startContainer(containerName: string, host: string = 'loca
  * Removes a container and its directory on a host
  */
 export async function removeContainer(containerName: string, serviceId: string, host: string = 'localhost'): Promise<void> {
-  const expandedDir = `~/workspace/nemo/${serviceId}`.replace(/^~/, process.env.HOME || '');
+  const dirPath = `~/workspace/nemo/${serviceId}`;
   
-  let cmd: string;
-  if (host === 'localhost') {
-    cmd = `docker rm -f ${containerName} 2>/dev/null || true && rm -rf ${expandedDir}`;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    const cmd = `docker rm -f ${containerName} 2>/dev/null || true; rm -rf ${dirPath}`;
+    await runCommand(cmd);
   } else {
-    cmd = `ssh ${host} "docker rm -f ${containerName} 2>/dev/null || true && rm -rf ${expandedDir}\"`;
-  }
-  
-  const result = await runCommand(cmd);
-  if (result.exitCode !== 0) {
-    throw new Error(`Failed to remove container: ${result.stderr}`);
+    const cmd = `ssh ${host} 'docker rm -f ${containerName} 2>/dev/null || true; rm -rf ${dirPath}'`;
+    await runCommand(cmd);
   }
 }
