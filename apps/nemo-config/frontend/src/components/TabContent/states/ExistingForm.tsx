@@ -3,13 +3,14 @@ import { useSnapshot } from 'valtio';
 import { Activity, Check, AlertCircle } from 'lucide-react';
 import { store, selectActiveTab, selectActiveTemplate } from '../../../store';
 import * as actions from '../../../store/actions';
-import * as apiActions from '../../../store/api-actions';
+import { useMutations } from '../../../hooks/useMutations';
 
 export const TabExistingForm = () => {
   const snap = useSnapshot(store);
   const activeTab = selectActiveTab(snap);
   const template = selectActiveTemplate(snap);
   const isDeploying = snap.deploying === snap.activeTabId;
+  const { testConnection } = useMutations();
   
   if (!activeTab || !template) return null;
   
@@ -31,8 +32,18 @@ export const TabExistingForm = () => {
   };
   
   const handleTestConnection = () => {
-    if (snap.activeTabId) {
-      apiActions.testConnection(snap.activeTabId);
+    if (snap.activeTabId && template) {
+      if (!activeTab?.existingUrl.trim()) {
+        actions.setTestStatus(snap.activeTabId, 'error', 'Please enter a connection URL');
+        actions.appendLog(snap.activeTabId, 'Error: No connection URL provided');
+        return;
+      }
+      testConnection.mutate({
+        service_id: snap.activeTabId,
+        connection_url: activeTab.existingUrl,
+        health_check: template.health_check,
+        metadata: activeTab.formValues,
+      });
     }
   };
   

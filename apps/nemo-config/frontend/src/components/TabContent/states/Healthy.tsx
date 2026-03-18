@@ -1,45 +1,71 @@
 import { useSnapshot } from 'valtio';
 import { store, selectActiveTab } from '../../../store';
-import * as apiActions from '../../../store/api-actions';
+import { useMutations } from '../../../hooks/useMutations';
 import { InstanceDetailsView } from '../../InstanceDetails';
 
 export const TabHealthy = () => {
   const snap = useSnapshot(store);
   const activeTab = selectActiveTab(snap);
-  
+  const { containerAction } = useMutations();
+
   if (!activeTab?.instanceDetails) return null;
-  
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
   };
-  
+
   const handleStop = () => {
     if (snap.activeTabId) {
-      apiActions.handleContainerAction(snap.activeTabId, 'stop');
+      containerAction.mutate({
+        tabId: snap.activeTabId,
+        action: 'stop',
+        natsUrl: snap.natsUrl,
+        deployPath: snap.deployPath,
+      });
     }
   };
-  
+
   const handleStart = () => {
     if (snap.activeTabId) {
-      apiActions.handleContainerAction(snap.activeTabId, 'start');
+      containerAction.mutate({
+        tabId: snap.activeTabId,
+        action: 'start',
+        natsUrl: snap.natsUrl,
+        deployPath: snap.deployPath,
+      });
     }
   };
-  
+
   const handleRestart = () => {
     if (snap.activeTabId) {
-      apiActions.handleContainerAction(snap.activeTabId, 'restart');
+      containerAction.mutate({
+        tabId: snap.activeTabId,
+        action: 'restart',
+        natsUrl: snap.natsUrl,
+        deployPath: snap.deployPath,
+      });
     }
   };
-  
+
   const handleDelete = () => {
     if (snap.activeTabId) {
-      apiActions.handleContainerAction(snap.activeTabId, 'delete');
+      containerAction.mutate({
+        tabId: snap.activeTabId,
+        action: 'delete',
+        natsUrl: snap.natsUrl,
+        deployPath: snap.deployPath,
+      });
     }
   };
-  
+
   const handleRemoveConfig = () => {
     if (snap.activeTabId) {
-      apiActions.handleContainerAction(snap.activeTabId, 'removeConfig');
+      containerAction.mutate({
+        tabId: snap.activeTabId,
+        action: 'removeConfig',
+        natsUrl: snap.natsUrl,
+        deployPath: snap.deployPath,
+      });
     }
   };
   

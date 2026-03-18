@@ -1,11 +1,12 @@
 import { useSnapshot } from 'valtio';
 import { store } from '../../store';
 import * as actions from '../../store/actions';
-import * as apiActions from '../../store/api-actions';
+import { useMutations } from '../../hooks/useMutations';
 import { Settings, Activity, CheckCircle, XCircle, Download } from 'lucide-react';
 
 export const Header = () => {
   const snap = useSnapshot(store);
+  const { exportConfig } = useMutations();
   
   const getStatusIcon = () => {
     switch (snap.natsStatus) {
@@ -51,8 +52,9 @@ export const Header = () => {
         </button>
         
         <button
-          onClick={() => apiActions.exportConfig()}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
+          onClick={() => exportConfig.mutate(snap.natsUrl)}
+          disabled={exportConfig.isPending}
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50"
         >
           <Download size={16} />
           Export

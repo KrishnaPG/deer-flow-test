@@ -98,12 +98,3 @@ const Component = () => {
 5. **WebSocket ONLY** for real-time deployment logs
 6. **TanStack Query ONLY** for all other server data
 
-## Migration Checklist
-
-- [ ] Create useMutations.ts with all mutations
-- [ ] Add instanceDetails + containerLogs queries to useServerSync
-- [ ] Remove useInstanceDetailsLoader.ts
-- [ ] Remove api-actions.ts (move to useMutations)
-- [ ] Update components to use mutation hooks
-- [ ] Test: Deploy → see WebSocket logs → switch to container logs
-- [ ] Test: Register external → config updated → no container logs
