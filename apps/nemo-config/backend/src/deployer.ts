@@ -86,15 +86,15 @@ function injectContainerName(composeStr: string, containerName: string): string 
 }
 
 export async function getInstanceDetails(serviceId: string, consulUrl: string): Promise<InstanceDetails> {
-  const configs = await getAllConfigFromConsul(consulUrl, [`${serviceId}.>`, `nemo_metadata.${serviceId}`]);
+  const configs = await getAllConfigFromConsul(consulUrl, [`${serviceId}.>`, `nemo.metadata.${serviceId}`]);
   const connectionUrl = configs[`nemo.${serviceId}.url`] || configs[`${serviceId}.url`] || null;
-  const metadataRaw = configs[`nemo.metadata.${serviceId}`] || configs[`nemo_metadata.${serviceId}`];
+  const metadataRaw = configs[`nemo.metadata.${serviceId}`];
   let metadata: ServiceMetadata | null = null;
   if (metadataRaw) {
     try {
       metadata = JSON.parse(metadataRaw);
     } catch {
-      const host = configs[`nemo.metadata.${serviceId}_last_host`] || configs[`nemo_metadata.${serviceId}_last_host`];
+      const host = configs[`nemo.metadata.${serviceId}_last_host`];
       if (host && connectionUrl) {
         metadata = {
           serviceId,
@@ -158,17 +158,19 @@ export async function deployService(req: DeployRequest, onLog?: LogCallback) {
   const baseDir = req.deploy_path || '~/workspace/nemo';
   const remoteDir = `${baseDir}/${req.service_id}`;
   
-  // Auto-generate DATA_PATH if the template uses it and no value is provided
   const dataPath = req.env_values.DATA_PATH || `${remoteDir}/data`;
+  const port = req.env_values.PORT || `${req.template.default_port}`;
   
   const vars = { 
     ...req.env_values, 
     HOST: ip, 
+    PORT: port,
     CONTAINER_NAME: containerName,
     DATA_PATH: dataPath
   };
   
   log(`[Deploy] Data path: ${dataPath}`);
+  log(`[Deploy] Port: ${port}`);
   
   let composeStr = req.template.docker_compose;
   composeStr = injectContainerName(composeStr, containerName);

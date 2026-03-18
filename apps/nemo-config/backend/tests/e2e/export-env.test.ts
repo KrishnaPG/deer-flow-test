@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { cleanupTestResources, cleanupConsulForService } from './helpers/consul';
+import { cleanupTestResources, cleanupConsulForService, generateTestServiceId, getNextTestPort, getContainerName } from './helpers/consul';
+import { stopContainer, removeContainer } from './helpers/docker';
 import { get, post } from './helpers/api';
-import { generateTestServiceId } from './helpers/consul';
 import { CONFIG } from './config';
+
+const TARGET_HOST = CONFIG.DEFAULT_TARGET_HOST;
 
 describe('Export Env API - E2E Tests', () => {
   let testServiceId: string;
+  let containerName: string;
+  let testPort: number;
 
   beforeAll(async () => {
     await cleanupTestResources();
@@ -17,22 +21,29 @@ describe('Export Env API - E2E Tests', () => {
 
   beforeEach(async () => {
     testServiceId = generateTestServiceId('test-service');
+    containerName = getContainerName(testServiceId);
+    testPort = getNextTestPort();
   });
 
   afterEach(async () => {
+    try {
+      await stopContainer(containerName, TARGET_HOST).catch(() => {});
+      await removeContainer(containerName, testServiceId, TARGET_HOST).catch(() => {});
+    } catch (error) {
+      console.warn('Cleanup warning:', error);
+    }
     await cleanupConsulForService(testServiceId);
   });
 
   it('should export configurations as .env format', async () => {
-    // Deploy a service to create some config
     const catalogResponse = await get('/api/catalog');
     const redisTemplate = catalogResponse.data.find((t: any) => t.id === 'redis');
     
     const deployResponse = await post('/api/deploy', {
-      target_host: 'localhost',
+      target_host: TARGET_HOST,
       service_id: testServiceId,
       template: redisTemplate,
-      env_values: {},
+      env_values: { PORT: String(testPort) },
       consul_url: CONFIG.CONSUL_URL,
       mode: 'deploy',
       deploy_path: CONFIG.DEPLOY_BASE_PATH

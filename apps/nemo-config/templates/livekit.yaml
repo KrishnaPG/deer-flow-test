@@ -11,6 +11,9 @@ env_vars:
     description: "API Secret"
     secret: true
     default: "secret"
+  - key: DATA_PATH
+    description: "Host path for data persistence (recordings)"
+    default: "./data"
 exports:
   "livekit.url": "wss://${HOST}:7880"
   "livekit.api_key": "${LIVEKIT_API_KEY:-devkey}"
@@ -28,3 +31,5 @@ docker_compose: |
         - "7880:7880"
         - "7881:7881"
         - "50000-50200:50000-50200/udp"
+      volumes:
+        - ${DATA_PATH:-./data}:/var/livekit

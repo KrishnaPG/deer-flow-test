@@ -1,29 +1,21 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { removeServiceConfig, getAllConfigFromConsul } from '../../../src/consul-store';
 import { CONFIG } from '../config';
 
 const execAsync = promisify(exec);
 
-/**
- * Executes a shell command and returns the result
- */
-export async function runCommand(cmd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  try {
-    const result = await execAsync(cmd);
-    return { stdout: result.stdout.toString(), stderr: result.stderr.toString(), exitCode: 0 };
-  } catch (error: any) {
-    return { stdout: error.stdout?.toString() || '', stderr: error.stderr?.toString() || '', exitCode: 1 };
-  }
+let portCounter = 6379;
+
+export function getNextTestPort(): number {
+  portCounter++;
+  if (portCounter > 9999) portCounter = 6380;
+  return portCounter;
 }
 
 /**
  * Cleans up all test-related Consul keys and containers
- * NOTE: This can be slow if there are many test keys. Use cleanupConsulForService for per-test cleanup.
  */
 export async function cleanupTestResources(): Promise<void> {
-  // Quick cleanup - just log that we're skipping bulk cleanup
-  // Individual tests should clean up their own resources
   console.log('[Cleanup] Skipping bulk cleanup - tests clean up their own resources');
 }
 
@@ -38,33 +30,67 @@ export function generateTestServiceId(baseId: string): string {
  * Cleans up Consul keys for a specific service
  */
 export async function cleanupConsulForService(serviceId: string): Promise<void> {
-  await removeServiceConfig(serviceId, CONFIG.CONSUL_URL).catch(() => {});
+  const consulUrl = CONFIG.CONSUL_URL;
+  try {
+    const consul = new (await import('consul')).default({ host: consulUrl.split(':')[0], port: consulUrl.split(':')[1] || '8500' });
+    await consul.kv.del({ key: `nemo/${serviceId}`, recurse: true });
+    await consul.kv.del({ key: serviceId, recurse: true });
+    console.log(`[Consul] Cleaned up config for ${serviceId}`);
+  } catch (error) {
+    console.log(`[Consul] Error removing config: ${error.message}`);
+  }
 }
 
 /**
- * Verifies that a service configuration exists in Consul
+ * Gets all config from Consul for given prefixes
  */
-export async function verifyConsulConfig(serviceId: string, expectedKeys: string[]): Promise<boolean> {
+export async function getAllConfigFromConsul(
+  consulUrl: string, 
+  allowedPrefixes?: string[]
+): Promise<Record<string, string>> {
+  const configs: Record<string, string> = {};
+  
   try {
-    const configs = await getAllConfigFromConsul(CONFIG.CONSUL_URL, [serviceId + '.>', 'nemo/' + serviceId + '/.>']);
+    const host = consulUrl.split(':')[0];
+    const port = consulUrl.split(':')[1] || '8500';
+    const consul = new (await import('consul')).default({ host, port });
     
-    for (const expectedKey of expectedKeys) {
-      // Check both old format (serviceId.key) and new format (nemo.serviceId.key)
-      const keyExists = Object.keys(configs).some(key => 
-        key === `${serviceId}.${expectedKey}` || 
-        key === `nemo.${serviceId}.${expectedKey}`
-      );
+    const prefixes = allowedPrefixes && allowedPrefixes.length > 0 
+      ? allowedPrefixes 
+      : ['nemo/'];
+    
+    for (const prefix of prefixes) {
+      let consulPrefix = prefix;
+      if (prefix.includes('.') && !prefix.includes('/')) {
+        consulPrefix = prefix.replace(/\./g, '/');
+        if (!consulPrefix.startsWith('nemo')) {
+          consulPrefix = `nemo/${consulPrefix}`;
+        }
+      }
       
-      if (!keyExists) {
-        return false;
+      if (!consulPrefix.endsWith('/')) {
+        consulPrefix += '/';
+      }
+      
+      try {
+        const items = await consul.kv.get({ key: consulPrefix, recurse: true });
+        if (items && Array.isArray(items)) {
+          for (const item of items) {
+            if (item.Key && item.Value) {
+              const key = item.Key.replace(consulPrefix, '').replace('nemo/', '');
+              configs[key] = Buffer.from(item.Value, 'base64').toString('utf-8');
+            }
+          }
+        }
+      } catch (e) {
+        // Prefix might not exist
       }
     }
-    
-    return true;
   } catch (error) {
-    console.error('Error verifying Consul config:', error);
-    return false;
+    console.error('Error fetching Consul config:', error);
   }
+  
+  return configs;
 }
 
 /**
