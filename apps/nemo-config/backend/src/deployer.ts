@@ -97,7 +97,7 @@ function injectContainerName(composeStr: string, containerName: string): string 
 }
 
 export async function getInstanceDetails(serviceId: string, natsUrl: string): Promise<InstanceDetails> {
-  const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.>`, `nemo_metadata.${serviceId}.>`, `nemo_metadata.${serviceId}_`]);
+  const configs = await getAllConfigFromNats(natsUrl, [`${serviceId}.>`, `nemo_metadata.${serviceId}`]);
   const connectionUrl = configs[`${serviceId}.url`] || null;
   const metadataRaw = configs[`nemo_metadata.${serviceId}`];
   let metadata: ServiceMetadata | null = null;
@@ -414,12 +414,22 @@ export async function removeServiceConfig(serviceId: string, natsUrl: string): P
   const js = nc.jetstream();
   const kv = await js.views.kv(KV_BUCKET);
   
+  const prefixes = [`${serviceId}.>`, `nemo_metadata.${serviceId}.>`, `nemo_metadata.${serviceId}_`];
+  
   try {
-    const keysIter = await kv.keys([`${serviceId}.`, `nemo_metadata.${serviceId}`]);
-    for await (const key of keysIter) {
-      if (key.startsWith(serviceId + '.') || key.startsWith(`nemo_metadata.${serviceId}`)) {
-        await kv.delete(key);
-        console.log(`[NATS] Deleted key: ${key}`);
+    for (const prefix of prefixes) {
+      try {
+        const keysIter = await kv.keys(prefix);
+        for await (const key of keysIter) {
+          if (key.startsWith(serviceId + '.') || key.startsWith(`nemo_metadata.${serviceId}`)) {
+            await kv.delete(key);
+            console.log(`[NATS] Deleted key: ${key}`);
+          }
+        }
+      } catch (err: any) {
+        if (!err.message?.includes('no keys')) {
+          throw err;
+        }
       }
     }
   } catch (err: any) {
