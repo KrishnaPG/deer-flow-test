@@ -1,4 +1,4 @@
-import { CheckCircle, Activity, Loader2 } from 'lucide-react';
+import { CheckCircle, Activity, Loader2, AlertCircle } from 'lucide-react';
 import type { Template, ServiceStatus } from '../definitions';
 import { ICONS } from '../definitions';
 
@@ -8,9 +8,11 @@ interface SidebarProps {
   status: Record<string, ServiceStatus>;
   onSelect: (id: string) => void;
   isLoading?: boolean;
+  error?: string;
+  isLoadingConfigs?: boolean;
 }
 
-export function Sidebar({ templates, selectedId, status, onSelect, isLoading = false }: SidebarProps) {
+export function Sidebar({ templates, selectedId, status, onSelect, isLoading = false, error, isLoadingConfigs = false }: SidebarProps) {
   const sortedTemplates = [...templates].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -24,6 +26,11 @@ export function Sidebar({ templates, selectedId, status, onSelect, isLoading = f
             <Loader2 size={24} className="text-gray-400 animate-spin mb-3" />
             <p className="text-sm text-gray-500">Loading services...</p>
           </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <AlertCircle size={24} className="text-red-500 mb-3" />
+            <p className="text-sm text-red-600 text-center">{error}</p>
+          </div>
         ) : sortedTemplates.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4">
             <p className="text-sm text-gray-500 text-center">No services available</p>
@@ -35,6 +42,7 @@ export function Sidebar({ templates, selectedId, status, onSelect, isLoading = f
               template={tpl}
               isSelected={selectedId === tpl.id}
               status={status[tpl.id] || 'unconfigured'}
+              isLoadingConfigs={isLoadingConfigs}
               onClick={() => onSelect(tpl.id)}
             />
           ))
@@ -48,12 +56,14 @@ interface ServiceItemProps {
   template: Template;
   isSelected: boolean;
   status: ServiceStatus;
+  isLoadingConfigs?: boolean;
   onClick: () => void;
 }
 
-function ServiceItem({ template, isSelected, status, onClick }: ServiceItemProps) {
+function ServiceItem({ template, isSelected, status, isLoadingConfigs = false, onClick }: ServiceItemProps) {
   const Icon = ICONS[template.icon] || ICONS['box'];
   const isUnconfigured = status === 'unconfigured';
+  const showCheckingSpinner = isLoadingConfigs && isUnconfigured;
 
   return (
     <button
@@ -75,6 +85,7 @@ function ServiceItem({ template, isSelected, status, onClick }: ServiceItemProps
           </span>
           {status === 'healthy' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
           {status === 'deploying' && <Activity size={14} className="text-blue-500 animate-pulse flex-shrink-0" />}
+          {showCheckingSpinner && <Loader2 size={14} className="text-yellow-500 animate-spin flex-shrink-0" />}
         </div>
         <p className="text-xs text-gray-500 font-mono">Port: {template.default_port}</p>
       </div>
