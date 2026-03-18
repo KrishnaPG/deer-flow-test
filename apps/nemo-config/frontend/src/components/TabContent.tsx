@@ -79,17 +79,26 @@ export function TabContent({
       {/* Upper: Form or Instance Details */}
       <div className="flex-1 overflow-y-auto p-6 bg-white">
         <div className="max-w-2xl space-y-5">
-          {isHealthy && instanceDetails ? (
-            <InstanceDetailsView
-              instanceDetails={instanceDetails}
-              onCopy={onCopy}
-              onStop={onStop}
-              onStart={onStart}
-              onRestart={onRestart}
-              onDelete={onDelete}
-              onRemoveConfig={onRemoveConfig}
-              isProcessing={isProcessing}
-            />
+          {isHealthy ? (
+            instanceDetails ? (
+              <InstanceDetailsView
+                instanceDetails={instanceDetails}
+                onCopy={onCopy}
+                onStop={onStop}
+                onStart={onStart}
+                onRestart={onRestart}
+                onDelete={onDelete}
+                onRemoveConfig={onRemoveConfig}
+                isProcessing={isProcessing}
+              />
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Loading instance details...</p>
+                </div>
+              </div>
+            )
           ) : (
             <>
               {mode === 'deploy' ? (
