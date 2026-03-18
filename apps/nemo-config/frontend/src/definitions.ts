@@ -33,4 +33,21 @@ export type ServiceStatus = 'unconfigured' | 'deploying' | 'healthy';
 
 export type NatsStatus = 'connected' | 'disconnected' | 'checking';
 
+export interface ServiceMetadata {
+  serviceId: string;
+  containerName: string;
+  managedBy: 'nemo' | 'external';
+  host: string;
+  connectionUrl: string;
+  deployedAt: string;
+  templateId: string;
+}
+
+export interface InstanceDetails {
+  metadata: ServiceMetadata | null;
+  connectionUrl: string | null;
+  isHealthy: boolean;
+  containerStatus?: 'running' | 'stopped' | 'not_found';
+}
+
 // Types re-exported for Vite HMR
