@@ -49,14 +49,15 @@ frontend/src/
 
 ## Queries (useServerSync)
 
-| Query           | Key                          | Syncs To                | Polling           |
-| --------------- | ---------------------------- | ----------------------- | ----------------- |
-| templates       | `['templates']`              | `store.templates`       | No                |
-| configs         | `['configs', natsUrl]`       | `store.configs`         | No                |
-| hosts           | `['hosts']`                  | `store.hosts`           | No                |
-| natsHealth      | `['natsHealth', natsUrl]`    | `store.natsStatus`      | 10s               |
-| instanceDetails | `['instanceDetails', tabId]` | `store.instanceDetails` | No                |
-| containerLogs   | `['containerLogs', tabId]`   | `store.logs[tabId]`     | 1s (managed only) |
+| Query           | Key                            | Syncs To                | Polling           |
+| --------------- | ------------------------------ | ----------------------- | ----------------- |
+| templates       | `['templates']`                | `store.templates`       | No                |
+| configs         | `['configs', consulUrl]`       | `store.configs`         | No                |
+| hosts           | `['hosts']`                    | `store.hosts`           | No                |
+| consulHealth    | `['consulHealth', consulUrl]`  | `store.consulStatus`    | 10s               |
+| servicesHealth  | `['servicesHealth', consulUrl]`| `store.servicesHealth`  | 30s               |
+| instanceDetails | `['instanceDetails', tabId]`   | `store.instanceDetails` | No                |
+| containerLogs   | `['containerLogs', tabId]`     | `store.logs[tabId]`     | 1s (managed only) |
 
 ## Mutations (useMutations)
 

@@ -1,6 +1,6 @@
 # Nemo-Config: Infrastructure Control Plane & DX
 
-This document outlines the architecture, lifecycle, and developer/operator workflow for `nemo-config` (NATS Environment Management & Orchestration). 
+This document outlines the architecture, lifecycle, and developer/operator workflow for `nemo-config` (Consul Environment Management & Orchestration). 
 
 `nemo-config` is a standalone, reusable infrastructure control plane designed to eliminate `.env` file management, dynamic container provisioning, and fragile application startup sequences across both development and production environments.
 
@@ -9,7 +9,7 @@ This document outlines the architecture, lifecycle, and developer/operator workf
 The architecture strictly separates the **Application Data Plane** (the actual business logic, e.g., the State Server) from the **Infrastructure Control Plane** (`nemo-config`).
 
 1.  **Applications NEVER crash on startup due to missing infrastructure.** They boot instantly into a "Degraded Mode" and wait patiently for configuration.
-2.  **Configuration is Stateful and Centralized.** All connection strings (Postgres, ClickHouse, MinIO, etc.) live securely in the NATS JetStream Key-Value (KV) store.
+2.  **Configuration is Stateful and Centralized.** All connection strings (Postgres, ClickHouse, MinIO, etc.) live securely in the Consul Key-Value (KV) store.
 3.  **Infrastructure Provisioning is Dynamic.** `nemo-config` can deploy missing services to remote WireGuard nodes via SSH, rather than relying on monolithic, static `docker-compose.yml` files.
 
 ---
@@ -25,7 +25,7 @@ The architecture strictly separates the **Application Data Plane** (the actual b
     *   Toggle services ON/OFF from the catalog.
     *   Provide an existing URL for a toggled service (reusing existing infra on the VPN).
     *   Provide SSH credentials to dynamically deploy a toggled service to a remote WireGuard node (e.g., executing `docker compose up -d` over SSH).
-*   **The Publisher:** As services become healthy (either existing or newly deployed), `nemo-config` publishes their connection strings to the central NATS KV store (e.g., bucket: `cluster_config`, key: `postgres_url`).
+*   **The Publisher:** As services become healthy (either existing or newly deployed), `nemo-config` publishes their connection strings to the central Consul KV store (e.g., prefix: `nemo/postgres`, key: `url`).
 *   **The Monitor (Optional):** If left running, it acts as a lightweight cluster dashboard, showing real-time health (GREEN/RED) by polling service endpoints.
 
 ---
@@ -36,14 +36,14 @@ The main application (API, Edge worker, etc.) is completely agnostic to *how* it
 
 ### Startup Requirements
 The application only knows two things on startup:
-1.  The `NATS_URL` (the singular "Bootstrap Node").
+1.  The `CONSUL_URL` (the singular "Bootstrap Node").
 2.  Its own struct of prerequisites (e.g., `requires: { db: true, storage: true, event_bus: true }`).
 
 ### The "Degraded Mode" State Machine
 
-*   **The Watcher:** On boot, the application connects to NATS and watches the `cluster_config` KV bucket.
-*   **State: Degraded:** If the KV store is missing required keys (e.g., `postgres_url`), the app stays in degraded mode. It performs no business logic. Its health endpoint returns `503 Service Unavailable` with a JSON payload indicating missing dependencies (`{"status": "degraded", "missing": ["postgres"]}`).
-*   **State: Functional (The Magic Transition):** The moment the app's NATS watcher detects that all required keys are present in the KV store, it dynamically initializes its connection pools. If successful, it transitions to "Functional", logs `[INFO] All prerequisites met`, and begins serving traffic instantly—zero restarts required.
+*   **The Watcher:** On boot, the application connects to Consul and watches the `nemo/` KV prefix.
+*   **State: Degraded:** If the KV store is missing required keys (e.g., `nemo/postgres/url`), the app stays in degraded mode. It performs no business logic. Its health endpoint returns `503 Service Unavailable` with a JSON payload indicating missing dependencies (`{"status": "degraded", "missing": ["postgres"]}`).
+*   **State: Functional (The Magic Transition):** The moment the app's Consul watcher detects that all required keys are present in the KV store, it dynamically initializes its connection pools. If successful, it transitions to "Functional", logs `[INFO] All prerequisites met`, and begins serving traffic instantly—zero restarts required.
 
 ---
 
@@ -56,7 +56,7 @@ Because `nemo-config` and the application are decoupled, the workflow is identic
 1.  **Clone & Boot the App:**
     *   The developer clones the application repository.
     *   They run `cargo run` (or deploy the production binary). 
-    *   The app boots instantly but enters **Degraded Mode** because the NATS KV store lacks the required URLs.
+    *   The app boots instantly but enters **Degraded Mode** because the Consul KV store lacks the required URLs.
 2.  **Start the Config Tool:**
     *   The developer runs the standalone `nemo-config` tool (e.g., `nemo start`).
     *   A local UI opens (`localhost:8080`).
@@ -65,13 +65,13 @@ Because `nemo-config` and the application are decoupled, the workflow is identic
     *   They point Postgres to an *existing* IP on the WireGuard VPN (reusing infrastructure).
     *   They use the *SSH deploy feature* to spin up MinIO on a spare Raspberry Pi (or cloud VM) on the network.
 4.  **The Magic Transition:**
-    *   As soon as `nemo-config` verifies MinIO is up, it writes the URL to NATS KV. 
-    *   The main application (sitting in Degraded Mode watching NATS) instantly detects the change, builds its connection pools, and is ready for use.
+    *   As soon as `nemo-config` verifies MinIO is up, it writes the URL to Consul KV (e.g., `nemo/minio/url`). 
+    *   The main application (sitting in Degraded Mode watching Consul) instantly detects the change, builds its connection pools, and is ready for use.
 5.  **Cleanup:**
-    *   The developer closes the `nemo-config` UI. The main application continues running perfectly. The configuration is safely persisted in NATS JetStream.
+    *   The developer closes the `nemo-config` UI. The main application continues running perfectly. The configuration is safely persisted in Consul.
 
 ### Scenario: Hot-Swapping a Database
 If a database needs to be migrated to a new server:
 1.  Open the `nemo-config` UI.
 2.  Update the Postgres IP address.
-3.  The main application detects the KV change via NATS, drops the old Postgres pool, creates a new one, and continues serving requests—zero downtime, no `.env` edits, no container restarts.
+3.  The main application detects the KV change via Consul, drops the old Postgres pool, creates a new one, and continues serving requests—zero downtime, no `.env` edits, no container restarts.
