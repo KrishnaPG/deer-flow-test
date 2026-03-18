@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
+import * as actions from '../store/actions';
 
-export function useWebSocket(onMessage: (serviceId: string, message: string) => void) {
+export const useWebSocketManager = (): void => {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
 
   useEffect(() => {
@@ -16,13 +17,14 @@ export function useWebSocket(onMessage: (serviceId: string, message: string) => 
         ws.onopen = () => {
           console.log('WebSocket connected');
           reconnectAttemptsRef.current = 0;
+          actions.setWsConnected(true);
         };
         
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             if (data.serviceId && data.message) {
-              onMessage(data.serviceId, data.message);
+              actions.appendLog(data.serviceId, data.message);
             }
           } catch (err) {
             console.error('Failed to parse WebSocket message', err);
@@ -36,6 +38,7 @@ export function useWebSocket(onMessage: (serviceId: string, message: string) => 
         ws.onclose = () => {
           console.log('WebSocket closed');
           wsRef.current = null;
+          actions.setWsConnected(false);
           
           if (reconnectAttemptsRef.current < 5) {
             reconnectAttemptsRef.current++;
@@ -60,7 +63,5 @@ export function useWebSocket(onMessage: (serviceId: string, message: string) => 
         wsRef.current = null;
       }
     };
-  }, [onMessage]);
-
-  return wsRef;
-}
+  }, []);
+};
