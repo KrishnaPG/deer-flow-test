@@ -1,6 +1,5 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
-import { websocket } from "@elysiajs/websocket";
 import { readdir, readFile } from "fs/promises";
 import * as yaml from "js-yaml";
 import { resolve } from "path";
@@ -30,7 +29,6 @@ interface Template {
 
 const app = new Elysia()
   .use(cors())
-  .use(websocket())
   .ws('/ws/logs', {
     message(ws, message) {
       // Clients just listen to a global firehose, no actions needed
