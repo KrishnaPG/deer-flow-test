@@ -22,6 +22,22 @@ export const queryClient = new QueryClient({
   },
 });
 
+export const retryConsulHealth = async (consulUrl: string): Promise<void> => {
+  try {
+    const result = await queryClient.fetchQuery({
+      queryKey: ['consulHealth', consulUrl],
+      queryFn: () => checkConsulHealth(consulUrl),
+      retry: false,
+    });
+    store.consulStatus = result.connected ? 'connected' : 'disconnected';
+    store.consulError = result.error || null;
+  } catch {
+    store.consulStatus = 'disconnected';
+    store.consulError = 'Failed to check health';
+  }
+  store.retryingConnection = false;
+};
+
 export const useServerSync = (): void => {
   // Use snapshot to track reactive values from Valtio store
   const snap = useSnapshot(store);
@@ -97,9 +113,15 @@ export const useServerSync = (): void => {
   // Sync CONSUL status to store
   useEffect(() => {
     const status = consulHealthQuery.isLoading ? 'checking' 
-      : consulHealthQuery.data ? 'connected' 
+      : consulHealthQuery.data?.connected ? 'connected' 
       : 'disconnected';
     store.consulStatus = status;
+    if (consulHealthQuery.data?.error !== undefined) {
+      store.consulError = consulHealthQuery.data.error || null;
+    }
+    if (status !== 'checking' && store.retryingConnection) {
+      store.retryingConnection = false;
+    }
   }, [consulHealthQuery.data, consulHealthQuery.isLoading]);
 
   // Sync instance details to store

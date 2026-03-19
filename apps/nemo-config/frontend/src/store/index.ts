@@ -52,6 +52,8 @@ export const store = proxy({
   
   // CONSUL status
   consulStatus: 'checking' as ConsulStatus,
+  retryingConnection: false,
+  consulError: null as string | null,
 });
 
 export type Store = typeof store;

@@ -34,14 +34,21 @@ export const fetchContainerLogs = async (serviceId: string, consulUrl: string): 
   return res.data.logs || [];
 };
 
-export const checkConsulHealth = async (consulUrl: string): Promise<boolean> => {
+export const checkConsulHealth = async (consulUrl: string): Promise<{ connected: boolean; error?: string }> => {
   try {
     const res = await axios.get(`${API_URL}/health/consul`, {
       params: { consul_url: consulUrl },
       timeout: 10000
     });
-    return res.data.connected;
-  } catch {
-    return false;
+    if (res.data.connected) {
+      return { connected: true };
+    }
+    return { connected: false, error: res.data.error || 'Connection failed' };
+  } catch (err) {
+    const error = err as any;
+    const message = error.response?.status === 0 || !error.response
+      ? 'Connection refused or network error'
+      : error.response?.data?.message || error.message || 'Unknown error';
+    return { connected: false, error: message };
   }
 };
