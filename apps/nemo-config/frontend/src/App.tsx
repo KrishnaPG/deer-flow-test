@@ -8,6 +8,7 @@ import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
 import { Settings } from './components/Settings';
+import { DisconnectedOverlay } from './components/DisconnectedOverlay';
 import './App.css';
 
 function AppContent() {
@@ -34,6 +35,7 @@ function AppContent() {
         </div>
       </div>
       <Settings />
+      <DisconnectedOverlay />
     </div>
   );
 }
