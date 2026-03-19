@@ -2,20 +2,20 @@ import { subscribe } from 'valtio';
 import { store } from './index';
 
 const STORAGE_KEYS = {
-  natsUrl: 'nemo-nats-url',
+  consulUrl: 'nemo-consul-url',
   deployPath: 'nemo-deploy-path',
 };
 
 export const loadPersistedState = (): void => {
   try {
-    const natsUrl = localStorage.getItem(STORAGE_KEYS.natsUrl);
+    const consulUrl = localStorage.getItem(STORAGE_KEYS.consulUrl);
     const deployPath = localStorage.getItem(STORAGE_KEYS.deployPath);
     
-    store.natsUrl = natsUrl || 'nats://localhost:4222';
+    store.consulUrl = consulUrl || 'http://localhost:8500';
     store.deployPath = deployPath || '~/workspace/nemo';
   } catch (err) {
     console.error('Failed to load persisted state:', err);
-    store.natsUrl = 'nats://localhost:4222';
+    store.consulUrl = 'http://localhost:8500';
     store.deployPath = '~/workspace/nemo';
   }
 };
@@ -27,7 +27,7 @@ export const startPersistence = (): void => {
   
   unsubscribe = subscribe(store, () => {
     try {
-      localStorage.setItem(STORAGE_KEYS.natsUrl, store.natsUrl);
+      localStorage.setItem(STORAGE_KEYS.consulUrl, store.consulUrl);
       localStorage.setItem(STORAGE_KEYS.deployPath, store.deployPath);
     } catch (err) {
       console.error('Failed to persist state:', err);

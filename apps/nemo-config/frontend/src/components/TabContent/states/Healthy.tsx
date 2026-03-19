@@ -19,7 +19,7 @@ export const TabHealthy = () => {
       containerAction.mutate({
         tabId: snap.activeTabId,
         action: 'stop',
-        natsUrl: snap.natsUrl,
+        consulUrl: snap.consulUrl,
         deployPath: snap.deployPath,
       });
     }
@@ -30,7 +30,7 @@ export const TabHealthy = () => {
       containerAction.mutate({
         tabId: snap.activeTabId,
         action: 'start',
-        natsUrl: snap.natsUrl,
+        consulUrl: snap.consulUrl,
         deployPath: snap.deployPath,
       });
     }
@@ -41,7 +41,7 @@ export const TabHealthy = () => {
       containerAction.mutate({
         tabId: snap.activeTabId,
         action: 'restart',
-        natsUrl: snap.natsUrl,
+        consulUrl: snap.consulUrl,
         deployPath: snap.deployPath,
       });
     }
@@ -52,7 +52,7 @@ export const TabHealthy = () => {
       containerAction.mutate({
         tabId: snap.activeTabId,
         action: 'delete',
-        natsUrl: snap.natsUrl,
+        consulUrl: snap.consulUrl,
         deployPath: snap.deployPath,
       });
     }
@@ -63,7 +63,7 @@ export const TabHealthy = () => {
       containerAction.mutate({
         tabId: snap.activeTabId,
         action: 'removeConfig',
-        natsUrl: snap.natsUrl,
+        consulUrl: snap.consulUrl,
         deployPath: snap.deployPath,
       });
     }

@@ -13,31 +13,31 @@ export const fetchHosts = async (): Promise<string[]> => {
   return res.data;
 };
 
-export const fetchConfigs = async (natsUrl: string): Promise<Record<string, string>> => {
+export const fetchConfigs = async (consulUrl: string): Promise<Record<string, string>> => {
   const res = await axios.get(`${API_URL}/configs`, { 
-    params: { nats_url: natsUrl } 
+    params: { consul_url: consulUrl } 
   }).catch(() => ({ data: {} }));
   return res.data;
 };
 
-export const fetchInstanceDetails = async (serviceId: string, natsUrl: string): Promise<InstanceDetails> => {
+export const fetchInstanceDetails = async (serviceId: string, consulUrl: string): Promise<InstanceDetails> => {
   const res = await axios.get(`${API_URL}/services/${serviceId}/details`, {
-    params: { nats_url: natsUrl }
+    params: { consul_url: consulUrl }
   });
   return res.data;
 };
 
-export const fetchContainerLogs = async (serviceId: string, natsUrl: string): Promise<string[]> => {
+export const fetchContainerLogs = async (serviceId: string, consulUrl: string): Promise<string[]> => {
   const res = await axios.get(`${API_URL}/services/${serviceId}/logs`, {
-    params: { nats_url: natsUrl, tail: 100 }
+    params: { consul_url: consulUrl, tail: 100 }
   });
   return res.data.logs || [];
 };
 
-export const checkNatsHealth = async (natsUrl: string): Promise<boolean> => {
+export const checkConsulHealth = async (consulUrl: string): Promise<boolean> => {
   try {
-    const res = await axios.get(`${API_URL}/health/nats`, {
-      params: { nats_url: natsUrl },
+    const res = await axios.get(`${API_URL}/health/consul`, {
+      params: { consul_url: consulUrl },
       timeout: 10000
     });
     return res.data.connected;

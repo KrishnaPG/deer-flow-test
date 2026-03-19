@@ -3,7 +3,7 @@ import type { Template, InstanceDetails } from '../definitions';
 
 export type Mode = 'deploy' | 'existing';
 export type TestStatus = 'idle' | 'testing' | 'success' | 'error';
-export type NatsStatus = 'connected' | 'disconnected' | 'checking';
+export type ConsulStatus = 'connected' | 'disconnected' | 'checking';
 export type ConsoleMode = 'deployment' | 'container';
 
 export interface TabState {
@@ -35,13 +35,13 @@ export const store = proxy({
   activeTabId: null as string | null,
   
   // Settings (persisted)
-  natsUrl: '',
+  consulUrl: '',
   deployPath: '',
   
   // Operation states
   deploying: null as string | null,
   showSettings: false,
-  settingsInputs: { natsUrl: '', deployPath: '' },
+  settingsInputs: { consulUrl: '', deployPath: '' },
   
   // Logs: serviceId -> log lines
   logs: {} as Record<string, string[]>,
@@ -50,8 +50,8 @@ export const store = proxy({
   // WebSocket
   wsConnected: false,
   
-  // NATS status
-  natsStatus: 'checking' as NatsStatus,
+  // CONSUL status
+  consulStatus: 'checking' as ConsulStatus,
 });
 
 export type Store = typeof store;

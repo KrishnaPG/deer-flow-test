@@ -7,7 +7,7 @@ import {
   fetchTemplates,
   fetchHosts,
   fetchConfigs,
-  checkNatsHealth,
+  checkConsulHealth,
   fetchInstanceDetails,
   fetchContainerLogs,
 } from '../api/services';
@@ -25,7 +25,7 @@ export const queryClient = new QueryClient({
 export const useServerSync = (): void => {
   // Use snapshot to track reactive values from Valtio store
   const snap = useSnapshot(store);
-  const { activeTabId, natsUrl, configs, consoleMode } = snap;
+  const { activeTabId, consulUrl, configs, consoleMode } = snap;
 
   // Templates query
   const templatesQuery = useQuery({
@@ -42,33 +42,33 @@ export const useServerSync = (): void => {
 
   // Configs query
   const configsQuery = useQuery({
-    queryKey: ['configs', natsUrl],
-    queryFn: () => fetchConfigs(natsUrl),
-    enabled: !!natsUrl,
+    queryKey: ['configs', consulUrl],
+    queryFn: () => fetchConfigs(consulUrl),
+    enabled: !!consulUrl,
   });
 
-  // NATS health query
-  const natsHealthQuery = useQuery({
-    queryKey: ['natsHealth', natsUrl],
-    queryFn: () => checkNatsHealth(natsUrl),
+  // CONSUL health query
+  const consulHealthQuery = useQuery({
+    queryKey: ['consulHealth', consulUrl],
+    queryFn: () => checkConsulHealth(consulUrl),
     refetchInterval: 10000,
-    enabled: !!natsUrl,
+    enabled: !!consulUrl,
   });
 
   // Instance details query - fetch for active tab
   const instanceDetailsQuery = useQuery({
     queryKey: ['instanceDetails', activeTabId],
-    queryFn: () => fetchInstanceDetails(activeTabId!, natsUrl),
-    enabled: !!activeTabId && !!natsUrl && !!configs[`${activeTabId}.url`],
+    queryFn: () => fetchInstanceDetails(activeTabId!, consulUrl),
+    enabled: !!activeTabId && !!consulUrl && !!configs[`${activeTabId}.url`],
   });
 
   // Container logs query - only for managed services in container mode
   const containerLogsQuery = useQuery({
     queryKey: ['containerLogs', activeTabId],
-    queryFn: () => fetchContainerLogs(activeTabId!, natsUrl),
+    queryFn: () => fetchContainerLogs(activeTabId!, consulUrl),
     refetchInterval: 1000,
     enabled: !!activeTabId && 
-              !!natsUrl && 
+              !!consulUrl && 
               !!configs[`${activeTabId}.url`] &&
               consoleMode[activeTabId] === 'container',
   });
@@ -94,13 +94,13 @@ export const useServerSync = (): void => {
     store.configsError = configsQuery.error?.message || null;
   }, [configsQuery.data, configsQuery.isLoading, configsQuery.error]);
 
-  // Sync NATS status to store
+  // Sync CONSUL status to store
   useEffect(() => {
-    const status = natsHealthQuery.isLoading ? 'checking' 
-      : natsHealthQuery.data ? 'connected' 
+    const status = consulHealthQuery.isLoading ? 'checking' 
+      : consulHealthQuery.data ? 'connected' 
       : 'disconnected';
-    store.natsStatus = status;
-  }, [natsHealthQuery.data, natsHealthQuery.isLoading]);
+    store.consulStatus = status;
+  }, [consulHealthQuery.data, consulHealthQuery.isLoading]);
 
   // Sync instance details to store
   useEffect(() => {
