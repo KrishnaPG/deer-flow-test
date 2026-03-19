@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { Terminal, Activity } from 'lucide-react';
+import { Terminal, Activity, Loader2 } from 'lucide-react';
 
 interface ConsoleProps {
   output: string[];
   mode?: 'deployment' | 'container';
+  isLoading?: boolean;
 }
 
-export function Console({ output, mode = 'deployment' }: ConsoleProps) {
+export function Console({ output, mode = 'deployment', isLoading = false }: ConsoleProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,7 +27,10 @@ export function Console({ output, mode = 'deployment' }: ConsoleProps) {
       <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-b border-gray-700">
         <Icon size={16} className="text-gray-400" />
         <span className="text-sm font-medium text-gray-300">{title}</span>
-        {mode === 'container' && (
+        {isLoading && (
+          <Loader2 size={14} className="text-gray-400 animate-spin ml-1" />
+        )}
+        {mode === 'container' && !isLoading && (
           <span className="ml-2 text-xs text-gray-500">(auto-refresh)</span>
         )}
       </div>

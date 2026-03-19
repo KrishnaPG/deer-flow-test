@@ -27,6 +27,8 @@ export const store = proxy({
   
   isLoadingTemplates: false,
   isLoadingConfigs: false,
+  isLoadingInstanceDetails: false,
+  isLoadingContainerLogs: false,
   templatesError: null as string | null,
   configsError: null as string | null,
   

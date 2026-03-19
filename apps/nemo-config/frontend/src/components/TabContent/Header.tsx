@@ -6,7 +6,7 @@ import { Server, Link2 } from 'lucide-react';
 export const TabHeader = () => {
   const snap = useSnapshot(store);
   const template = selectActiveTemplate(snap);
-  const isHealthy = !!snap.configs[`${snap.activeTabId}.url`];
+  const isHealthy = !!snap.configs[`nemo.${snap.activeTabId}.url`];
   
   if (!template) return null;
   

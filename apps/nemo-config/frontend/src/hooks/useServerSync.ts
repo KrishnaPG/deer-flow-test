@@ -129,6 +129,7 @@ export const useServerSync = (): void => {
 
   // Sync instance details to store
   useEffect(() => {
+    store.isLoadingInstanceDetails = instanceDetailsQuery.isLoading;
     if (activeTabId && instanceDetailsQuery.data) {
       actions.setInstanceDetails(activeTabId, instanceDetailsQuery.data);
       // If this is a managed service, switch to container logs mode
@@ -136,10 +137,11 @@ export const useServerSync = (): void => {
         actions.setConsoleMode(activeTabId, 'container');
       }
     }
-  }, [instanceDetailsQuery.data, activeTabId]);
+  }, [instanceDetailsQuery.data, instanceDetailsQuery.isLoading, activeTabId]);
 
   // Sync container logs to store
   useEffect(() => {
+    store.isLoadingContainerLogs = containerLogsQuery.isLoading;
     if (activeTabId && containerLogsQuery.data) {
       store.logs = { ...store.logs, [activeTabId]: containerLogsQuery.data };
       // Ensure console mode is set to container when we have container logs
@@ -147,5 +149,5 @@ export const useServerSync = (): void => {
         actions.setConsoleMode(activeTabId, 'container');
       }
     }
-  }, [containerLogsQuery.data, activeTabId]);
+  }, [containerLogsQuery.data, containerLogsQuery.isLoading, activeTabId]);
 };
