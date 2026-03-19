@@ -17,6 +17,7 @@ export type TabContentStateKey =
   | 'checking' 
   | 'healthy'
   | 'loading-details'
+  | 'container-not-found'
   | 'deploy'
   | 'existing';
 
@@ -28,6 +29,20 @@ export const selectTabContentState = (s: any, tabId: string | null): TabContentS
   if (s.configsError) return 'error';
   if (s.isLoadingConfigs && !s.configs[getServiceUrlKey(tabId)]) return 'checking';
   if (s.configs[getServiceUrlKey(tabId)]) {
+    const tab = s.tabs.find((t: any) => t.id === tabId);
+    const instanceDetails = tab?.instanceDetails;
+    const containerStatus = instanceDetails?.containerStatus;
+    const managedBy = instanceDetails?.metadata?.managedBy;
+    
+    if (managedBy === 'external') {
+      return 'healthy';
+    }
+    if (managedBy === 'nemo' && containerStatus === 'not_found') {
+      return 'container-not-found';
+    }
+    if (s.isLoadingInstanceDetails || !instanceDetails) {
+      return 'loading-details';
+    }
     return 'healthy';
   }
   const tab = s.tabs.find((t: any) => t.id === tabId);
