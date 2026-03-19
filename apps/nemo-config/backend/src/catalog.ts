@@ -2,6 +2,7 @@ import { readdir, readFile } from "fs/promises";
 import * as yaml from "js-yaml";
 import { resolve } from "path";
 import { type Template } from "./deployer";
+import { CONSUL_PREFIX } from "../../schema";
 
 const TEMPLATE_DIR = resolve(import.meta.dir, "../../templates");
 console.log(`[CATALOG] Loading templates from: ${TEMPLATE_DIR}`);
@@ -27,12 +28,12 @@ export async function getCatalogTemplates(): Promise<Template[]> {
 }
 
 /**
- * Returns a list of valid Consul KV key prefixes based on the current catalog.
- * e.g., ["nemo/redis/", "nemo/postgres/", "nemo/metadata/"]
+ * Returns prefixes for fetching ALL configs from Consul.
+ * Fetches both service configs and metadata.
  */
 export async function getCatalogPrefixes(): Promise<string[]> {
-  const templates = await getCatalogTemplates();
-  const prefixes = templates.map(t => `nemo/${t.id}/`);
-  prefixes.push("nemo/metadata/"); // Always allow internal metadata
-  return prefixes;
+  return [
+    `${CONSUL_PREFIX}/`,
+    `${CONSUL_PREFIX}/metadata/`,
+  ];
 }

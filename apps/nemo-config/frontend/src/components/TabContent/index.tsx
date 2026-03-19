@@ -73,7 +73,7 @@ const DeployButton = () => {
   const activeTab = selectActiveTab(snap);
   const template = selectActiveTemplate(snap);
   const isDeploying = snap.deploying === snap.activeTabId;
-  const isHealthy = !!snap.configs[`${snap.activeTabId}.url`];
+  const isHealthy = !!snap.configs[`nemo.${snap.activeTabId}.url`];
   const canRegisterExisting = selectCanRegisterExisting(snap, snap.activeTabId);
   const { executeDeploy } = useMutations();
 
