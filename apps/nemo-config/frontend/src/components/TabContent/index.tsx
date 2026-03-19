@@ -37,6 +37,7 @@ export const TabContent = () => {
   const Component = stateRegistry[stateKey as TabContentStateKey];
   const logs = snap.logs[snap.activeTabId || ''] || [];
   const consoleMode = snap.consoleMode[snap.activeTabId || ''] || 'deployment';
+  const containerNotFound = activeTab?.instanceDetails?.containerStatus === 'not_found';
   const showOverlay = stateKey === 'error' || stateKey === 'checking';
   const showButton = stateKey === 'deploy' || stateKey === 'existing';
 
@@ -61,6 +62,7 @@ export const TabContent = () => {
           output={[...logs]}
           mode={consoleMode as 'deployment' | 'container'}
           isLoading={snap.isLoadingContainerLogs}
+          containerNotFound={containerNotFound}
         />
       </div>
     </div>

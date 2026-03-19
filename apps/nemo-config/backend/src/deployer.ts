@@ -299,7 +299,11 @@ export async function registerExistingInstance(req: RegisterExistingRequest, onL
 export async function getContainerLogs(serviceId: string, consulUrl: string, tail: number = 100): Promise<string[]> {
   const details = await getInstanceDetails(serviceId, consulUrl);
   if (!details.metadata || details.metadata.managedBy !== 'nemo') {
-    throw new Error('Cannot get logs: service is not managed by nemo');
+    return [];
+  }
+  
+  if (details.containerStatus === 'not_found') {
+    return ['Container not found. It may have been deleted.'];
   }
   
   const { containerName, host } = details.metadata;
@@ -315,7 +319,7 @@ export async function getContainerLogs(serviceId: string, consulUrl: string, tai
     const { stdout } = await execAsync(command, { maxBuffer: 1024 * 1024 * 10 });
     return stdout.split('\n').filter(line => line.trim());
   } catch (error: any) {
-    throw new Error(`Failed to get logs: ${error.message}`);
+    return [`Error fetching logs: ${error.message}`];
   }
 }
 

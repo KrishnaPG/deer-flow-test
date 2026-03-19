@@ -81,15 +81,20 @@ export const useServerSync = (): void => {
     enabled: !!activeTabId && !!consulUrl && !!configs[getServiceUrlKey(activeTabId)],
   });
 
-  // Container logs query - only for managed services in container mode
+  // Check container status from instance details
+  const containerStatus = activeTabId && snap.tabs.find(t => t.id === activeTabId)?.instanceDetails?.containerStatus;
+  const containerNotFound = containerStatus === 'not_found';
+
+  // Container logs query - only for managed services in container mode and container exists
   const containerLogsQuery = useQuery({
     queryKey: ['containerLogs', activeTabId],
     queryFn: () => fetchContainerLogs(activeTabId!, consulUrl),
-    refetchInterval: 1000,
+    refetchInterval: containerNotFound ? false : 1000,
     enabled: !!activeTabId && 
               !!consulUrl && 
               !!configs[getServiceUrlKey(activeTabId)] &&
-              consoleMode[activeTabId] === 'container',
+              consoleMode[activeTabId] === 'container' &&
+              !containerNotFound,
   });
 
   // Sync templates to store
