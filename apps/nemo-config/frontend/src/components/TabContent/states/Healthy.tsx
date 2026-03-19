@@ -70,6 +70,8 @@ export const TabHealthy = () => {
   };
 
   const isExternal = activeTab.instanceDetails?.metadata?.managedBy === 'external';
+  const containerNotFound = activeTab.instanceDetails?.containerStatus === 'not_found';
+  const isManaged = activeTab.instanceDetails?.metadata?.managedBy === 'nemo';
   
   // For external services (registered via "Use Existing"), show minimal info
   if (isExternal) {
@@ -80,6 +82,46 @@ export const TabHealthy = () => {
           <h3 className="text-lg font-semibold text-blue-800 mb-2">External Service</h3>
           <p className="text-sm text-blue-700">
             This external service is registered but not managed by Nemo.
+          </p>
+        </div>
+        {configUrl && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Connection URL</label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono break-all">
+                {configUrl}
+              </code>
+              <button
+                onClick={() => handleCopy(configUrl)}
+                className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={handleRemoveConfig}
+            disabled={activeTab.isProcessing}
+            className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
+          >
+            Remove Configuration
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // For managed services where container is not found, show option to remove config
+  if (isManaged && containerNotFound) {
+    const configUrl = snap.configs[`nemo.${activeTab.id}.url`];
+    return (
+      <div className="space-y-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-amber-800 mb-2">Container Not Found</h3>
+          <p className="text-sm text-amber-700">
+            The container for this service was deleted or could not be found. You can remove the configuration to deploy a new instance.
           </p>
         </div>
         {configUrl && (
