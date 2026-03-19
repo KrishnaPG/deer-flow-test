@@ -153,7 +153,12 @@ const app = new Elysia()
           return `${envKey}=${value}`;
         });
       
-      return envLines.join('\n') || '# No configurations found in Consul KV store';
+      const content = envLines.join('\n') || '# No configurations found in Consul KV store';
+      return { 
+        success: true, 
+        content,
+        count: envLines.length
+      };
     } catch (error: any) {
       console.error('[Export] Error:', error);
       return new Response(

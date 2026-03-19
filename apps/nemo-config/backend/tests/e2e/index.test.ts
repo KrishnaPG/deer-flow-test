@@ -50,5 +50,23 @@ import './container-ops/start.test.ts';
 import './container-ops/restart.test.ts';
 import './container-ops/delete.test.ts';
 
-// No additional code needed - importing the test files executes them
+async function waitForBackend(maxRetries = 30): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await fetch('http://localhost:3001/api/catalog');
+      if (response.ok) {
+        console.log('Backend is ready');
+        return;
+      }
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  throw new Error('Backend failed to start');
+}
+
+waitForBackend().catch(err => {
+  console.error('Failed to start backend:', err.message);
+  process.exit(1);
+});
+
 console.log('E2E Test Suite Loaded - All tests will run when bun test is executed');
