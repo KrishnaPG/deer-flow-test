@@ -404,11 +404,11 @@ export async function deleteContainer(serviceId: string, consulUrl: string, depl
     const expandedDir = remoteDir.replace(/^~/, process.env.HOME || '');
     commands = [
       `docker rm -f ${containerName} 2>/dev/null || true`,
-      `rm -rf ${expandedDir}`
+      `rm -f ${expandedDir}/docker-compose.yml`
     ];
   } else {
     commands = [
-      `ssh ${host} "docker rm -f ${containerName} 2>/dev/null || true && rm -rf ${remoteDir}"`
+      `ssh ${host} "docker rm -f ${containerName} 2>/dev/null || true && rm -f ${remoteDir}/docker-compose.yml"`
     ];
   }
   
@@ -419,7 +419,7 @@ export async function deleteContainer(serviceId: string, consulUrl: string, depl
     
     await removeServiceConfig(serviceId, consulUrl);
     
-    return { success: true, message: `Deleted container ${containerName} and removed config` };
+    return { success: true, message: `Deleted container ${containerName} and removed config (data preserved)` };
   } catch (error: any) {
     throw new Error(`Failed to delete container: ${error.message}`);
   }
