@@ -118,7 +118,7 @@ export const setConsoleMode = (serviceId: string, mode: 'deployment' | 'containe
 // === Settings ===
 
 export const openSettings = (): void => {
-  store.settingsInputs = { natsUrl: store.natsUrl, deployPath: store.deployPath };
+  store.settingsInputs = { consulUrl: store.consulUrl, deployPath: store.deployPath };
   store.showSettings = true;
 };
 
@@ -126,12 +126,12 @@ export const closeSettings = (): void => {
   store.showSettings = false;
 };
 
-export const updateSettingsInput = (field: 'natsUrl' | 'deployPath', value: string): void => {
+export const updateSettingsInput = (field: 'consulUrl' | 'deployPath', value: string): void => {
   store.settingsInputs = { ...store.settingsInputs, [field]: value };
 };
 
 export const saveSettings = (): void => {
-  store.natsUrl = store.settingsInputs.natsUrl;
+  store.consulUrl = store.settingsInputs.consulUrl;
   store.deployPath = store.settingsInputs.deployPath;
   store.showSettings = false;
 };
@@ -152,18 +152,18 @@ export const setInstanceDetails = (tabId: string, details: InstanceDetails | nul
   updateTab(tabId, { instanceDetails: details });
 };
 
-export const loadInstanceDetails = async (tabId: string, natsUrl: string): Promise<void> => {
+export const loadInstanceDetails = async (tabId: string, consulUrl: string): Promise<void> => {
   try {
-    const details = await fetchInstanceDetails(tabId, natsUrl);
+    const details = await fetchInstanceDetails(tabId, consulUrl);
     setInstanceDetails(tabId, details);
   } catch (err) {
     console.error('Failed to fetch instance details:', err);
   }
 };
 
-export const loadContainerLogs = async (tabId: string, natsUrl: string): Promise<void> => {
+export const loadContainerLogs = async (tabId: string, consulUrl: string): Promise<void> => {
   try {
-    const logs = await fetchContainerLogs(tabId, natsUrl);
+    const logs = await fetchContainerLogs(tabId, consulUrl);
     store.logs = { ...store.logs, [tabId]: logs };
     store.consoleMode = { ...store.consoleMode, [tabId]: 'container' };
   } catch (err) {

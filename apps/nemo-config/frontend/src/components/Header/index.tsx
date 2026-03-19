@@ -9,7 +9,7 @@ export const Header = () => {
   const { exportConfig } = useMutations();
   
   const getStatusIcon = () => {
-    switch (snap.natsStatus) {
+    switch (snap.consulStatus) {
       case 'checking':
         return <Activity size={16} className="text-yellow-500 animate-pulse" />;
       case 'connected':
@@ -20,7 +20,7 @@ export const Header = () => {
   };
   
   const getStatusText = () => {
-    switch (snap.natsStatus) {
+    switch (snap.consulStatus) {
       case 'checking':
         return 'Checking...';
       case 'connected':
@@ -34,7 +34,7 @@ export const Header = () => {
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <h1 className="text-xl font-bold text-gray-900">Nemo Config</h1>
-        <span className="text-sm text-gray-500">{snap.natsUrl}</span>
+        <span className="text-sm text-gray-500">{snap.consulUrl}</span>
       </div>
       
       <div className="flex items-center gap-4">
@@ -52,7 +52,7 @@ export const Header = () => {
         </button>
         
         <button
-          onClick={() => exportConfig.mutate(snap.natsUrl)}
+          onClick={() => exportConfig.mutate(snap.consulUrl)}
           disabled={exportConfig.isPending}
           className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50"
         >

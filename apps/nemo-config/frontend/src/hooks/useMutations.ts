@@ -11,7 +11,7 @@ interface DeployPayload {
   service_id: string;
   template: Template;
   env_values: Record<string, string>;
-  nats_url: string;
+  consul_url: string;
   mode: 'deploy';
   deploy_path: string;
 }
@@ -19,7 +19,7 @@ interface DeployPayload {
 interface RegisterExistingPayload {
   service_id: string;
   connection_url: string;
-  nats_url: string;
+  consul_url: string;
   template: Template;
   env_values: Record<string, string>;
 }
@@ -51,12 +51,12 @@ const registerExistingFn = async (payload: RegisterExistingPayload) => {
 const containerActionFn = async ({
   tabId,
   action,
-  natsUrl,
+  consulUrl,
   deployPath,
 }: {
   tabId: string;
   action: 'stop' | 'start' | 'restart' | 'delete' | 'removeConfig';
-  natsUrl: string;
+  consulUrl: string;
   deployPath: string;
 }) => {
   const endpoint =
@@ -71,14 +71,14 @@ const containerActionFn = async ({
   const res = await axios({
     method,
     url: endpoint,
-    params: { nats_url: natsUrl, deploy_path: deployPath },
+    params: { consul_url: consulUrl, deploy_path: deployPath },
   });
   return res.data;
 };
 
-const exportConfigFn = async (natsUrl: string) => {
+const exportConfigFn = async (consulUrl: string) => {
   const res = await axios.get(`${API_URL}/export-env`, {
-    params: { nats_url: natsUrl },
+    params: { consul_url: consulUrl },
   });
   return res.data;
 };
@@ -127,7 +127,7 @@ export const useMutations = () => {
         return registerExistingFn({
           service_id: tabId,
           connection_url: tab.existingUrl,
-          nats_url: store.natsUrl,
+          consul_url: store.consulUrl,
           template,
           env_values: tab.formValues,
         });
@@ -137,7 +137,7 @@ export const useMutations = () => {
           service_id: tabId,
           template,
           env_values: tab.formValues,
-          nats_url: store.natsUrl,
+          consul_url: store.consulUrl,
           mode: 'deploy',
           deploy_path: store.deployPath,
         });
@@ -210,7 +210,7 @@ export const useMutations = () => {
       URL.revokeObjectURL(url);
     },
     onError: () => {
-      alert('Failed to export config. Is NATS running?');
+      alert('Failed to export config. Is CONSUL running?');
     },
   });
 

@@ -1,6 +1,6 @@
 # Nemo-Config: Infrastructure Control Plane & DX
 
-This document outlines the architecture, lifecycle, and developer/operator workflow for `nemo-config` (Consul Environment Management & Orchestration). 
+This document outlines the architecture, lifecycle, and developer/operator workflow for `nemo-config` tool (Consul Environment Management & Orchestration). 
 
 `nemo-config` is a standalone, reusable infrastructure control plane designed to eliminate `.env` file management, dynamic container provisioning, and fragile application startup sequences across both development and production environments.
 
@@ -32,7 +32,7 @@ The architecture strictly separates the **Application Data Plane** (the actual b
 
 ## 2. The Application Lifecycle (e.g., State Server)
 
-The main application (API, Edge worker, etc.) is completely agnostic to *how* its infrastructure was provisioned. 
+The main application (API, Edge worker, etc., which is different from the current `nemo-config` tool) is completely agnostic to *how* its infrastructure was provisioned. 
 
 ### Startup Requirements
 The application only knows two things on startup:

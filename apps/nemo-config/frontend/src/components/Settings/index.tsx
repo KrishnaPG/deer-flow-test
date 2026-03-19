@@ -62,17 +62,17 @@ export const Settings = () => {
         <div className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              NATS URL
+              CONSUL URL
             </label>
             <input
               type="text"
               className="w-full border-gray-300 rounded-md shadow-sm p-2.5 border bg-white focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
-              value={snap.settingsInputs.natsUrl}
-              onChange={e => actions.updateSettingsInput('natsUrl', e.target.value)}
-              placeholder="nats://localhost:4222"
+              value={snap.settingsInputs.consulUrl}
+              onChange={e => actions.updateSettingsInput('consulUrl', e.target.value)}
+              placeholder="http://localhost:8500"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Connection string for NATS server
+              Connection string for CONSUL server
             </p>
           </div>
           

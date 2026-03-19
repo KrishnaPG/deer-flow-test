@@ -2,10 +2,10 @@
 
 ## Core Principles
 
-1. **TanStack Query = Single Source of Truth** for all server data
-2. **Valtio Store = UI State** synced from TanStack Query only
-3. **useMutations Hook = Single Entry Point** for all mutations
-4. **Components = Declarative Rendering** via registry pattern, no if/else
+1. TanStack Query = Source of Truth for all *server* data, queries, mutations
+2. Valtio Store = Source of Truth for UI State, client side data, and data derived from server data
+3. useMutations Hook = Single Entry Point for all server mutations; for client data mutations, use Valtio store mutation methods;
+4. Components = Declarative Rendering via registry pattern, no if/else branching in rendering
 
 ## Data Flow
 
@@ -49,15 +49,15 @@ frontend/src/
 
 ## Queries (useServerSync)
 
-| Query           | Key                            | Syncs To                | Polling           |
-| --------------- | ------------------------------ | ----------------------- | ----------------- |
-| templates       | `['templates']`                | `store.templates`       | No                |
-| configs         | `['configs', consulUrl]`       | `store.configs`         | No                |
-| hosts           | `['hosts']`                    | `store.hosts`           | No                |
-| consulHealth    | `['consulHealth', consulUrl]`  | `store.consulStatus`    | 10s               |
-| servicesHealth  | `['servicesHealth', consulUrl]`| `store.servicesHealth`  | 30s               |
-| instanceDetails | `['instanceDetails', tabId]`   | `store.instanceDetails` | No                |
-| containerLogs   | `['containerLogs', tabId]`     | `store.logs[tabId]`     | 1s (managed only) |
+| Query           | Key                             | Syncs To                | Polling           |
+| --------------- | ------------------------------- | ----------------------- | ----------------- |
+| templates       | `['templates']`                 | `store.templates`       | No                |
+| configs         | `['configs', consulUrl]`        | `store.configs`         | No                |
+| hosts           | `['hosts']`                     | `store.hosts`           | No                |
+| consulHealth    | `['consulHealth', consulUrl]`   | `store.consulStatus`    | 10s               |
+| servicesHealth  | `['servicesHealth', consulUrl]` | `store.servicesHealth`  | 30s               |
+| instanceDetails | `['instanceDetails', tabId]`    | `store.instanceDetails` | No                |
+| containerLogs   | `['containerLogs', tabId]`      | `store.logs[tabId]`     | 1s (managed only) |
 
 ## Mutations (useMutations)
 
@@ -98,6 +98,7 @@ const Component = () => {
 4. **Mutations ALWAYS** invalidate affected queries
 5. **WebSocket ONLY** for real-time deployment logs
 6. **TanStack Query ONLY** for all other server data
+7. Valtio: Read from `useSnapshot` for reactive updates; Read from store proxy directly for non-reactive raw data access; Use store mutation methods for updating state;
 
 ## Package Manager
 
