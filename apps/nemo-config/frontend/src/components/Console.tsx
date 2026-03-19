@@ -5,9 +5,10 @@ interface ConsoleProps {
   output: string[];
   mode?: 'deployment' | 'container';
   isLoading?: boolean;
+  containerNotFound?: boolean;
 }
 
-export function Console({ output, mode = 'deployment', isLoading = false }: ConsoleProps) {
+export function Console({ output, mode = 'deployment', isLoading = false, containerNotFound = false }: ConsoleProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -18,9 +19,16 @@ export function Console({ output, mode = 'deployment', isLoading = false }: Cons
 
   const title = mode === 'container' ? 'Container Logs' : 'Deployment Console';
   const Icon = mode === 'container' ? Activity : Terminal;
-  const placeholder = mode === 'container' 
-    ? 'Waiting for container logs...' 
-    : 'No output yet. Start a deployment to see logs...';
+  
+  const getPlaceholder = () => {
+    if (mode === 'container') {
+      if (containerNotFound) {
+        return 'Container not found. It may have been deleted.';
+      }
+      return 'Waiting for container logs...';
+    }
+    return 'No output yet. Start a deployment to see logs...';
+  };
 
   return (
     <div className="h-full flex flex-col bg-gray-900">
@@ -30,7 +38,7 @@ export function Console({ output, mode = 'deployment', isLoading = false }: Cons
         {isLoading && (
           <Loader2 size={14} className="text-gray-400 animate-spin ml-1" />
         )}
-        {mode === 'container' && !isLoading && (
+        {mode === 'container' && !isLoading && !containerNotFound && (
           <span className="ml-2 text-xs text-gray-500">(auto-refresh)</span>
         )}
       </div>
@@ -39,7 +47,9 @@ export function Console({ output, mode = 'deployment', isLoading = false }: Cons
         className="flex-1 overflow-y-auto p-4 font-mono text-sm"
       >
         {output.length === 0 ? (
-          <p className="text-gray-500 italic">{placeholder}</p>
+          <p className={`italic ${containerNotFound ? 'text-amber-500' : 'text-gray-500'}`}>
+            {getPlaceholder()}
+          </p>
         ) : (
           output.map((line, i) => (
             <div key={i} className="text-gray-300 whitespace-pre-wrap break-all">
