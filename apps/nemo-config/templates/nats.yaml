@@ -5,7 +5,7 @@ default_port: 4222
 connection_url_pattern: "nats://${HOST}:4222"
 env_vars:
   - key: DATA_PATH
-    description: "Host path for data persistence"
+    description: "Host path for data persistence (default: ./data)"
     default: "./data"
 exports:
   "nats.url": "nats://${HOST}:4222"
