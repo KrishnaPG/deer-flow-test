@@ -4,10 +4,10 @@ import type { InstanceDetails } from '../definitions';
 interface InstanceDetailsViewProps {
   instanceDetails: InstanceDetails;
   onCopy: (text: string) => void;
-  onStop: () => void;
-  onStart: () => void;
-  onRestart: () => void;
-  onDelete: () => void;
+  onStop: (tabId: string) => void;
+  onStart: (tabId: string) => void;
+  onRestart: (tabId: string) => void;
+  onDelete: (tabId: string) => void;
   onRemoveConfig: () => void;
   isProcessing: boolean;
 }
@@ -72,6 +72,7 @@ export function InstanceDetailsView({
   const isManaged = metadata?.managedBy === 'nemo';
   const isRunning = containerStatus === 'running';
   const isStopped = containerStatus === 'stopped';
+  const serviceId = metadata?.serviceId || '';
 
   return (
     <div className="space-y-6">
@@ -144,7 +145,7 @@ export function InstanceDetailsView({
           <div className="flex flex-wrap gap-2">
             {isRunning && (
               <button
-                onClick={onStop}
+                onClick={() => onStop(serviceId)}
                 disabled={isProcessing}
                 className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -154,7 +155,7 @@ export function InstanceDetailsView({
             )}
             {isStopped && (
               <button
-                onClick={onStart}
+                onClick={() => onStart(serviceId)}
                 disabled={isProcessing}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -164,7 +165,7 @@ export function InstanceDetailsView({
             )}
             {isRunning && (
               <button
-                onClick={onRestart}
+                onClick={() => onRestart(serviceId)}
                 disabled={isProcessing}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -173,7 +174,7 @@ export function InstanceDetailsView({
               </button>
             )}
             <button
-              onClick={onDelete}
+              onClick={() => onDelete(serviceId)}
               disabled={isProcessing || !isStopped}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-auto"
             >

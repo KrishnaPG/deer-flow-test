@@ -6,13 +6,10 @@ import { Server, Link2 } from 'lucide-react';
 export const TabHeader = () => {
   const snap = useSnapshot(store);
   const template = selectActiveTemplate(snap);
-  const activeTab = snap.tabs.find(t => t.id === snap.activeTabId);
   const hasConfig = !!snap.configs[`nemo.${snap.activeTabId}.url`];
-  const containerNotFound = activeTab?.instanceDetails?.containerStatus === 'not_found';
-  const isManaged = activeTab?.instanceDetails?.metadata?.managedBy === 'nemo';
   
-  // Show deploy/existing buttons when: no config OR (managed container not found)
-  const showDeployButtons = !hasConfig || (isManaged && containerNotFound);
+  // Show deploy/existing buttons only when there's NO config
+  const showDeployButtons = !hasConfig;
   
   if (!template) return null;
   

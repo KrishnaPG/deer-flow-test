@@ -4,6 +4,7 @@ import { TabError } from './states/Error';
 import { TabChecking } from './states/Checking';
 import { TabHealthy } from './states/Healthy';
 import { TabLoadingDetails } from './states/LoadingDetails';
+import { TabContainerNotFound } from './states/ContainerNotFound';
 import { TabDeployForm } from './states/DeployForm';
 import { TabExistingForm } from './states/ExistingForm';
 import { TabHeader } from './Header';
@@ -15,6 +16,7 @@ const stateRegistry = {
   checking: TabChecking,
   healthy: TabHealthy,
   'loading-details': TabLoadingDetails,
+  'container-not-found': TabContainerNotFound,
   deploy: TabDeployForm,
   existing: TabExistingForm,
 } as const;
