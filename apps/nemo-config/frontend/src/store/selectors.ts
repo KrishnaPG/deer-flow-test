@@ -1,6 +1,8 @@
 // === Component State Selectors (NO branching in components) ===
 // These selectors work with the frozen snapshot from useSnapshot
 
+import { CONSUL_PREFIX } from '../../../schema';
+
 export type SidebarStateKey = 'loading' | 'error' | 'empty' | 'list';
 
 export const selectSidebarState = (s: any): SidebarStateKey => {
@@ -18,12 +20,14 @@ export type TabContentStateKey =
   | 'deploy'
   | 'existing';
 
+const getServiceUrlKey = (serviceId: string) => `${CONSUL_PREFIX}.${serviceId}.url`;
+
 export const selectTabContentState = (s: any, tabId: string | null): TabContentStateKey => {
   if (!tabId) return 'deploy';
 
   if (s.configsError) return 'error';
-  if (s.isLoadingConfigs && !s.configs[`${tabId}.url`]) return 'checking';
-  if (s.configs[`${tabId}.url`]) {
+  if (s.isLoadingConfigs && !s.configs[getServiceUrlKey(tabId)]) return 'checking';
+  if (s.configs[getServiceUrlKey(tabId)]) {
     return 'healthy';
   }
   const tab = s.tabs.find((t: any) => t.id === tabId);
@@ -31,7 +35,7 @@ export const selectTabContentState = (s: any, tabId: string | null): TabContentS
 };
 
 export const selectServiceStatus = (s: any, serviceId: string): string => {
-  if (s.configs[`${serviceId}.url`]) return 'healthy';
+  if (s.configs[getServiceUrlKey(serviceId)]) return 'healthy';
   if (s.deploying === serviceId) return 'deploying';
   return 'unconfigured';
 };

@@ -1,6 +1,5 @@
 import Consul from "consul";
-
-const CONSUL_PREFIX = "nemo";
+import { CONSUL_PREFIX, ConsulKeys, ServiceConfigKeys } from "../../schema";
 
 export interface ServiceMetadata {
   serviceId: string;
@@ -10,42 +9,6 @@ export interface ServiceMetadata {
   connectionUrl: string;
   deployedAt: string;
   templateId: string;
-}
-
-export interface Template {
-  name: string;
-  id: string;
-  icon: string;
-  default_port: number;
-  env_vars: { key: string; description: string; default?: string; secret?: boolean }[];
-  health_check: { type: string; port: number; path?: string };
-  docker_compose: string;
-  connection_url_pattern?: string;
-  exports?: Record<string, string>;
-}
-
-export interface DeployRequest {
-  target_host: string;
-  service_id: string;
-  template: Template;
-  env_values: Record<string, string>;
-  consul_url: string;
-  mode: 'deploy' | 'existing';
-  deploy_path?: string;
-}
-
-export interface RegisterExistingRequest {
-  service_id: string;
-  connection_url: string;
-  consul_url: string;
-  template: Template;
-  env_values?: Record<string, string>;
-}
-
-export interface ContainerActionRequest {
-  service_id: string;
-  consul_url: string;
-  deploy_path?: string;
 }
 
 export interface InstanceDetails {
@@ -84,6 +47,14 @@ function makeKey(serviceId: string, subKey: string): string {
 
 function makeMetadataKey(serviceId: string): string {
   return `${CONSUL_PREFIX}/metadata/${serviceId}`;
+}
+
+export function getConfigKey(serviceId: string): string {
+  return ServiceConfigKeys.serviceUrl(serviceId);
+}
+
+export function getMetadataKey(serviceId: string): string {
+  return ServiceConfigKeys.serviceMetadata(serviceId);
 }
 
 export async function updateConsulKV(
@@ -193,7 +164,8 @@ export async function getAllConfigFromConsul(
         }
         
         // Check if this is a direct key (no wildcard) or directory query
-        const isDirectKey = !prefix.includes('>') && !prefix.endsWith('.');
+        // A trailing / means it's a directory query for listing keys
+        const isDirectKey = !prefix.includes('>') && !prefix.endsWith('.') && !prefix.endsWith('/');
         
         if (isDirectKey) {
           // Direct key lookup - don't add trailing slash

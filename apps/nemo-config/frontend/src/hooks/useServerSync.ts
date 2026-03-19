@@ -11,6 +11,9 @@ import {
   fetchInstanceDetails,
   fetchContainerLogs,
 } from '../api/services';
+import { CONSUL_PREFIX } from '../../../schema';
+
+const getServiceUrlKey = (serviceId: string) => `${CONSUL_PREFIX}.${serviceId}.url`;
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,7 +78,7 @@ export const useServerSync = (): void => {
   const instanceDetailsQuery = useQuery({
     queryKey: ['instanceDetails', activeTabId],
     queryFn: () => fetchInstanceDetails(activeTabId!, consulUrl),
-    enabled: !!activeTabId && !!consulUrl && !!configs[`${activeTabId}.url`],
+    enabled: !!activeTabId && !!consulUrl && !!configs[getServiceUrlKey(activeTabId)],
   });
 
   // Container logs query - only for managed services in container mode
@@ -85,7 +88,7 @@ export const useServerSync = (): void => {
     refetchInterval: 1000,
     enabled: !!activeTabId && 
               !!consulUrl && 
-              !!configs[`${activeTabId}.url`] &&
+              !!configs[getServiceUrlKey(activeTabId)] &&
               consoleMode[activeTabId] === 'container',
   });
 
