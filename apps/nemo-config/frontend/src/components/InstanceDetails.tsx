@@ -162,7 +162,7 @@ export function InstanceDetailsView({
                 Start
               </button>
             )}
-            {(isRunning || isStopped) && (
+            {isRunning && (
               <button
                 onClick={onRestart}
                 disabled={isProcessing}
@@ -174,7 +174,7 @@ export function InstanceDetailsView({
             )}
             <button
               onClick={onDelete}
-              disabled={isProcessing}
+              disabled={isProcessing || !isStopped}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-auto"
             >
               <Trash2 size={14} />

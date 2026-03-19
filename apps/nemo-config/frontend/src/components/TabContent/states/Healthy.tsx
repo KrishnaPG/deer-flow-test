@@ -69,15 +69,17 @@ export const TabHealthy = () => {
     }
   };
 
-  // For external services without full instance details, show minimal info
-  if (!activeTab.instanceDetails) {
-    const configUrl = snap.configs[`${activeTab.id}.url`];
+  const isExternal = activeTab.instanceDetails?.metadata?.managedBy === 'external';
+  
+  // For external services (registered via "Use Existing"), show minimal info
+  if (isExternal) {
+    const configUrl = snap.configs[`nemo.${activeTab.id}.url`];
     return (
       <div className="space-y-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-green-800 mb-2">External Service Registered</h3>
-          <p className="text-sm text-green-700">
-            This external service has been successfully registered.
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">External Service</h3>
+          <p className="text-sm text-blue-700">
+            This external service is registered but not managed by Nemo.
           </p>
         </div>
         {configUrl && (
@@ -105,6 +107,15 @@ export const TabHealthy = () => {
             Remove Configuration
           </button>
         </div>
+      </div>
+    );
+  }
+  
+  // If instance details not yet loaded for a managed service, show loading
+  if (!activeTab.instanceDetails) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading service details...</div>
       </div>
     );
   }

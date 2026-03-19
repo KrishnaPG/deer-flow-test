@@ -24,7 +24,7 @@ export const TabContent = () => {
   const stateKey = selectTabContentState(snap, snap.activeTabId);
   const activeTab = selectActiveTab(snap);
   const template = selectActiveTemplate(snap);
-  
+
   // Don't render if no active tab
   if (!activeTab || !template) {
     return (
@@ -33,31 +33,35 @@ export const TabContent = () => {
       </div>
     );
   }
-  
+
   const Component = stateRegistry[stateKey as TabContentStateKey];
   const logs = snap.logs[snap.activeTabId || ''] || [];
   const consoleMode = snap.consoleMode[snap.activeTabId || ''] || 'deployment';
   const showOverlay = stateKey === 'error' || stateKey === 'checking';
   const showButton = stateKey === 'deploy' || stateKey === 'existing';
-  
+
   return (
     <div className="h-full flex flex-col relative">
       <TabHeader />
-      
+
       {/* Upper: Form or Instance Details */}
       <div className="flex-1 overflow-y-auto p-6 bg-white relative">
         {showOverlay && <Component />}
-        
+
         <div className="max-w-2xl space-y-5">
           {!showOverlay && <Component />}
-          
+
           {showButton && <DeployButton />}
         </div>
       </div>
-      
+
       {/* Lower: Console */}
-      <div className="h-48 flex-shrink-0 border-t border-gray-200">
-        <Console output={[...logs]} mode={consoleMode as 'deployment' | 'container'} />
+      <div className="h-[33vh] flex-shrink-0 border-t border-gray-200">
+        <Console
+          output={[...logs]}
+          mode={consoleMode as 'deployment' | 'container'}
+          isLoading={snap.isLoadingContainerLogs}
+        />
       </div>
     </div>
   );
@@ -84,7 +88,7 @@ const DeployButton = () => {
       executeDeploy.mutate(snap.activeTabId);
     }
   };
-  
+
   const getButtonContent = () => {
     if (isDeploying) {
       return (
@@ -94,11 +98,11 @@ const DeployButton = () => {
         </>
       );
     }
-    
+
     if (isHealthy) {
       return 'Update Config';
     }
-    
+
     if (activeTab.mode === 'deploy') {
       return (
         <>
@@ -107,7 +111,7 @@ const DeployButton = () => {
         </>
       );
     }
-    
+
     return (
       <>
         <Link2 size={16} />
@@ -115,23 +119,22 @@ const DeployButton = () => {
       </>
     );
   };
-  
+
   const isDisabled = executeDeploy.isPending || (activeTab.mode === 'existing' && !canRegisterExisting && !isHealthy);
-  
+
   return (
     <div className="pt-4">
       <button
         onClick={handleDeploy}
         disabled={isDisabled}
-        className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md shadow-sm text-sm font-medium transition-colors ${
-          isHealthy
+        className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md shadow-sm text-sm font-medium transition-colors ${isHealthy
             ? 'bg-green-600 hover:bg-green-700 text-white'
             : 'bg-blue-600 hover:bg-blue-700 text-white'
-        } disabled:opacity-50 disabled:cursor-not-allowed`}
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {getButtonContent()}
       </button>
-      
+
       {activeTab.mode === 'existing' && !canRegisterExisting && !isHealthy && (
         <p className="text-xs text-amber-600 mt-2 text-center">
           Please test the connection successfully before registering.
