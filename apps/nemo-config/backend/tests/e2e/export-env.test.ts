@@ -52,38 +52,34 @@ describe('Export Env API - E2E Tests', () => {
     expect(deployResponse.status).toBe(200);
     expect(deployResponse.data.success).toBe(true);
     
-    // Wait for Consul update
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Export configs as .env
-    const { data: envContent, status } = await get(
+    const { data: exportData, status } = await get(
       `/api/export-env?consul_url=${encodeURIComponent(CONFIG.CONSUL_URL)}`
     );
     
     expect(status).toBe(200);
-    expect(typeof envContent).toBe('string');
+    expect(exportData.success).toBe(true);
+    expect(typeof exportData.content).toBe('string');
     
     // Should contain our test service's configuration in .env format
-    // The export converts dots to underscores and uppercase
-    // So nemo.e2e-test-*.url becomes NEMO_E2E_TEST_*_URL
-    expect(envContent).toContain('NEMO_');
-    expect(envContent).toContain('URL=');
+    expect(exportData.content).toContain('NEMO_');
+    expect(exportData.content).toContain('URL=');
     
-    // Should not contain internal metadata keys (those with metadata)
-    expect(envContent).not.toContain('METADATA');
+    // Should not contain internal metadata keys
+    expect(exportData.content).not.toContain('METADATA');
   });
 
   it('should handle empty Consul gracefully', async () => {
-    // Clean up first to ensure we start clean
     await cleanupTestResources();
     
-    const { data: envContent, status } = await get(
+    const { data: exportData, status } = await get(
       `/api/export-env?consul_url=${encodeURIComponent(CONFIG.CONSUL_URL)}`
     );
     
     expect(status).toBe(200);
-    expect(typeof envContent).toBe('string');
-    // Should return a comment or empty content
-    expect(envContent).toBeTruthy();
+    expect(exportData.success).toBe(true);
+    expect(typeof exportData.content).toBe('string');
+    expect(exportData.content).toBeTruthy();
   });
 });
