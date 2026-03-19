@@ -10,6 +10,9 @@ env_vars:
   - key: CLICKHOUSE_PASSWORD
     description: "Database Password"
     secret: true
+  - key: PORT
+    description: "Host port to expose (default: 8123)"
+    default: "8123"
   - key: DATA_PATH
     description: "Host path for data persistence (default: ./data)"
     default: "./data"
@@ -29,7 +32,7 @@ docker_compose: |
         CLICKHOUSE_USER: ${CLICKHOUSE_USER}
         CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       ports:
-        - "8123:8123"
+        - "${PORT:-8123}:8123"
         - "9000:9000"
       volumes:
         - ${DATA_PATH:-./data}:/var/lib/clickhouse
