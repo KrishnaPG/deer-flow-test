@@ -4,6 +4,9 @@ icon: "activity"
 default_port: 3301
 connection_url_pattern: "http://${HOST}:3301"
 env_vars:
+  - key: PORT
+    description: "Host port to expose (default: 3301)"
+    default: "3301"
   - key: DATA_PATH
     description: "Host path for data persistence (default: ./data)"
     default: "./data"
@@ -18,7 +21,7 @@ docker_compose: |
     signoz-frontend:
       image: signoz/frontend:latest
       ports:
-        - "3301:3301"
+        - "${PORT:-3301}:3301"
     otel-collector:
       image: signoz/signoz-otel-collector:latest
       ports:

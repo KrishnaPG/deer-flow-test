@@ -11,6 +11,9 @@ env_vars:
     description: "API Secret"
     secret: true
     default: "secret"
+  - key: PORT
+    description: "Host port to expose (default: 7880)"
+    default: "7880"
   - key: DATA_PATH
     description: "Host path for data persistence (default: ./data)"
     default: "./data"
@@ -28,7 +31,7 @@ docker_compose: |
       image: livekit/livekit-server:latest
       command: --dev --keys "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
       ports:
-        - "7880:7880"
+        - "${PORT:-7880}:7880"
         - "7881:7881"
         - "50000-50200:50000-50200/udp"
       volumes:

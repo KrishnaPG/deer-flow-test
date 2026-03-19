@@ -4,6 +4,9 @@ icon: "message-square"
 default_port: 4222
 connection_url_pattern: "nats://${HOST}:4222"
 env_vars:
+  - key: PORT
+    description: "Host port to expose (default: 4222)"
+    default: "4222"
   - key: DATA_PATH
     description: "Host path for data persistence (default: ./data)"
     default: "./data"
@@ -18,7 +21,7 @@ docker_compose: |
       image: nats:2.10-alpine
       command: ["-js", "-m", "8222"]
       ports:
-        - "4222:4222"
+        - "${PORT:-4222}:4222"
         - "8222:8222"
       volumes:
         - ${DATA_PATH:-./data}:/data
