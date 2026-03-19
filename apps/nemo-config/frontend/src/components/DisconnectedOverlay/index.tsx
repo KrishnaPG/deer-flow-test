@@ -7,7 +7,7 @@ import { AlertTriangle, Settings, Loader2 } from 'lucide-react';
 export const DisconnectedOverlay = () => {
   const snap = useSnapshot(store);
 
-  if (snap.consulStatus !== 'disconnected' || snap.showSettings) return null;
+  if (snap.consulStatus === 'connected' || snap.showSettings) return null;
 
   const handleRetry = () => {
     if (!snap.consulUrl) return;
@@ -28,12 +28,12 @@ export const DisconnectedOverlay = () => {
         </div>
         
         <h2 className="text-xl font-semibold text-gray-900 mb-2">
-          Consul Disconnected
+          {isRetrying ? 'Connecting...' : 'Consul Disconnected'}
         </h2>
         
         <p className="text-gray-600 mb-4">
           {isRetrying 
-            ? 'Attempting to reconnect...'
+            ? 'Attempting to connect to the Consul server...'
             : 'Unable to connect to the Consul server. Please verify the Consul URL in your settings or check your network connection.'}
         </p>
         

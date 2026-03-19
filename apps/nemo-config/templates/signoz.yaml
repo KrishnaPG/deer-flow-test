@@ -5,7 +5,7 @@ default_port: 3301
 connection_url_pattern: "http://${HOST}:3301"
 env_vars:
   - key: DATA_PATH
-    description: "Host path for data persistence"
+    description: "Host path for data persistence (default: ./data)"
     default: "./data"
 exports:
   "signoz.url": "http://${HOST}:3301"

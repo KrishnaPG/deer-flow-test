@@ -12,7 +12,7 @@ env_vars:
     secret: true
     default: "secret"
   - key: DATA_PATH
-    description: "Host path for data persistence (recordings)"
+    description: "Host path for data persistence (default: ./data)"
     default: "./data"
 exports:
   "livekit.url": "wss://${HOST}:7880"

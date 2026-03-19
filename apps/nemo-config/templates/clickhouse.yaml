@@ -11,7 +11,7 @@ env_vars:
     description: "Database Password"
     secret: true
   - key: DATA_PATH
-    description: "Host path for data persistence"
+    description: "Host path for data persistence (default: ./data)"
     default: "./data"
 exports:
   "clickhouse.url": "http://${CLICKHOUSE_USER:-default}:${CLICKHOUSE_PASSWORD:-}@${HOST}:8123"

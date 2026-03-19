@@ -41,7 +41,7 @@ export const TabBar = () => {
                 e.stopPropagation();
                 actions.closeTab(tab.id);
               }}
-              className="p-0.5 hover:bg-gray-200 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-0.5 hover:bg-gray-200 rounded opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
             >
               <X size={14} className="text-gray-500" />
             </button>
