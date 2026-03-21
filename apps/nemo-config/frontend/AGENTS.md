@@ -1,12 +1,5 @@
 # Frontend Data Pipeline Architecture
 
-## Core Principles
-
-1. TanStack Query = Source of Truth for all *server* data, queries, mutations
-2. Valtio Store = Source of Truth for UI State, client side data, and data derived from server data
-3. useMutations Hook = Single Entry Point for all server mutations; for client data mutations, use Valtio store mutation methods;
-4. Components = Declarative Rendering via registry pattern, no if/else branching in rendering
-
 ## Data Flow
 
 ```
@@ -32,13 +25,11 @@ frontend/src/
 ├── hooks/
 │   ├── useServerSync.ts      # ALL queries + sync to Valtio
 │   ├── useMutations.ts       # ALL mutations + invalidation
-│   ├── useWebSocketManager.ts # Real-time deployment logs
-│   └── useLogPollingManager.ts # REMOVED (replaced by TanStack Query)
+│   └── useWebSocketManager.ts # Real-time deployment logs
 ├── store/
 │   ├── index.ts              # Valtio state (server + client)
 │   ├── selectors.ts          # Component state keys
 │   ├── actions.ts            # UI state mutations only
-│   ├── api-actions.ts        # REMOVED (replaced by useMutations)
 │   └── persistence.ts        # localStorage sync
 ├── components/
 │   └── [Component]/
@@ -90,15 +81,43 @@ const Component = () => {
 }
 ```
 
-## Key Rules
+## State Management & Data Flow Strict Rules
 
-1. **NO direct axios calls** in components or actions (except mutationFn)
-2. **NO data fetching** outside useServerSync
-3. **NO if/else** branching in component render
-4. **Mutations ALWAYS** invalidate affected queries
-5. **WebSocket ONLY** for real-time deployment logs
-6. **TanStack Query ONLY** for all other server data
-7. Valtio: Read from `useSnapshot` for reactive updates; Read from store proxy directly for non-reactive raw data access; Use store mutation methods for updating state;
+The frontend must adhere to strict state separation and mutation rules:
+
+### Server State (TanStack Query)
+* **Tool:** `useQuery` and `useMutation` (TanStack Query).
+* **Rule:** This is the *single source of truth* for all remote data. Valtio must NEVER cache or duplicate server responses. All data fetching, caching, and invalidation is handled strictly by TanStack.
+
+### Client State (Valtio)
+* **Tool:** `valtio` (Proxy-based state).
+* **Scope:** 
+  1. UI state (e.g. selected nodes, current timestep, active brush windows)
+  2. client-side derived calculations based on server data.  (e.g. pivoted results )
+* **Access Rules:**
+  1. **Reactive:** React components MUST use `useSnapshot(store.part)` to access only the slice of state they need to trigger re-renders.
+  2. **Raw/Non-Reactive:** For callbacks or pure functions needing data without triggering renders, read directly from the `valtio` proxy (`store.part`).
+  3. **Mutations:** State mutations MUST occur through dedicated, named action methods on the store object itself. No inline or direct property reassignment inside components.
+
+## Coding Constraints
+
+To maintain a pristine, highly-modular codebase, the following constraints are non-negotiable:
+
+1. **Size Limits:**
+   * Files must be **< 400 LOC**.
+   * React components and functions must be **< 50 LOC**.
+2. **No nested or inline Functions:** Callbacks (`onClick`, `onChange`, etc.) must be defined outside the JSX return block as named functions.
+3. **Component Registry:** Use Component Registry dictionaries to dynamically resolve and load components.
+4. **No `if..else` Rendering:** 
+   * Avoid `if...else` branching in JSX rendering logic. 
+   * Use the Component Registry, polymorphism, or early returns to handle conditional UI states. 
+5. Avoid inlining custom styles for components. Use CSS modules with class reuse. Prioritize Relative Units (rem) for all font sizing to ensure scalability.
+   
+7. **NO data fetching** outside useServerSync
+9.  **Mutations ALWAYS** invalidate affected queries
+10. **WebSocket ONLY** for real-time deployment logs
+11. **TanStack Query ONLY** for all other server data
+
 
 ## Package Manager
 
