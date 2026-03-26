@@ -60,3 +60,8 @@ apps/nemo-config/backend/.tmp_*.yml
 # Rust
 target/
 Cargo.lock
+
+.agents
+.kilo
+.kilocode
+skills-lock.json
