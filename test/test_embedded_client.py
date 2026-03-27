@@ -2,30 +2,16 @@ import sys
 import os
 import uuid
 import subprocess
+import json
+import hashlib
+from collections import defaultdict, Counter
 
-# Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-# Set custom DeerFlow home directory BEFORE importing config
 os.environ["DEER_FLOW_HOME"] = "/tmp/deer-flow"
 
-# Add DeerFlow backend packages to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "3rdParty", "deer-flow", "backend", "packages", "harness"))
-
-# Monkey-patch ClarificationMiddleware BEFORE importing DeerFlow client
-# This makes ask_clarification work as a regular tool (no Command(goto=END))
-from deerflow.agents.middlewares.clarification_middleware import ClarificationMiddleware
-
-def _passthrough_wrap_tool_call(self, request, handler):
-    return handler(request)
-
-async def _passthrough_awrap_tool_call(self, request, handler):
-    return await handler(request)
-
-ClarificationMiddleware.wrap_tool_call = _passthrough_wrap_tool_call
-ClarificationMiddleware.awrap_tool_call = _passthrough_awrap_tool_call
-print("[patched] ClarificationMiddleware disabled — ask_clarification will work as a regular tool")
 
 from deerflow.config.app_config import AppConfig, set_app_config
 from deerflow.config.model_config import ModelConfig
@@ -33,13 +19,40 @@ from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.client import DeerFlowClient
 from deerflow.config.paths import get_paths
 
-# Hardcoded - replace with your values
+# Colorized console output (optional dependency: colorama)
+try:
+    from colorama import Fore, Style, init as _colorama_init
+except Exception:
+    Fore = None
+    Style = None
+    _colorama_init = None
+
+if _colorama_init:
+    _colorama_init(autoreset=True)
+
+def colored(text: str, color: str = None, bright: bool = True) -> str:
+    if not Fore or not Style or color is None:
+        return text
+    color_code = getattr(Fore, color.upper(), "")
+    bright_code = Style.BRIGHT if bright else ""
+    return f"{bright_code}{color_code}{text}{Style.RESET_ALL}"
+
+def print_block(header: str, body: str | None = None, color: str = "CYAN"):
+    print(colored(f"\n--- {header} ---", color))
+    if body:
+        print(body)
+    print(colored(f"--- end {header} ---\n", color, bright=False))
+
 API_KEY = os.environ.get("OPENCODE_API_KEY", "your-api-key-here")
 MODEL_NAME = "glm-5"
 BASE_URL = "https://opencode.ai/zen/v1"
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
 SANDBOX_TOOLS = {"bash", "write_file", "read_file", "ls", "str_replace"}
+
+# Track repeated present_files calls per-thread for debugging / loop detection
+PRESENT_FILES_HISTORY: dict[str, Counter] = defaultdict(Counter)
+PRESENT_FILES_REPEAT_LIMIT = 3
 
 config = AppConfig(
     models=[
@@ -68,144 +81,173 @@ def _truncate(text, max_len=200):
 
 def _format_tool_args(name, args):
     if name == "bash":
-        desc = args.get("description", "")
-        cmd = args.get("command", "")
-        return f"desc={desc!r}, command={cmd!r}"
+        return f"desc={args.get('description', '')!r}, command={args.get('command', '')!r}"
     if name == "present_files":
         return f"filepaths={args.get('filepaths', [])}"
     if name == "write_file":
-        path = args.get("path", "")
-        content = args.get("content", "")
-        return f"path={path!r}, content={content!r}"
+        return f"path={args.get('path', '')!r}, content={args.get('content', '')!r}"
     if name == "read_file":
         return f"path={args.get('path', '')!r}"
     if name == "str_replace":
         return f"path={args.get('path', '')!r}"
     if name == "ask_clarification":
-        q = args.get("question", "")
-        opts = args.get("options")
-        return f"question={q!r}, options={opts!r}"
+        return f"question={args.get('question', '')!r}, options={args.get('options')!r}"
     return ", ".join(f"{k}={v!r}" for k, v in args.items())
 
 
-def handle_event(event, thread_id, tool_call_counts, tool_result_counts, verbose,
-                 seen_msg_ids=None, clarification_tracker=None):
-    """Process a single stream event and display relevant output."""
-    # Dedup messages across turns
-    if event.type == "messages-tuple" and seen_msg_ids is not None:
-        msg_id = event.data.get("id")
-        if msg_id and msg_id in seen_msg_ids:
-            return
-        if msg_id:
-            seen_msg_ids.add(msg_id)
-
-    if event.type == "messages-tuple":
-        data = event.data
-        msg_type = data.get("type")
-
-        if msg_type == "ai":
-            tool_calls = data.get("tool_calls")
-            if tool_calls:
-                for tc in tool_calls:
-                    name = tc.get("name", "?")
-                    args = tc.get("args", {})
-                    tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
-                    print(f"  🔧 {name}({_format_tool_args(name, args)})")
-
-                    # Track ask_clarification
-                    if name == "ask_clarification" and clarification_tracker is not None:
-                        clarification_tracker["question"] = args.get("question", "")
-                        clarification_tracker["options"] = args.get("options")
-
-            content = data.get("content", "")
-            if content:
-                print(f"  AI: {content}")
-
-        elif msg_type == "tool":
-            name = data.get("name", "")
-            content = data.get("content", "")
-            tool_result_counts[name] = tool_result_counts.get(name, 0) + 1
-            if name in SANDBOX_TOOLS:
-                truncated = _truncate(content, max_len=500)
-                marker = "✗" if content.lower().startswith("error") else "←"
-                if truncated:
-                    print(f"  {marker} {name}: {truncated}")
-                else:
-                    print(f"  {marker} {name}: (empty)")
-            elif verbose:
-                truncated = _truncate(content)
-                if truncated:
-                    print(f"  ← {name}: {truncated}")
-                else:
-                    print(f"  ← {name}: (empty)")
-
-    elif event.type == "values":
-        artifacts = event.data.get("artifacts", [])
-        for artifact_vpath in artifacts:
-            try:
-                host_path = get_paths().resolve_virtual_path(thread_id, artifact_vpath)
-                if host_path.exists():
-                    suffix = host_path.suffix.lower()
-                    if suffix in IMAGE_EXTS:
-                        subprocess.run(["open", str(host_path)], check=False)
-                    print(f"  📎 {host_path.name} → {host_path}")
-                else:
-                    print(f"  ⚠ Artifact not found on disk: {host_path}")
-            except Exception as e:
-                print(f"  ⚠ Could not resolve artifact {artifact_vpath}: {e}")
-
-    elif event.type == "end":
-        usage = event.data.get("usage", {})
-        total = usage.get("total_tokens", 0)
-        if total:
-            print(f"\n  [{usage.get('input_tokens', 0)} in / {usage.get('output_tokens', 0)} out / {total} total tokens]")
-
-
-def print_tool_summary(tool_call_counts, tool_result_counts):
-    for name, count in sorted(tool_call_counts.items()):
-        if count > 2:
-            print(f"  ⚠ {name} called {count} times — possible loop")
-    if not tool_call_counts:
-        return
-    parts = []
-    for name in sorted(tool_call_counts):
-        calls = tool_call_counts[name]
-        results = tool_result_counts.get(name, 0)
-        parts.append(f"{name}({calls}c/{results}r)")
-    print(f"  ── {' | '.join(parts)} ──")
-
-
-def run_turn(client, message, thread_id, seen_msg_ids, verbose):
-    """Run a single stream turn. Returns True if a clarification was asked."""
+def process_stream(client, message, thread_id, seen_msg_ids):
+    """Stream events for a message. Returns (question, options) if clarification was asked."""
     tool_call_counts = {}
     tool_result_counts = {}
-    clarification = {"question": None, "options": None}
+    clarification_question = None
+    clarification_options = None
 
     print()
     for event in client.stream(message, thread_id=thread_id):
-        handle_event(event, thread_id, tool_call_counts, tool_result_counts, verbose,
-                     seen_msg_ids=seen_msg_ids, clarification_tracker=clarification)
+        # Raw dumps for debugging: messages-tuple and values
+        try:
+            if event.type == "messages-tuple":
+                print_block("RAW MESSAGE-TUPLE", json.dumps(event.data, indent=2, default=str), color="YELLOW")
+            if event.type == "values":
+                print_block("RAW VALUES SNAPSHOT", json.dumps(event.data, indent=2, default=str), color="CYAN")
+        except Exception:
+            pass
+        if event.type == "messages-tuple":
+            data = event.data
+            msg_id = data.get("id")
+            if msg_id and msg_id in seen_msg_ids:
+                continue
+            if msg_id:
+                seen_msg_ids.add(msg_id)
 
-    print_tool_summary(tool_call_counts, tool_result_counts)
+            msg_type = data.get("type")
 
-    if clarification["question"]:
-        print(f"\n  ❓ {clarification['question']}")
-        if clarification["options"]:
-            for i, opt in enumerate(clarification["options"], 1):
-                print(f"    {i}. {opt}")
-        return True
-    return False
+            if msg_type == "ai":
+                tool_calls = data.get("tool_calls")
+                if tool_calls:
+                    for tc in tool_calls:
+                        name = tc.get("name", "?")
+                        args = tc.get("args", {})
+                        tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
+                        tool_call_id = tc.get("id")
+                        print(colored(f"  \U0001f527 {name}({_format_tool_args(name, args)}) [id={tool_call_id}]", "BLUE"))
+
+                        if name == "ask_clarification":
+                            clarification_question = args.get("question", "")
+                            clarification_options = args.get("options")
+                            # also print the formatted clarification block
+                            print_block("CLARIFICATION (tool_calls)", clarification_question or "", color="BLUE")
+                            if clarification_options:
+                                for i, opt in enumerate(clarification_options, 1):
+                                    print(colored(f"    {i}. {opt}", "BLUE"))
+
+                        if name == "present_files":
+                            # Handle present_files intents immediately for debugging
+                            filepaths = args.get("filepaths") or []
+                            # Print vpaths
+                            print_block("PRESENT_FILES (intent)", json.dumps(filepaths, indent=2, default=str), color="YELLOW")
+
+                            # Hash the set of filepaths to detect repeats
+                            norm = json.dumps(sorted(filepaths), separators=(",", ":"), ensure_ascii=False)
+                            h = hashlib.md5(norm.encode()).hexdigest()[:12]
+                            PRESENT_FILES_HISTORY[thread_id][h] += 1
+                            count = PRESENT_FILES_HISTORY[thread_id][h]
+                            if count > PRESENT_FILES_REPEAT_LIMIT:
+                                print(colored(f"\n[WARNING] present_files repeated {count} times for this thread — suppressing auto-open.\n", "YELLOW"))
+
+                            # Attempt to resolve and open any referenced paths now
+                            for vpath in filepaths:
+                                try:
+                                    host_path = get_paths().resolve_virtual_path(thread_id, vpath)
+                                except Exception as e:
+                                    print(colored(f"  ⚠ Could not resolve vpath {vpath}: {e}", "RED"))
+                                    host_path = None
+
+                                if host_path:
+                                    try:
+                                        exists = host_path.exists()
+                                    except Exception:
+                                        exists = False
+                                    if exists:
+                                        suffix = host_path.suffix.lower()
+                                        print(colored(f"  📎 Resolved: {vpath} -> {host_path}", "CYAN"))
+                                        # Auto-open images unless we've suppressed due to repeats
+                                        if count <= PRESENT_FILES_REPEAT_LIMIT and suffix in IMAGE_EXTS:
+                                            try:
+                                                subprocess.run(["open", str(host_path)], check=False)
+                                            except Exception as e:
+                                                print(colored(f"  ⚠ Failed to open file {host_path}: {e}", "RED"))
+                                    else:
+                                        print(colored(f"  ⚠ Artifact not found on disk: {host_path}", "YELLOW"))
+
+                content = data.get("content", "")
+                if content:
+                    print(colored(f"  AI: {content}", "MAGENTA"))
+
+            elif msg_type == "tool":
+                name = data.get("name", "")
+                if name == "ask_clarification":
+                    continue
+                content = data.get("content", "")
+                tool_result_counts[name] = tool_result_counts.get(name, 0) + 1
+                if name in SANDBOX_TOOLS:
+                    truncated = _truncate(content, max_len=500)
+                    if content.lower().startswith("error"):
+                        print(colored(f"  \u2717 {name}: {truncated}", "RED"))
+                    else:
+                        print(colored(f"  \u2190 {name}: {truncated}", "GREEN"))
+                else:
+                    truncated = _truncate(content)
+                    if truncated:
+                        print(colored(f"  \u2190 {name}: {truncated}", "CYAN"))
+
+        elif event.type == "values":
+            artifacts = event.data.get("artifacts", [])
+            for artifact_vpath in artifacts:
+                try:
+                    host_path = get_paths().resolve_virtual_path(thread_id, artifact_vpath)
+                    if host_path.exists():
+                        suffix = host_path.suffix.lower()
+                        if suffix in IMAGE_EXTS:
+                            subprocess.run(["open", str(host_path)], check=False)
+                        print(f"  \U0001f4ce {host_path.name} \u2192 {host_path}")
+                    else:
+                        print(f"  \u26a0 Artifact not found on disk: {host_path}")
+                except Exception as e:
+                    print(f"  \u26a0 Could not resolve artifact {artifact_vpath}: {e}")
+
+        elif event.type == "end":
+            usage = event.data.get("usage", {})
+            total = usage.get("total_tokens", 0)
+            if total:
+                print(f"\n  [{usage.get('input_tokens', 0)} in / {usage.get('output_tokens', 0)} out / {total} total tokens]")
+
+    for name, count in sorted(tool_call_counts.items()):
+        if count > 2:
+            print(f"  \u26a0 {name} called {count} times \u2014 possible loop")
+    if tool_call_counts:
+        parts = [f"{n}({tool_call_counts[n]}c/{tool_result_counts.get(n, 0)}r)" for n in sorted(tool_call_counts)]
+        print(f"  \u2500\u2500 {' | '.join(parts)} \u2500\u2500")
+
+    return clarification_question, clarification_options
 
 
 def main():
     client = DeerFlowClient(model_name=MODEL_NAME)
+    # Print system prompt used by the agent (best-effort)
+    try:
+        from deerflow.agents.lead_agent.prompt import apply_prompt_template
+        system_prompt = apply_prompt_template(subagent_enabled=False, max_concurrent_subagents=3, agent_name=None)
+        print_block("SYSTEM PROMPT", system_prompt, color="MAGENTA")
+    except Exception:
+        # best-effort: ignore if prompt cannot be rendered in this environment
+        pass
     thread_id = str(uuid.uuid4())
-    verbose = True
-    seen_msg_ids = set()  # global dedup across turns
+    seen_msg_ids = set()
 
     print(f"DeerFlow Interactive Chat (model: {MODEL_NAME})")
     print(f"Thread: {thread_id}")
-    print("Commands: /new (new conversation), /verbose (toggle tool logging), /quit")
+    print("Commands: /new (new conversation), /quit")
     print("-" * 60)
 
     while True:
@@ -225,21 +267,27 @@ def main():
         if cmd == "/new":
             thread_id = str(uuid.uuid4())
             seen_msg_ids.clear()
-            print(f"(New conversation started — thread: {thread_id})")
-            continue
-        if cmd == "/verbose":
-            verbose = not verbose
-            print(f"(Verbose mode: {'on' if verbose else 'off'})")
+            print(f"(New conversation started \u2014 thread: {thread_id})")
             continue
 
-        # Run turn — if clarification is asked, show it and loop for more input
         try:
-            asked = run_turn(client, user_input, thread_id, seen_msg_ids, verbose)
-            if asked:
-                # Show clarification, let user respond naturally on next input
-                # The agent already received the ask_clarification tool result
-                # and can proceed with other tool calls on the next turn
-                pass
+            while True:
+                question, options = process_stream(
+                    client, user_input, thread_id, seen_msg_ids
+                )
+                if not question:
+                    break
+                print(f"\n  \u2753 {question}")
+                if options:
+                    for i, opt in enumerate(options, 1):
+                        print(f"    {i}. {opt}")
+                try:
+                    user_input = input("\nYou: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print("\nBye!")
+                    return
+                if not user_input:
+                    break
         except Exception as e:
             print(f"Error: {e}")
 
