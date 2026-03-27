@@ -178,7 +178,29 @@ def process_stream(client, message, thread_id, seen_msg_ids):
                                             except Exception as e:
                                                 print(colored(f"  ⚠ Failed to open file {host_path}: {e}", "RED"))
                                     else:
-                                        print(colored(f"  ⚠ Artifact not found on disk: {host_path}", "YELLOW"))
+                                        # Poll briefly to allow delayed writes
+                                        found = False
+                                        for attempt in range(6):
+                                            try:
+                                                if host_path.exists():
+                                                    found = True
+                                                    break
+                                            except Exception:
+                                                pass
+                                            print(colored(f"  …waiting for artifact to appear ({attempt+1}/6)", "YELLOW"))
+                                            import time
+                                            time.sleep(0.5)
+
+                                        if found:
+                                            print(colored(f"  📎 Artifact appeared: {host_path}", "GREEN"))
+                                            suffix = host_path.suffix.lower()
+                                            if count <= PRESENT_FILES_REPEAT_LIMIT and suffix in IMAGE_EXTS:
+                                                try:
+                                                    subprocess.run(["open", str(host_path)], check=False)
+                                                except Exception as e:
+                                                    print(colored(f"  ⚠ Failed to open file {host_path}: {e}", "RED"))
+                                        else:
+                                            print(colored(f"  ⚠ Artifact not found on disk: {host_path}", "YELLOW"))
 
                 content = data.get("content", "")
                 if content:
