@@ -1,67 +1,101 @@
-mod app;
-mod bridge;
+//! Deer GUI — Bevy application entry point.
+//!
+//! Bootstraps the Bevy engine with window configuration, logging,
+//! diagnostics, EGui overlay, and the orbital camera system.
+
+mod camera;
+mod constants;
+mod diagnostics;
 mod models;
 
-use app::DeerGuiApp;
+use bevy::app::App;
+use bevy::log::{info, LogPlugin};
+use bevy::prelude::*;
+use bevy::window::{Window, WindowResolution};
+use bevy_egui::EguiPlugin;
 
-fn main() -> eframe::Result<()> {
-    // Load .env file (if present) before anything else.
-    // Variables already set in the environment are NOT overwritten,
-    // so `OPENAI_API_KEY=xxx cargo run` still takes precedence.
-    //
-    // Search order: ./apps/deer_gui/.env (CARGO_MANIFEST_DIR), then cwd.
+use crate::camera::CameraPlugin;
+use crate::constants::window::*;
+use crate::diagnostics::DiagnosticsPlugin;
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+fn main() {
+    load_dotenv();
+
+    let log_filter = build_log_filter();
+
+    App::new()
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: TITLE.to_string(),
+                        resolution: WindowResolution::new(DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                            .with_scale_factor_override(1.0),
+                        resize_constraints: WindowResizeConstraints {
+                            min_width: MIN_WIDTH,
+                            min_height: MIN_HEIGHT,
+                            ..default()
+                        },
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(LogPlugin {
+                    filter: log_filter,
+                    level: bevy::log::Level::TRACE,
+                    ..default()
+                })
+                .disable::<bevy::audio::AudioPlugin>(),
+        )
+        .add_plugins(EguiPlugin::default())
+        .add_plugins(DiagnosticsPlugin)
+        .add_plugins(CameraPlugin)
+        .run();
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Loads `.env` from the crate manifest directory first, falling back to cwd.
+///
+/// Variables already present in the environment are **not** overwritten,
+/// so `DEER_GUI_LOG=debug cargo run` always takes precedence.
+fn load_dotenv() {
     let manifest_env = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
     if manifest_env.exists() {
+        info!("main::load_dotenv — loading {}", manifest_env.display());
         dotenvy::from_path(&manifest_env).ok();
     } else {
-        dotenvy::dotenv().ok(); // try cwd
+        info!("main::load_dotenv — no manifest .env, trying cwd");
+        dotenvy::dotenv().ok();
     }
+}
 
-    // Logging controlled by env vars (both work):
-    //   DEER_GUI_LOG=debug   — app-specific, recommended
-    //   RUST_LOG=deer_gui=debug  — standard Rust convention
-    //
-    // Levels: error, warn, info, debug, trace
-    //   trace = includes raw JSON protocol dumps
-    //   debug = command/event flow
-    //   info  = lifecycle events (default)
-    //
-    // DEER_GUI_LOG only sets the level for deer_gui modules (not wgpu/naga/eframe).
-    // Use RUST_LOG for fine-grained control over all crates.
-    let mut builder = env_logger::Builder::new();
-    builder
-        .filter_level(log::LevelFilter::Warn) // default: only warnings+ for all crates
-        .format_timestamp_millis();
-
+/// Builds the `tracing` filter string for [`LogPlugin`].
+///
+/// Priority (highest wins):
+/// 1. `RUST_LOG` — full control, passed through verbatim.
+/// 2. `DEER_GUI_LOG` — sets only the `deer_gui` crate level;
+///    noisy crates (`wgpu`, `naga`) stay quiet.
+/// 3. Fallback — `deer_gui=info,wgpu=error,naga=warn`.
+fn build_log_filter() -> String {
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
-        // Full control: user specified RUST_LOG directly
-        builder.parse_filters(&rust_log);
+        eprintln!("[deer_gui] Using RUST_LOG filter: {rust_log}");
+        return rust_log;
     }
 
-    if let Ok(app_level) = std::env::var("DEER_GUI_LOG") {
-        // App-specific: only apply to deer_gui modules, keep others at warn
-        let filter = format!("deer_gui={app_level}");
-        builder.parse_filters(&filter);
-    } else if std::env::var("RUST_LOG").is_err() {
-        // No log env set at all: default deer_gui to info
-        builder.parse_filters("deer_gui=info");
+    if let Ok(level) = std::env::var("DEER_GUI_LOG") {
+        let filter = format!("deer_gui={level},wgpu=error,naga=warn");
+        eprintln!("[deer_gui] Using DEER_GUI_LOG filter: {filter}");
+        return filter;
     }
 
-    builder.init();
-
-    log::info!("Starting Deer GUI");
-
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1480.0, 920.0])
-            .with_min_inner_size([1080.0, 760.0])
-            .with_title("Deer GUI"),
-        ..Default::default()
-    };
-
-    eframe::run_native(
-        "Deer GUI",
-        options,
-        Box::new(|cc| Ok(Box::new(DeerGuiApp::new(cc)))),
-    )
+    let filter = "deer_gui=info,wgpu=error,naga=warn".to_string();
+    eprintln!("[deer_gui] Using default log filter: {filter}");
+    filter
 }
