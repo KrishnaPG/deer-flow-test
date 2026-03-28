@@ -3,7 +3,7 @@
 //! Re-exports the [`ScenePlugin`] for app integration and the
 //! [`SceneConfig`] trait for scene-specific configuration.
 
-mod common;
+pub mod common;
 mod plugin;
 mod tet;
 mod traits;

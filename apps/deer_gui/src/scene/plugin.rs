@@ -5,6 +5,7 @@ use bevy::prelude::{App, Plugin, Startup, Update};
 
 use super::common::atmosphere::{atmosphere_transition_system, AtmosphereConfig};
 use super::common::parallax::PreviousCameraPosition;
+use super::common::weather::{weather_transition_system, weather_update_system, WeatherMachine};
 use super::tet::setup::tet_scene_setup_system;
 use super::tet::systems::{data_trail_system, tet_glow_system};
 
@@ -25,6 +26,7 @@ impl Plugin for ScenePlugin {
 
         app.init_resource::<AtmosphereConfig>()
             .init_resource::<PreviousCameraPosition>()
+            .init_resource::<WeatherMachine>()
             .add_systems(Startup, tet_scene_setup_system)
             .add_systems(
                 Update,
@@ -32,6 +34,8 @@ impl Plugin for ScenePlugin {
                     tet_glow_system,
                     data_trail_system,
                     atmosphere_transition_system,
+                    weather_update_system,
+                    weather_transition_system,
                 ),
             );
     }

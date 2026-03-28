@@ -4,8 +4,9 @@
 //! `use crate::theme::{ThemePlugin, ThemeManager, Theme};`.
 
 mod plugin;
-mod tet_theme;
+pub mod tet_theme;
 mod theme;
 
 pub use plugin::ThemePlugin;
+pub use tet_theme::tet_theme;
 pub use theme::{Theme, ThemeManager};
