@@ -3,32 +3,22 @@
 //! Bootstraps the Bevy engine with window configuration, logging,
 //! diagnostics, EGui overlay, and the orbital camera system.
 
-mod bridge;
-mod camera;
-mod constants;
-mod diagnostics;
-mod hud;
-mod models;
-mod picking;
-mod scene;
-mod theme;
-mod world;
-
 use bevy::app::App;
 use bevy::log::{info, LogPlugin};
 use bevy::prelude::*;
 use bevy::window::{Window, WindowResolution};
 use bevy_egui::EguiPlugin;
 
-use crate::bridge::BridgePlugin;
-use crate::camera::CameraPlugin;
-use crate::constants::window::*;
-use crate::diagnostics::DiagnosticsPlugin;
-use crate::hud::HudPlugin;
-use crate::picking::PickingPlugin as DeerPickingPlugin;
-use crate::scene::ScenePlugin;
-use crate::theme::ThemePlugin;
-use crate::world::WorldPlugin;
+use deer_gui::audio::DeerAudioPlugin;
+use deer_gui::bridge::BridgePlugin;
+use deer_gui::camera::CameraPlugin;
+use deer_gui::constants::window::*;
+use deer_gui::diagnostics::DiagnosticsPlugin;
+use deer_gui::hud::HudPlugin;
+use deer_gui::picking::PickingPlugin as DeerPickingPlugin;
+use deer_gui::scene::ScenePlugin;
+use deer_gui::theme::ThemePlugin;
+use deer_gui::world::WorldPlugin;
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -72,6 +62,7 @@ fn main() {
         .add_plugins(WorldPlugin)
         .add_plugins(HudPlugin)
         .add_plugins(DeerPickingPlugin)
+        .add_plugins(DeerAudioPlugin)
         .run();
 }
 
