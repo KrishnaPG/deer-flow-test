@@ -7,9 +7,15 @@
 
 mod integration {
     pub mod audio;
+    pub mod bridge;
     pub mod camera;
     pub mod constants_diagnostics;
+    pub mod hud;
+    pub mod models_pipeline;
+    pub mod picking;
+    pub mod scene_tet;
     pub mod scene_weather;
     pub mod theme;
     pub mod world;
+    pub mod world_extended;
 }

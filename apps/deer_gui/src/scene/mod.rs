@@ -5,7 +5,7 @@
 
 pub mod common;
 mod plugin;
-mod tet;
+pub mod tet;
 mod traits;
 
 pub use plugin::ScenePlugin;

@@ -21,6 +21,34 @@ impl WorldState {
     pub fn system_online(&self) -> bool {
         self.system_health.system_online
     }
+
+    /// Registers a domain entity ID → Bevy `Entity` mapping.
+    ///
+    /// Returns `None` if the ID was new, or `Some(old_entity)` if
+    /// an existing mapping was replaced.
+    pub fn register(&mut self, entity_id: String, entity: Entity) -> Option<Entity> {
+        bevy::log::debug!("WorldState::register — id={entity_id} entity={entity:?}");
+        self.entity_registry.insert(entity_id, entity)
+    }
+
+    /// Removes the mapping for `entity_id`.
+    ///
+    /// Returns `Some(entity)` if the ID was present, `None` otherwise.
+    pub fn unregister(&mut self, entity_id: &str) -> Option<Entity> {
+        bevy::log::debug!("WorldState::unregister — id={entity_id}");
+        self.entity_registry.remove(entity_id)
+    }
+
+    /// Looks up the Bevy `Entity` for a given domain ID.
+    pub fn lookup(&self, entity_id: &str) -> Option<Entity> {
+        bevy::log::trace!("WorldState::lookup — id={entity_id}");
+        self.entity_registry.get(entity_id).copied()
+    }
+
+    /// Returns the number of registered domain entities.
+    pub fn entity_count(&self) -> usize {
+        self.entity_registry.len()
+    }
 }
 
 /// Aggregate health metrics for the running system.

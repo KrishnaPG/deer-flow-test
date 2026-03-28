@@ -130,4 +130,117 @@ impl SpatialIndex {
     pub fn entity_count(&self) -> usize {
         self.cells.values().map(|v| v.len()).sum()
     }
+
+    /// Removes an entity from the cell containing `position`.
+    ///
+    /// Returns `true` if the entity was found and removed.
+    pub fn remove(&mut self, entity: Entity, position: Vec3) -> bool {
+        let cell = GridCell::from_position(position, self.cell_size);
+        trace!(
+            "SpatialIndex::remove — entity={:?} pos={:?} cell={:?}",
+            entity,
+            position,
+            cell
+        );
+        if let Some(entities) = self.cells.get_mut(&cell) {
+            if let Some(idx) = entities.iter().position(|e| *e == entity) {
+                entities.swap_remove(idx);
+                if entities.is_empty() {
+                    self.cells.remove(&cell);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Moves an entity from `old_position` to `new_position`.
+    ///
+    /// Equivalent to `remove(entity, old) + insert(entity, new)`.
+    pub fn update(&mut self, entity: Entity, old_position: Vec3, new_position: Vec3) {
+        trace!(
+            "SpatialIndex::update — entity={:?} old={:?} new={:?}",
+            entity,
+            old_position,
+            new_position
+        );
+        self.remove(entity, old_position);
+        self.insert(entity, new_position);
+    }
+
+    /// Returns all entities within `radius` of `center`.
+    ///
+    /// Checks all grid cells that could overlap the sphere, then
+    /// distance-filters against actual positions (not available here,
+    /// so returns all entities in overlapping cells — caller should
+    /// refine with actual Transform checks).
+    pub fn query_sphere(&self, center: Vec3, radius: f32) -> Vec<Entity> {
+        let cells_radius = (radius / self.cell_size).ceil() as i32;
+        let center_cell = GridCell::from_position(center, self.cell_size);
+        trace!(
+            "SpatialIndex::query_sphere — center={:?} radius={} cells_radius={}",
+            center,
+            radius,
+            cells_radius
+        );
+        let mut result = Vec::new();
+        for dx in -cells_radius..=cells_radius {
+            for dy in -cells_radius..=cells_radius {
+                for dz in -cells_radius..=cells_radius {
+                    let cell = GridCell {
+                        x: center_cell.x + dx,
+                        y: center_cell.y + dy,
+                        z: center_cell.z + dz,
+                    };
+                    if let Some(entities) = self.cells.get(&cell) {
+                        result.extend(entities);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// Simple grid-walk raycast: returns entities in cells along `ray_direction`
+    /// from `ray_origin`, up to `max_distance`.
+    ///
+    /// Samples the ray at `cell_size / 2` intervals and collects unique
+    /// entities from each sampled cell.
+    pub fn raycast(&self, ray_origin: Vec3, ray_direction: Vec3, max_distance: f32) -> Vec<Entity> {
+        let dir = ray_direction.normalize_or_zero();
+        if dir == Vec3::ZERO {
+            return Vec::new();
+        }
+        let step = self.cell_size * 0.5;
+        let steps = (max_distance / step).ceil() as usize;
+        trace!(
+            "SpatialIndex::raycast — origin={:?} dir={:?} max_dist={} steps={}",
+            ray_origin,
+            dir,
+            max_distance,
+            steps
+        );
+        let mut result = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        for i in 0..=steps {
+            let pos = ray_origin + dir * (i as f32 * step);
+            let cell = GridCell::from_position(pos, self.cell_size);
+            if visited.insert(cell) {
+                if let Some(entities) = self.cells.get(&cell) {
+                    result.extend(entities);
+                }
+            }
+        }
+        result
+    }
+
+    /// Returns the total number of entity entries (alias).
+    pub fn len(&self) -> usize {
+        self.entity_count()
+    }
+
+    /// Returns `true` if the index contains no entities.
+    pub fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
 }

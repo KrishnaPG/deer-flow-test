@@ -4,7 +4,9 @@ use bevy::log::{debug, info, trace, warn};
 use bevy::prelude::*;
 
 use crate::bridge::{BridgeEvent, BridgeEventQueue};
+use crate::constants::timing::BEACON_PULSE_HZ;
 
+use super::components::PulsingBeacon;
 use super::state::WorldState;
 
 /// Consumes bridge events from [`BridgeEventQueue`] and updates [`WorldState`].
@@ -70,5 +72,20 @@ pub fn bridge_event_handler_system(
                 debug!("Bridge response: request_id={request_id:?} response={response:?}");
             }
         }
+    }
+}
+
+/// Animates [`PulsingBeacon`] entities by oscillating their `Transform` scale.
+///
+/// Uses a sine wave at [`BEACON_PULSE_HZ`] to pulse between 0.8× and 1.2×
+/// the base scale on all axes.
+pub fn beacon_pulse_system(time: Res<Time>, mut query: Query<(&PulsingBeacon, &mut Transform)>) {
+    let t = time.elapsed_secs();
+    for (beacon, mut transform) in &mut query {
+        let freq = beacon.frequency.max(BEACON_PULSE_HZ);
+        let phase = t * freq * std::f32::consts::TAU;
+        let scale = 1.0 + 0.2 * phase.sin();
+        trace!("beacon_pulse_system — entity freq={} scale={}", freq, scale);
+        transform.scale = Vec3::splat(scale);
     }
 }
