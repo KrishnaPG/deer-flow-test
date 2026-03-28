@@ -7,7 +7,7 @@
 
 use bevy::log::{debug, info};
 use bevy::prelude::*;
-use bevy_egui::EguiContexts;
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 
 use super::tet_theme::{apply_theme_to_egui, tet_theme};
 use super::theme::ThemeManager;
@@ -19,7 +19,7 @@ use super::theme::ThemeManager;
 /// Registers the theme subsystem.
 ///
 /// * Inserts a [`ThemeManager`] resource seeded with the default theme(s).
-/// * Adds an `Update` system that reacts to theme switches by applying
+/// * Adds an `EguiPrimaryContextPass` system that reacts to theme switches by applying
 ///   the new [`egui::Visuals`] to the primary egui context.
 pub struct ThemePlugin;
 
@@ -30,7 +30,7 @@ impl Plugin for ThemePlugin {
         let manager = ThemeManager::new(vec![tet_theme()]);
 
         app.insert_resource(manager)
-            .add_systems(Update, theme_apply_system);
+            .add_systems(EguiPrimaryContextPass, theme_apply_system);
     }
 }
 

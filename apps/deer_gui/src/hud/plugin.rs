@@ -1,10 +1,11 @@
 //! [`HudPlugin`] — registers the HUD state resource and all panel systems.
 //!
-//! All HUD systems run during `Update` and depend on [`HudState`] being
-//! available as a resource. The plugin initializes the state with defaults.
+//! All HUD systems run during `EguiPrimaryContextPass` and depend on [`HudState`]
+//! being available as a resource. The plugin initializes the state with defaults.
 
 use bevy::log::info;
 use bevy::prelude::*;
+use bevy_egui::EguiPrimaryContextPass;
 
 use super::bottom_console::bottom_console_system;
 use super::center_canvas::center_canvas_system;
@@ -22,7 +23,7 @@ use super::HudState;
 /// Registers the HUD overlay subsystem.
 ///
 /// * Inserts the [`HudState`] resource with default values.
-/// * Adds all HUD panel systems to the `Update` schedule.
+/// * Adds all HUD panel systems to the `EguiPrimaryContextPass` schedule.
 ///
 /// Panel render order matters for egui layout:
 /// 1. Top bar (claims top edge)
@@ -39,7 +40,7 @@ impl Plugin for HudPlugin {
         info!("HudPlugin::build — registering HUD resources and systems");
 
         app.init_resource::<HudState>().add_systems(
-            Update,
+            EguiPrimaryContextPass,
             (
                 top_bar_system,
                 bottom_console_system,
