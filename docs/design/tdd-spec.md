@@ -4,6 +4,10 @@ This document defines **every interface, trait, struct, enum, and test case** fo
 Cinematic Control Center. Code must conform to these contracts. Tests must be written before or
 alongside implementation (TDD per AGENTS.md).
 
+**Test Philosophy:** Every test spins up a real Bevy `App` with real plugins, inserts real data,
+runs real systems, and asserts real outcomes. No mocks, no unit tests of pure functions in
+isolation. If a function matters, it matters because a *system* calls it — so we test the system.
+
 ---
 
 ## Table of Contents
@@ -94,10 +98,8 @@ pub const SWARM_VISUAL_RATIO: f32 = 0.05; // 100 agents → 5 visible boats
 
 ### Tests
 
-- **T-CONST-01:** Verify `CAMERA_MIN_ZOOM < CAMERA_DEFAULT_ZOOM < CAMERA_MAX_ZOOM`.
-- **T-CONST-02:** Verify `CAMERA_MIN_PITCH < CAMERA_DEFAULT_PITCH < CAMERA_MAX_PITCH`.
-- **T-CONST-03:** Verify `Z_WORLD_FAR < Z_WORLD_MID < Z_WORLD_NEAR < Z_HUD`.
-- **T-CONST-04:** Verify all `f32` constants are finite (not NaN or Infinity).
+- **T-CONST-01:** (Integration) App built with all plugins starts without panic, confirming constant relationships (zoom, pitch, z-depth ordering) are valid at runtime.
+- **T-CONST-02:** (Integration) CameraPlugin spawns a camera whose default zoom lies within `[CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM]`, proving constant consistency.
 
 ---
 
@@ -202,11 +204,9 @@ pub struct ArtifactInfo {
 
 ### Tests
 
-- **T-MODEL-01:** Round-trip serde: `ThreadSummary` → JSON → `ThreadSummary` preserves all fields.
-- **T-MODEL-02:** Round-trip serde: `ChatMessage` with all optional fields populated.
-- **T-MODEL-03:** Round-trip serde: `ChatMessage` with all optional fields as `None`/empty.
-- **T-MODEL-04:** `Default::default()` produces valid (non-panicking) instances for all types.
-- **T-MODEL-05:** Deserialize a real bridge JSON payload into `ThreadRecord`.
+- **T-MODEL-01:** (Integration) App with BridgePlugin + WorldPlugin: a `BridgeEventReceived` carrying a real JSON-deserialized `ThreadRecord` is processed by `world_event_handler_system` without panic, proving serde types survive the full pipeline.
+- **T-MODEL-02:** (Integration) App with HudPlugin: inserting a `HudState` populated with real `ThreadSummary`, `ChatMessage` (all optional fields populated), and `ModelInfo` values — HUD systems run without panic, proving model types are usable end-to-end.
+- **T-MODEL-03:** (Integration) App with HudPlugin: inserting a `HudState` populated with `Default::default()` model types — HUD systems run without panic, proving defaults are valid across the system.
 
 ---
 
@@ -347,16 +347,11 @@ fn bridge_poll_system(
 
 ### Tests
 
-- **T-BRIDGE-01:** `BridgeCommand::list_threads()` produces valid JSON with `command: "list_threads"`.
-- **T-BRIDGE-02:** `BridgeCommand::send_message(...)` includes all fields in payload.
-- **T-BRIDGE-03:** `BridgeCommand` request IDs are unique UUIDs.
-- **T-BRIDGE-04:** Deserialize a mock Python JSON line `{"kind":"ready"}` into `BridgeEvent::Ready`.
-- **T-BRIDGE-05:** Deserialize `{"kind":"response","request_id":"...","data":{"threads":[...]}}` → `BridgeResponse::Threads`.
-- **T-BRIDGE-06:** Deserialize `{"kind":"event","event":"stream_message",...}` → `BridgeEvent::StreamMessage`.
-- **T-BRIDGE-07:** `BridgeError` variants produce meaningful error messages via `Display`.
-- **T-BRIDGE-08:** (Integration) `BridgePlugin` registers resource and event type in test `App`.
-- **T-BRIDGE-09:** (Integration) `bridge_poll_system` with no client does not panic.
-- **T-BRIDGE-10:** (Integration) `bridge_poll_system` caps at 64 events per frame.
+- **T-BRIDGE-01:** (Integration) `App::new()` with `BridgePlugin` registers `BridgeClientResource` and `BridgeEventReceived` event type — resource is queryable after startup.
+- **T-BRIDGE-02:** (Integration) `bridge_poll_system` with `BridgeClientResource(None)` runs without panic across multiple `app.update()` cycles.
+- **T-BRIDGE-03:** (Integration) `bridge_poll_system` caps at 64 events per frame: insert a real crossbeam channel with 128 pending `BridgeEvent::Ready` items into `BridgeClientResource`, run one `app.update()`, assert only 64 `BridgeEventReceived` events are emitted.
+- **T-BRIDGE-04:** (Integration) Bridge events are forwarded into the Bevy event system: create a real crossbeam channel, send `BridgeEvent::Ready` and `BridgeEvent::Error { message: "test" }` on the sender side, insert the receiver into `BridgeClientResource`, run `app.update()`, read `EventReader<BridgeEventReceived>` and assert both events arrived.
+- **T-BRIDGE-05:** (Integration) Bridge `StreamMessage` events carrying real `ChatMessage` data flow through `bridge_poll_system` and are readable by downstream systems in the same App.
 
 ---
 
@@ -549,20 +544,19 @@ impl Plugin for WorldPlugin {
 
 ### Tests
 
-- **T-WORLD-01:** `WorldState::register` + `lookup` returns the correct entity.
-- **T-WORLD-02:** `WorldState::unregister` removes and returns the entity.
-- **T-WORLD-03:** `WorldState::unregister` on non-existent ID returns `None`.
-- **T-WORLD-04:** `WorldState::entity_count` reflects registrations and removals.
-- **T-WORLD-05:** `SpatialIndex::insert` + `query_sphere` finds entity within radius.
-- **T-WORLD-06:** `SpatialIndex::query_sphere` does NOT return entities outside radius.
-- **T-WORLD-07:** `SpatialIndex::raycast` finds closest entity along ray direction.
-- **T-WORLD-08:** `SpatialIndex::raycast` returns `None` when no entities hit.
-- **T-WORLD-09:** `SpatialIndex::update` moves entity between cells correctly.
-- **T-WORLD-10:** `SpatialIndex::remove` + `query_sphere` no longer finds entity.
-- **T-WORLD-11:** `AgentState` equality: `AgentState::Idle == AgentState::Idle`.
-- **T-WORLD-12:** `EntityId` hash consistency for HashMap usage.
-- **T-WORLD-13:** (Integration) `WorldPlugin` registers `WorldState` and `SpatialIndex` resources.
-- **T-WORLD-14:** (Integration) `beacon_pulse_system` modifies transform scale based on time.
+- **T-WORLD-01:** (Integration) `App::new()` with `WorldPlugin` registers `WorldState` and `SpatialIndex` resources — both are queryable after startup.
+- **T-WORLD-02:** (Integration) Entity registration round-trip: build App with `WorldPlugin`, spawn a Bevy entity, call `WorldState::register` with an `EntityId`, then assert `WorldState::lookup` returns the same entity.
+- **T-WORLD-03:** (Integration) Entity unregistration: register an entity, then `unregister` it, assert `lookup` returns `None` and `entity_count` decrements.
+- **T-WORLD-04:** (Integration) Unregister non-existent ID returns `None` without panic in a real App.
+- **T-WORLD-05:** (Integration) SpatialIndex insert + query in real App: insert `SpatialIndex` resource, add entity at position `Vec3::new(5.0, 0.0, 0.0)`, call `query_sphere(Vec3::ZERO, 10.0)`, assert entity is found.
+- **T-WORLD-06:** (Integration) SpatialIndex out-of-range: insert entity at `Vec3::new(100.0, 0.0, 0.0)`, `query_sphere(Vec3::ZERO, 5.0)` returns empty.
+- **T-WORLD-07:** (Integration) SpatialIndex raycast finds closest entity: insert two entities along a ray, assert `raycast` returns the nearer one.
+- **T-WORLD-08:** (Integration) SpatialIndex raycast miss: `raycast` in a direction with no entities returns `None`.
+- **T-WORLD-09:** (Integration) SpatialIndex update moves entity between cells: insert at pos A, update to pos B, `query_sphere` around B finds it, `query_sphere` around A does not.
+- **T-WORLD-10:** (Integration) SpatialIndex remove: insert entity, remove it, `query_sphere` no longer returns it.
+- **T-WORLD-11:** (Integration) `beacon_pulse_system` modifies transform scale over time: spawn entity with `PulsingBeacon` + `Selectable` + `Transform`, advance time, run `app.update()`, assert transform scale changed.
+- **T-WORLD-12:** (Integration) `world_event_handler_system` processes a `BridgeEventReceived` carrying agent creation data: assert a new entity with `WorldEntity` + `AgentMarker` is spawned and registered in `WorldState`.
+- **T-WORLD-13:** (Integration) `system_health_update_system` updates `WorldState.system_health` when a `BridgeEventReceived(State { .. })` event is sent.
 
 ---
 
@@ -676,17 +670,17 @@ fn camera_spawn_system(mut commands: Commands);
 
 ### Tests
 
-- **T-CAM-01:** `smooth_interpolate(0.0, 10.0, 1.0, 1.0)` returns value between 0 and 10.
-- **T-CAM-02:** `smooth_interpolate(5.0, 5.0, *, *)` returns 5.0 (no change when at target).
-- **T-CAM-03:** `smooth_interpolate` respects clamping: result stays within `[min, max]`.
-- **T-CAM-04:** `CinematicCamera::default()` uses values from `constants`.
-- **T-CAM-05:** `compute_camera_transform` at yaw=0, pitch=0, zoom=1 produces expected position.
-- **T-CAM-06:** `compute_camera_transform` at yaw=90 produces position rotated 90 degrees.
-- **T-CAM-07:** `add_shake(1.0)` sets shake to 1.0; after decay it approaches 0.
-- **T-CAM-08:** `compute_position` with varying zoom changes distance from origin.
-- **T-CAM-09:** (Integration) `CameraPlugin` spawns exactly one entity with `CinematicCamera`.
-- **T-CAM-10:** (Integration) `camera_interpolation_system` moves camera toward target over multiple frames.
-- **T-CAM-11:** (Integration) `camera_input_system` with no mouse input does not change targets.
+- **T-CAM-01:** (Integration) `CameraPlugin` spawns exactly one entity with `CinematicCamera` component after `app.update()`.
+- **T-CAM-02:** (Integration) Spawned camera has default values matching constants: `yaw_deg == CAMERA_DEFAULT_YAW`, `pitch_deg == CAMERA_DEFAULT_PITCH`, `zoom == CAMERA_DEFAULT_ZOOM`.
+- **T-CAM-03:** (Integration) Camera interpolation moves toward target: set `target_yaw = 45.0` on the `CinematicCamera` component, run several `app.update()` ticks with real `Time` advancement, assert `yaw_deg` is closer to 45.0 than its initial value.
+- **T-CAM-04:** (Integration) Camera interpolation converges: after enough update ticks with `target_yaw = 45.0`, `yaw_deg` is within 0.1 of 45.0.
+- **T-CAM-05:** (Integration) Camera shake decays over time: set `shake = 1.0` on the camera, run multiple `app.update()` cycles, assert `shake` is closer to 0.0.
+- **T-CAM-06:** (Integration) Camera with no input remains stable: run `app.update()` with no mouse events, assert `target_yaw` and `target_pitch` are unchanged from defaults.
+- **T-CAM-07:** (Integration) Camera rotates when mouse drag input is applied: send real `MouseMotion` events via `app.world.send_event()` while `MouseButton::Left` is pressed, run `app.update()`, assert `target_yaw` changed from its initial value.
+- **T-CAM-08:** (Integration) Camera zoom changes when scroll input is applied: send real `MouseWheel` events, run `app.update()`, assert `target_zoom` changed from its initial value.
+- **T-CAM-09:** (Integration) Camera zoom clamps: set `target_zoom` to a value exceeding `CAMERA_MAX_ZOOM`, run `app.update()`, assert resulting zoom does not exceed `CAMERA_MAX_ZOOM`.
+- **T-CAM-10:** (Integration) Camera pitch clamps: set `target_pitch` below `CAMERA_MIN_PITCH`, run `app.update()`, assert resulting pitch does not go below `CAMERA_MIN_PITCH`.
+- **T-CAM-11:** (Integration) Camera focus: set `focus_target = Some(Vec3::new(100.0, 0.0, 0.0))`, run multiple `app.update()` cycles, assert camera yaw rotates toward the target.
 
 ---
 
@@ -895,21 +889,18 @@ impl Plugin for ScenePlugin {
 
 ### Tests
 
-- **T-SCENE-01:** `WeatherMachine::evaluate_target` with error_rate=0 → `Clear`.
-- **T-SCENE-02:** `WeatherMachine::evaluate_target` with error_rate=0.15 → `Stormy`.
-- **T-SCENE-03:** `WeatherMachine::evaluate_target` with lag_ms=600 → `Foggy`.
-- **T-SCENE-04:** `WeatherMachine::evaluate_target` with load_pct=0.8 → `Rainy`.
-- **T-SCENE-05:** `WeatherMachine::advance` with dt > transition time sets progress to 1.0.
-- **T-SCENE-06:** `WeatherMachine::advance` returns `true` when transition complete.
-- **T-SCENE-07:** `compute_parallax_offset` at yaw=0 returns zero offset.
-- **T-SCENE-08:** `compute_parallax_offset` at yaw=90, depth=1.0 returns non-zero offset.
-- **T-SCENE-09:** `compute_parallax_offset` at depth=0 always returns zero (fixed layer).
-- **T-SCENE-10:** `TetSceneConfig::map_health_to_atmosphere` with healthy metrics → bright ambient.
-- **T-SCENE-11:** `TetSceneConfig::map_health_to_atmosphere` with high error rate → dark ambient.
-- **T-SCENE-12:** `agent_moth_effect` for `AgentState::Working` → non-zero particle spawn rate.
-- **T-SCENE-13:** `agent_moth_effect` for `AgentState::Idle` → low/zero spawn rate.
-- **T-SCENE-14:** (Integration) `ScenePlugin` spawns TET structure entity.
-- **T-SCENE-15:** (Integration) `tet_setup_system` spawns exactly `STARFIELD_COUNT` star entities.
+- **T-SCENE-01:** (Integration) `App::new()` with `ScenePlugin` registers `WeatherMachine` resource — queryable after startup.
+- **T-SCENE-02:** (Integration) `tet_setup_system` spawns a `TetStructure` entity after `app.update()`.
+- **T-SCENE-03:** (Integration) `tet_setup_system` spawns exactly `STARFIELD_COUNT` entities with `Star` component.
+- **T-SCENE-04:** (Integration) Weather transitions from Clear to Stormy when error rate exceeds threshold: build App with `ScenePlugin` + `WorldPlugin`, set `WorldState.system_health.error_rate = 0.15` (above `WEATHER_STORMY_ERROR_RATE`), run `weather_update_system` via `app.update()` repeatedly, assert `WeatherMachine.target == WeatherState::Stormy` and `transition_progress` advances toward 1.0.
+- **T-SCENE-05:** (Integration) Weather stays Clear when all metrics are healthy: set healthy `SystemHealth` defaults, run `app.update()`, assert `WeatherMachine.target == WeatherState::Clear`.
+- **T-SCENE-06:** (Integration) Weather transitions to Foggy when latency exceeds threshold: set `system_health.state_server_lag_ms = 600.0`, run updates, assert target becomes `Foggy`.
+- **T-SCENE-07:** (Integration) Weather transitions to Rainy when load exceeds threshold: set `system_health.nats_saturation = 0.8`, run updates, assert target becomes `Rainy`.
+- **T-SCENE-08:** (Integration) Weather transition completes: set target to `Stormy`, run enough `app.update()` cycles (with real `Time` advancement exceeding `WEATHER_TRANSITION_SECS`), assert `WeatherMachine.current == WeatherState::Stormy` and `transition_progress == 1.0`.
+- **T-SCENE-09:** (Integration) Parallax layers move when camera yaw changes: spawn entity with `ParallaxLayer { depth: 1.0, .. }` + `Transform`, set camera `yaw_deg = 90.0`, run `parallax_update_system` via `app.update()`, assert transform position differs from base_offset.
+- **T-SCENE-10:** (Integration) Fixed parallax layers (depth=0) do not move: spawn entity with `ParallaxLayer { depth: 0.0, .. }`, change camera yaw, run `app.update()`, assert transform position equals base_offset.
+- **T-SCENE-11:** (Integration) `data_trail_system` animates `DataTrail` entity transforms over time: spawn entity with `DataTrail` + `Transform`, advance time, run `app.update()`, assert position changed.
+- **T-SCENE-12:** (Integration) `atmosphere_update_system` modifies `AmbientLight` based on `WeatherMachine` state: set weather to `Stormy`, run `app.update()`, assert `AmbientLight` intensity differs from default.
 
 ---
 
@@ -1088,14 +1079,12 @@ pub fn modal_system(
 
 ### Tests
 
-- **T-HUD-01:** `glass_panel_frame(0.75, 8.0)` produces a Frame with correct alpha.
-- **T-HUD-02:** `agent_state_color(Idle)` → green-ish, `Error` → red-ish.
-- **T-HUD-03:** `mission_status_color(Blocked)` → red/amber.
-- **T-HUD-04:** `EventLogEntry` with timestamp 0.0 and current time 9.0 → visible (within fade window).
-- **T-HUD-05:** `EventLogEntry` with timestamp 0.0 and current time 20.0 → faded out.
-- **T-HUD-06:** `HudState::default()` produces valid state with empty collections.
-- **T-HUD-07:** (Integration) `HudPlugin` registers `HudState` resource.
-- **T-HUD-08:** (Integration) All HUD systems run without panic on empty state.
+- **T-HUD-01:** (Integration) `HudPlugin` registers `HudState` resource — queryable after startup.
+- **T-HUD-02:** (Integration) All HUD systems run without panic on default (empty) `HudState`: build App with `HudPlugin` + `EguiPlugin` + required dependencies, call `app.update()` three times.
+- **T-HUD-03:** (Integration) All HUD systems run without panic when `HudState` is populated with realistic data (agents, missions, event log entries, threads).
+- **T-HUD-04:** (Integration) Selecting an entity updates the HUD inspector state: build App with `HudPlugin` + `WorldPlugin` + `PickingPlugin`, spawn a `WorldEntity` with `Selectable` + `Selected` components, run `selection_sync_system` via `app.update()`, assert `HudState.selected_entity` is `Some(...)` with matching entity data.
+- **T-HUD-05:** (Integration) Deselecting an entity clears inspector: remove `Selected` component from the entity, run `app.update()`, assert `HudState.selected_entity` is `None`.
+- **T-HUD-06:** (Integration) Event log entries are accessible to `event_ticker_system`: populate `HudState.event_log` with entries at various timestamps, run `app.update()` — system does not panic and processes the log.
 
 ---
 
@@ -1156,12 +1145,11 @@ pub fn tet_theme() -> Theme;
 
 ### Tests
 
-- **T-THEME-01:** `tet_theme()` produces a `Theme` with name "TET Orchestrator".
-- **T-THEME-02:** `ThemeManager::switch("nonexistent")` returns `false`.
-- **T-THEME-03:** `ThemeManager::switch("TET Orchestrator")` returns `true` and updates current.
-- **T-THEME-04:** All colors in `tet_theme()` are valid (alpha > 0 for visible elements).
-- **T-THEME-05:** (Integration) `ThemePlugin` registers `ThemeManager` resource.
-- **T-THEME-06:** (Integration) `ThemeChanged` event triggers egui `Visuals` update.
+- **T-THEME-01:** (Integration) `ThemePlugin` registers `ThemeManager` resource — queryable after `app.update()`.
+- **T-THEME-02:** (Integration) Theme switch works in real App: build App with `ThemePlugin`, add a second theme to `ThemeManager.available`, call `switch("TET Orchestrator")`, assert `current().name == "TET Orchestrator"`.
+- **T-THEME-03:** (Integration) Theme switch to non-existent name returns `false` and does not change current theme.
+- **T-THEME-04:** (Integration) `ThemeChanged` event triggers egui `Visuals` update: send `ThemeChanged("TET Orchestrator")` event, run `app.update()`, verify the egui context visuals were updated.
+- **T-THEME-05:** (Integration) Initial theme after plugin build has valid colors: query `ThemeManager`, assert all color fields on `current()` have alpha > 0 for visible elements.
 
 ---
 
@@ -1239,11 +1227,12 @@ fn audio_command_system(
 
 ### Tests
 
-- **T-AUDIO-01:** `AudioManager::new()` has volume 1.0, not muted.
-- **T-AUDIO-02:** `AudioManager::effective_volume()` returns 0.0 when muted.
-- **T-AUDIO-03:** `AudioManager::effective_volume()` returns `master_volume` when not muted.
-- **T-AUDIO-04:** `AudioCommand::PlayAmbient` can be constructed and cloned.
-- **T-AUDIO-05:** (Integration) `DeerAudioPlugin` registers `AudioManager` and `AudioCommand` event.
+- **T-AUDIO-01:** (Integration) `DeerAudioPlugin` registers `AudioManager` resource and `AudioCommand` event type — both queryable after `app.update()`.
+- **T-AUDIO-02:** (Integration) `AudioManager` initializes with volume 1.0 and not muted: build App with `DeerAudioPlugin`, query `AudioManager`, assert `master_volume == 1.0` and `muted == false`.
+- **T-AUDIO-03:** (Integration) Mute command sets effective volume to zero: send `AudioCommand::Mute` event, run `app.update()`, assert `AudioManager.muted == true` and `effective_volume() == 0.0`.
+- **T-AUDIO-04:** (Integration) Unmute command restores volume: send `AudioCommand::Mute` then `AudioCommand::Unmute`, run `app.update()` cycles, assert `effective_volume()` equals `master_volume`.
+- **T-AUDIO-05:** (Integration) SetMasterVolume command updates volume: send `AudioCommand::SetMasterVolume { volume: 0.5 }`, run `app.update()`, assert `AudioManager.master_volume == 0.5`.
+- **T-AUDIO-06:** (Integration) `audio_command_system` does not panic when processing `PlayOneShot` and `PlayAmbient` commands (even if audio assets are missing — graceful degradation).
 
 ---
 
@@ -1297,11 +1286,12 @@ pub fn selection_sync_system(
 
 ### Tests
 
-- **T-PICK-01:** (Integration) Clicking with no entities → no `EntityClicked` event.
-- **T-PICK-02:** (Integration) `selection_update_system` adds `Selected` to clicked entity.
-- **T-PICK-03:** (Integration) `selection_update_system` removes `Selected` from previously selected.
-- **T-PICK-04:** (Integration) `SelectionChanged` event has correct old/new values.
-- **T-PICK-05:** (Integration) `selection_sync_system` updates `HudState.selected_entity`.
+- **T-PICK-01:** (Integration) No click with no entities: build App with `PickingPlugin` + `WorldPlugin` + `CameraPlugin`, run `app.update()` with no mouse input, assert no `EntityClicked` events emitted.
+- **T-PICK-02:** (Integration) `selection_update_system` adds `Selected` component to clicked entity: spawn a `Selectable` entity, send `EntityClicked(entity)` event, run `app.update()`, query for `Selected` on that entity — assert it exists.
+- **T-PICK-03:** (Integration) `selection_update_system` removes `Selected` from previously selected entity: select entity A, then send `EntityClicked(entity_B)`, run `app.update()`, assert entity A no longer has `Selected`, entity B does.
+- **T-PICK-04:** (Integration) `SelectionChanged` event has correct old/new values: select entity A, then click entity B, read `SelectionChanged` event, assert `old == Some(entity_A)` and `new == Some(entity_B)`.
+- **T-PICK-05:** (Integration) `selection_sync_system` updates `HudState.selected_entity`: spawn entity with `WorldEntity { entity_id: "agent-1", entity_type: Agent(Idle) }` + `Selected` + `Transform`, run `app.update()`, assert `HudState.selected_entity` contains data matching "agent-1".
+- **T-PICK-06:** (Integration) `selection_sync_system` clears `HudState.selected_entity` when no entity has `Selected` component.
 
 ---
 
@@ -1328,7 +1318,8 @@ impl Plugin for DiagnosticsPlugin {
 
 ### Tests
 
-- **T-DIAG-01:** (Integration) `DiagnosticsPlugin` adds frame time diagnostics without panic.
+- **T-DIAG-01:** (Integration) `DiagnosticsPlugin` adds frame time diagnostics without panic: build App with `DiagnosticsPlugin`, run `app.update()` three times.
+- **T-DIAG-02:** (Integration) Entity count diagnostics are available after plugin registration: query diagnostics store for entity count metric, assert it exists.
 
 ---
 
@@ -1398,52 +1389,45 @@ pub enum DeerSets {
 
 ## 13. Test Matrix
 
-### Unit Tests (Pure Functions — No Bevy App)
+### Functional Tests (Real Bevy App — No Mocks)
 
-| ID | Module | Function Under Test | Assertion |
-|----|--------|-------------------|-----------|
-| T-CONST-01..04 | constants | Constant relationships | Ordering, finiteness |
-| T-MODEL-01..05 | models | Serde round-trips | Field preservation |
-| T-BRIDGE-01..07 | bridge | Command/event serialization | JSON structure, uniqueness |
-| T-WORLD-01..12 | world | WorldState, SpatialIndex | Insert/remove/query correctness |
-| T-CAM-01..08 | camera | Interpolation, transform math | Numerical correctness |
-| T-SCENE-01..13 | scene | Weather FSM, parallax, atmosphere | State transitions, offsets |
-| T-HUD-01..06 | hud | Style functions, fade math | Color/alpha correctness |
-| T-THEME-01..04 | theme | Theme construction, switching | Name matching, color validity |
-| T-AUDIO-01..04 | audio | AudioManager state | Volume, mute behavior |
-
-### Integration Tests (Bevy Test App)
+All tests follow the pattern: `App::new()` → add real plugin(s) → insert real data → run `app.update()` → assert real outcomes.
 
 | ID | Module | What's Tested | Setup |
 |----|--------|--------------|-------|
-| T-BRIDGE-08..10 | bridge | Plugin registration, poll system | `App::new() + BridgePlugin` |
-| T-WORLD-13..14 | world | Plugin registration, beacon pulse | `App::new() + WorldPlugin` |
-| T-CAM-09..11 | camera | Spawn, interpolation, no-input | `App::new() + CameraPlugin` |
-| T-SCENE-14..15 | scene | TET setup, star count | `App::new() + ScenePlugin` |
-| T-HUD-07..08 | hud | Plugin registration, empty render | `App::new() + HudPlugin + EguiPlugin` |
-| T-THEME-05..06 | theme | Plugin registration, theme change | `App::new() + ThemePlugin` |
-| T-AUDIO-05 | audio | Plugin registration | `App::new() + DeerAudioPlugin` |
-| T-PICK-01..05 | picking | Click events, selection | `App::new() + PickingPlugin + WorldPlugin` |
-| T-DIAG-01 | diagnostics | Plugin registration | `App::new() + DiagnosticsPlugin` |
+| T-CONST-01..02 | constants | Constant validity via real plugin startup | `App::new() + CameraPlugin` |
+| T-MODEL-01..03 | models | Model types survive full bridge→world pipeline | `App::new() + BridgePlugin + WorldPlugin + HudPlugin` |
+| T-BRIDGE-01..05 | bridge | Plugin registration, poll system, event forwarding, rate limiting | `App::new() + BridgePlugin` with real crossbeam channel |
+| T-WORLD-01..13 | world | Plugin registration, entity lifecycle, spatial queries, beacon animation, event processing | `App::new() + WorldPlugin + BridgePlugin` |
+| T-CAM-01..11 | camera | Spawn, interpolation, shake decay, input handling, zoom/pitch clamping, focus | `App::new() + CameraPlugin` with real input events |
+| T-SCENE-01..12 | scene | Plugin registration, TET setup, weather FSM transitions, parallax movement, atmosphere updates | `App::new() + ScenePlugin + WorldPlugin + CameraPlugin` |
+| T-HUD-01..06 | hud | Plugin registration, empty/populated state rendering, entity selection→inspector sync | `App::new() + HudPlugin + EguiPlugin + WorldPlugin + PickingPlugin` |
+| T-THEME-01..05 | theme | Plugin registration, theme switching, change event propagation | `App::new() + ThemePlugin` |
+| T-AUDIO-01..06 | audio | Plugin registration, volume/mute state, command processing | `App::new() + DeerAudioPlugin` |
+| T-PICK-01..06 | picking | Click events, selection add/remove, SelectionChanged events, HUD sync | `App::new() + PickingPlugin + WorldPlugin + CameraPlugin + HudPlugin` |
+| T-DIAG-01..02 | diagnostics | Plugin registration, diagnostics availability | `App::new() + DiagnosticsPlugin` |
 
-### Total Test Count: ~70 tests
+### Total Test Count: ~65 functional integration tests
 
 ### Test Commands
 
 ```bash
-# Run all unit tests
-cargo test --lib -p deer-gui
-
-# Run all integration tests
-cargo test --test '*' -p deer-gui
+# Run all functional tests
+cargo test -p deer-gui
 
 # Run tests for a specific module
-cargo test --lib -p deer-gui world::
-cargo test --lib -p deer-gui camera::
-cargo test --lib -p deer-gui scene::
+cargo test -p deer-gui bridge::
+cargo test -p deer-gui world::
+cargo test -p deer-gui camera::
+cargo test -p deer-gui scene::
+cargo test -p deer-gui hud::
+cargo test -p deer-gui picking::
 
 # Run with logs
-RUST_LOG=debug cargo test --lib -p deer-gui -- --nocapture
+RUST_LOG=debug cargo test -p deer-gui -- --nocapture
+
+# Run a single test by name
+cargo test -p deer-gui T_CAM_07
 ```
 
 ---
