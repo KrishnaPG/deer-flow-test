@@ -255,14 +255,14 @@ struct Theme {
 
 ### Mapping Backend Metrics to Cinematic World
 
-| Metric / Event | TET Theme | Precursors Theme | Descent Theme |
-|----------------|-----------|------------------|---------------|
-| NATS Saturation | Dense cyan trails, fast movement | River current speeds up, more boats | Wind speed increases, ship vibrates |
-| State Server Lag | TET glows dull, barges slow | Distant bridge becomes misty/fades | Cockpit HUD shows "SYSTEM LAG" warning |
-| Agent Swarm Active | TET surrounded by moths/points | Caravans on path, boats on river | Glow pods descending, ground activity |
-| Agents Retrying/Failing | Spinning/flickering lights | Boat stuck in whirlpool/eddy | Flickering drop-pod |
-| HITL Approval Needed | Highlighted barge + HUD prompt | Glowing beacon on boat + chime | Highlighted pod + HUD alert |
-| Artifact Created | Hover-barge carries crate | Hunter-gather returns to city | Beacon fire lit on ground |
+| Metric / Event          | TET Theme                        | Precursors Theme                    | Descent Theme                          |
+| ----------------------- | -------------------------------- | ----------------------------------- | -------------------------------------- |
+| NATS Saturation         | Dense cyan trails, fast movement | River current speeds up, more boats | Wind speed increases, ship vibrates    |
+| State Server Lag        | TET glows dull, barges slow      | Distant bridge becomes misty/fades  | Cockpit HUD shows "SYSTEM LAG" warning |
+| Agent Swarm Active      | TET surrounded by moths/points   | Caravans on path, boats on river    | Glow pods descending, ground activity  |
+| Agents Retrying/Failing | Spinning/flickering lights       | Boat stuck in whirlpool/eddy        | Flickering drop-pod                    |
+| HITL Approval Needed    | Highlighted barge + HUD prompt   | Glowing beacon on boat + chime      | Highlighted pod + HUD alert            |
+| Artifact Created        | Hover-barge carries crate        | Hunter-gather returns to city       | Beacon fire lit on ground              |
 
 ### Aggregation Strategy
 - **Never draw 10,000 widgets.**
@@ -307,84 +307,3 @@ struct Theme {
 - Use `rodio` crate for audio playback.
 - Audio is optional and configurable via settings.
 
----
-
-## 11. Technical Implementation Approach
-
-### Phase 1: Foundational Architecture
-1. Refactor `DeerGuiApp` into layout modules (`layer_background.rs`, `layer_hud.rs`, `panels/`).
-2. Implement `Theme` trait and `ThemeManager` with basic `DarkSciFi` theme.
-3. Create simple 2D procedural background (stars & geometric shapes).
-4. Implement 1-DOF camera (yaw) with mouse drag.
-5. Connect Top Bar and Background to real `SystemState` from bridge events.
-
-### Phase 2: Themes & Sprites
-1. Implement `PrecursorsScene` with panoramic 2D layering.
-2. Map agent states to moving dots (boats, walkers).
-3. Load and render 2D sprite sheets for agents.
-4. Implement 2D picking (point-in-rect).
-5. Add ambient audio.
-
-### Phase 3: Advanced Visualization
-1. Implement `DescentScene` with procedural clouds/terrain.
-2. Dynamic zoom tied to write throughput.
-3. Weather/season variations.
-
-### Phase 4: Center Canvas Modes
-1. Implement Swarm Monitor using `egui::Painter`.
-2. Implement Artifact Graph (basic node-link).
-3. Integration: clicking canvas entities opens Inspector.
-
-### Phase 5: Polish
-1. Camera focus transitions.
-2. Smooth animations.
-3. Hover effects, transitions.
-
----
-
-## 12. File Structure (Planned)
-
-```
-apps/deer_gui/src/
-├── app.rs              # Main app, orchestrates layers
-├── scene/              # Background scene implementations
-│   ├── mod.rs
-│   ├── tet_scene.rs
-│   ├── precursors_scene.rs
-│   └── descent_scene.rs
-├── theme/              # Theme engine
-│   ├── mod.rs
-│   ├── theme.rs
-│   └── manager.rs
-├── hud/                # HUD panels
-│   ├── mod.rs
-│   ├── top_bar.rs
-│   ├── bottom_panel.rs
-│   ├── left_panel.rs
-│   └── right_panel.rs
-├── canvas/             # Center canvas modes
-│   ├── mod.rs
-│   ├── experts_meeting.rs
-│   ├── swarm_monitor.rs
-│   ├── artifact_graph.rs
-│   └── forensics.rs
-├── view_models.rs      # System state, visual state
-├── audio.rs            # Audio manager (rodio)
-├── models.rs           # (existing)
-└── bridge.rs           # (existing)
-```
-
----
-
-## 13. Open Design Questions
-
-1. **Inspector Depth:** For deep logs/forensics, should the inspector expand in-place (virtualized scroll), or switch center canvas to a full "Forensics Mode"?**A:** Hybrid (Option C) recommended.
-
-2. **Swarm Default Grouping:** By workflow stage, by mission ID, or by agent type?  
-**A:** Workflow Stage (Option A) recommended.
-
-3. **Background Scope:** Show all agents in system, only selected mission, or hybrid (all visible but selected ones highlighted)?  
-**A:** Hybrid - Show all agents, visually highlight selected mission's agents (Option C recommended).
-
-4. **Minimap Representation:** Live DAG of workflow stages, or abstract heat-map of activity?  
-**A:** Live DAG (Option A) recommended.
