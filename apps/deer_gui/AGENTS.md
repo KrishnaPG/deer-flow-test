@@ -13,6 +13,7 @@ Below rules and CONSTRAINTS are vital for good quality code, and non-negotiable:
    - Test edge cases and error conditions;
    - Use Bevy's testing utilities and patterns;
    - Make tests maintainable and reliable;
+   - NO unit tests, NO mocks; Test the real features end to end;
  - enable dynamic tracing, debug-logs for all methods; Dev should be able to pin-point exactly where a bug is just by reviewing the logs and performance metrics;  
  - every module should be reusable in different projects; Coupling should be VERY LOW;
  - Consider ECS best practices

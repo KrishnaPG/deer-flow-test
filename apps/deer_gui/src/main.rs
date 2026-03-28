@@ -7,7 +7,9 @@ mod bridge;
 mod camera;
 mod constants;
 mod diagnostics;
+mod hud;
 mod models;
+mod picking;
 mod scene;
 mod theme;
 mod world;
@@ -22,6 +24,8 @@ use crate::bridge::BridgePlugin;
 use crate::camera::CameraPlugin;
 use crate::constants::window::*;
 use crate::diagnostics::DiagnosticsPlugin;
+use crate::hud::HudPlugin;
+use crate::picking::PickingPlugin as DeerPickingPlugin;
 use crate::scene::ScenePlugin;
 use crate::theme::ThemePlugin;
 use crate::world::WorldPlugin;
@@ -66,6 +70,8 @@ fn main() {
         .add_plugins(ScenePlugin)
         .add_plugins(BridgePlugin)
         .add_plugins(WorldPlugin)
+        .add_plugins(HudPlugin)
+        .add_plugins(DeerPickingPlugin)
         .run();
 }
 
