@@ -5,6 +5,18 @@ mod models;
 use app::DeerGuiApp;
 
 fn main() -> eframe::Result<()> {
+    // Load .env file (if present) before anything else.
+    // Variables already set in the environment are NOT overwritten,
+    // so `OPENAI_API_KEY=xxx cargo run` still takes precedence.
+    //
+    // Search order: ./apps/deer_gui/.env (CARGO_MANIFEST_DIR), then cwd.
+    let manifest_env = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
+    if manifest_env.exists() {
+        dotenvy::from_path(&manifest_env).ok();
+    } else {
+        dotenvy::dotenv().ok(); // try cwd
+    }
+
     // Logging controlled by env vars (both work):
     //   DEER_GUI_LOG=debug   — app-specific, recommended
     //   RUST_LOG=deer_gui=debug  — standard Rust convention
