@@ -1,3 +1,15 @@
-mod state;
+//! World module — ECS components, state, and systems for the world simulation.
+//!
+//! Submodules:
+//! - [`state`] — `WorldState` / `SystemHealth` resources
+//! - [`components`] — ECS components and marker types
+//! - [`systems`] — frame-update systems
+//! - [`plugin`] — Bevy plugin registration
 
-pub use state::*;
+pub mod components;
+mod plugin;
+pub mod state;
+mod systems;
+
+pub use plugin::WorldPlugin;
+pub use state::WorldState;

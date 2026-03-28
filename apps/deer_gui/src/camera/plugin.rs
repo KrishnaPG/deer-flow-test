@@ -1,10 +1,11 @@
 //! [`CameraPlugin`] — registers startup and per-frame camera systems.
 
+use bevy::light::GlobalAmbientLight;
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
 use bevy::prelude::{
-    AmbientLight, App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Plugin,
-    Startup, Transform, Update,
+    App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Plugin, Startup,
+    Transform, Update,
 };
 
 use super::components::CinematicCamera;
@@ -72,9 +73,10 @@ fn camera_spawn_system(mut commands: Commands) {
     ));
 
     // Ambient fill light.
-    commands.insert_resource(AmbientLight {
+    commands.insert_resource(GlobalAmbientLight {
         color: Color::WHITE,
         brightness: 300.0,
+        affects_lightmapped_meshes: true,
     });
 
     info!("camera_spawn: camera + lighting ready");

@@ -22,7 +22,7 @@ impl Plugin for DiagnosticsPlugin {
         app.add_plugins(FrameTimeDiagnosticsPlugin::default());
 
         debug!("DiagnosticsPlugin::build — adding EntityCountDiagnosticsPlugin");
-        app.add_plugins(EntityCountDiagnosticsPlugin);
+        app.add_plugins(EntityCountDiagnosticsPlugin::default());
 
         info!("DiagnosticsPlugin::build — diagnostic collectors registered");
     }

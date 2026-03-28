@@ -118,9 +118,9 @@ pub mod window {
     /// Window title shown in the OS title bar.
     pub const TITLE: &str = "Deer GUI \u{2014} Control Center";
     /// Default window width (pixels).
-    pub const DEFAULT_WIDTH: f32 = 1480.0;
+    pub const DEFAULT_WIDTH: u32 = 1480;
     /// Default window height (pixels).
-    pub const DEFAULT_HEIGHT: f32 = 920.0;
+    pub const DEFAULT_HEIGHT: u32 = 920;
     /// Minimum window width (pixels).
     pub const MIN_WIDTH: f32 = 1080.0;
     /// Minimum window height (pixels).

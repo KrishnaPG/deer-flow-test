@@ -12,7 +12,6 @@ bevy = { version = "0.18.1", default-features = false, features = [
     "bevy_render",
     "bevy_winit",
     "bevy_gizmos",
-    "bevy_input",
     "bevy_log",
     "bevy_state",
     "bevy_scene",

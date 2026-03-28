@@ -3,11 +3,11 @@
 //! Each system is a standalone Bevy system function designed for low coupling.
 //! Chain them in Update order via [`super::plugin::CameraPlugin`].
 
-use bevy::input::mouse::{MouseMotion, MouseWheel};
+use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::input::ButtonInput;
 use bevy::log::{debug, trace};
 use bevy::math::Vec3;
-use bevy::prelude::{EventReader, MouseButton, Query, Res, Time, Transform};
+use bevy::prelude::{MouseButton, Query, Res, Time, Transform};
 
 use super::components::CinematicCamera;
 use crate::constants::camera::{
@@ -19,28 +19,23 @@ use crate::constants::camera::{
 // Input
 // ---------------------------------------------------------------------------
 
-/// Reads mouse drag (right-button held) to update `target_yaw` / `target_pitch`,
-/// and mouse wheel to update `target_zoom`.
+/// Reads accumulated mouse motion (right-button held) to update `target_yaw` / `target_pitch`,
+/// and accumulated mouse scroll to update `target_zoom`.
 pub fn camera_input_system(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
-    mut motion_events: EventReader<MouseMotion>,
-    mut wheel_events: EventReader<MouseWheel>,
+    accumulated_motion: Res<AccumulatedMouseMotion>,
+    accumulated_scroll: Res<AccumulatedMouseScroll>,
     mut query: Query<&mut CinematicCamera>,
 ) {
     let right_held = mouse_buttons.pressed(MouseButton::Right);
 
-    // Accumulate deltas first (drain events regardless to avoid lag).
-    let mut drag_delta = bevy::math::Vec2::ZERO;
-    for ev in motion_events.read() {
-        if right_held {
-            drag_delta += ev.delta;
-        }
-    }
+    let drag_delta = if right_held {
+        accumulated_motion.delta
+    } else {
+        bevy::math::Vec2::ZERO
+    };
 
-    let mut scroll_y: f32 = 0.0;
-    for ev in wheel_events.read() {
-        scroll_y += ev.y;
-    }
+    let scroll_y = accumulated_scroll.delta.y;
 
     if drag_delta == bevy::math::Vec2::ZERO && scroll_y == 0.0 {
         return;
