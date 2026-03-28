@@ -21,21 +21,32 @@ use crate::constants::camera::{
 
 /// Reads accumulated mouse motion (right-button held) to update `target_yaw` / `target_pitch`,
 /// and accumulated mouse scroll to update `target_zoom`.
+///
+/// Input resources are optional so the system gracefully no-ops in
+/// headless / test environments where `InputPlugin` is absent.
 pub fn camera_input_system(
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    accumulated_motion: Res<AccumulatedMouseMotion>,
-    accumulated_scroll: Res<AccumulatedMouseScroll>,
+    mouse_buttons: Option<Res<ButtonInput<MouseButton>>>,
+    accumulated_motion: Option<Res<AccumulatedMouseMotion>>,
+    accumulated_scroll: Option<Res<AccumulatedMouseScroll>>,
     mut query: Query<&mut CinematicCamera>,
 ) {
-    let right_held = mouse_buttons.pressed(MouseButton::Right);
+    let right_held = mouse_buttons
+        .as_ref()
+        .is_some_and(|b| b.pressed(MouseButton::Right));
 
     let drag_delta = if right_held {
-        accumulated_motion.delta
+        accumulated_motion
+            .as_ref()
+            .map(|m| m.delta)
+            .unwrap_or(bevy::math::Vec2::ZERO)
     } else {
         bevy::math::Vec2::ZERO
     };
 
-    let scroll_y = accumulated_scroll.delta.y;
+    let scroll_y = accumulated_scroll
+        .as_ref()
+        .map(|s| s.delta.y)
+        .unwrap_or(0.0);
 
     if drag_delta == bevy::math::Vec2::ZERO && scroll_y == 0.0 {
         return;

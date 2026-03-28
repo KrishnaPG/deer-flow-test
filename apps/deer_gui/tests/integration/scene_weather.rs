@@ -4,6 +4,8 @@
 //! priority ordering, and transition completion via real Bevy systems.
 
 use bevy::prelude::*;
+use bevy::time::TimeUpdateStrategy;
+use std::time::Duration;
 
 use deer_gui::constants::weather::{FOGGY_LATENCY_MS, RAINY_LOAD_PCT, STORMY_ERROR_RATE};
 use deer_gui::scene::common::atmosphere::AtmosphereConfig;
@@ -22,6 +24,10 @@ use deer_gui::world::state::WorldState;
 fn weather_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
+    // Fixed time step so transition advances deterministically in tests.
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+        0.016,
+    )));
     app.init_resource::<AtmosphereConfig>();
     app.init_resource::<WeatherMachine>();
     app.init_resource::<WorldState>();

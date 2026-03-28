@@ -117,11 +117,14 @@ pub fn selection_update_system(
 /// message was emitted this frame, deselects the current entity.
 pub fn deselection_system(
     mut commands: Commands,
-    mouse: Res<ButtonInput<MouseButton>>,
+    mouse: Option<Res<ButtonInput<MouseButton>>>,
     click_messages: MessageReader<EntityClicked>,
     currently_selected: Query<Entity, With<Selected>>,
     mut change_messages: MessageWriter<SelectionChanged>,
 ) {
+    // Gracefully no-op when InputPlugin is absent (e.g. headless / test).
+    let Some(mouse) = mouse else { return };
+
     // Only act on fresh left-click
     if !mouse.just_pressed(MouseButton::Left) {
         return;

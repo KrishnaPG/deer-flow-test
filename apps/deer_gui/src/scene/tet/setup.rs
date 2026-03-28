@@ -45,9 +45,14 @@ pub struct DataTrail {
 /// Delegates to [`spawn_tet_environment`] with fresh asset stores.
 pub fn tet_scene_setup_system(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    meshes: Option<ResMut<Assets<Mesh>>>,
+    materials: Option<ResMut<Assets<StandardMaterial>>>,
 ) {
+    // Gracefully no-op when AssetPlugin is absent (e.g. headless / test).
+    let (Some(mut meshes), Some(mut materials)) = (meshes, materials) else {
+        return;
+    };
+
     info!("tet_scene_setup_system — begin");
     spawn_tet_environment(&mut commands, &mut meshes, &mut materials);
     info!("tet_scene_setup_system — complete");

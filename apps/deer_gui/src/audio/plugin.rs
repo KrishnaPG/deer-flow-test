@@ -41,8 +41,13 @@ fn audio_command_system(
     mut commands: Commands,
     mut cmd_reader: MessageReader<AudioCommand>,
     mut manager: ResMut<AudioManager>,
-    asset_server: Res<AssetServer>,
+    asset_server: Option<Res<AssetServer>>,
 ) {
+    // Gracefully no-op when AssetPlugin is absent (e.g. headless / test).
+    let Some(asset_server) = asset_server else {
+        return;
+    };
+
     for cmd in cmd_reader.read() {
         trace!("audio_command_system — processing {:?}", cmd);
         match cmd {
