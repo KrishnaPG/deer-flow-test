@@ -20,15 +20,32 @@
 
 The bridge resolves Deer Flow in this repo directly. Useful environment variables:
 
-- `DEER_FLOW_CONFIG_PATH` to point at a Deer Flow `config.yaml`
+- `DEER_FLOW_CONFIG_PATH` to point at a Deer Flow `config.yaml` (defaults to `apps/deer_gui/config.yaml`)
 - `DEER_FLOW_HOME` to control Deer Flow thread/artifact storage
 - `DEER_GUI_HOME` to control the GUI's local metadata store
 - `PYTHON_BIN` to override the Python executable used by the Rust app
+- `DEER_GUI_LOG` to set log level for deer_gui modules (debug, info, warn, error, trace)
+- `RUST_LOG` for fine-grained log control across all crates
+
+## Configuration
+
+Edit `apps/deer_gui/config.yaml` to set your LLM provider, model, and API key.
+See `3rdParty/deer-flow/config.example.yaml` for all available options.
 
 ## Run
+
+First setup the `.env` file:
+```bash
+cp apps/deer_gui/.env.example apps/deer_gui/.env
+```
 
 From the repository root:
 
 ```bash
 cargo run -p deer-gui
+```
+or
+
+```bash
+OPENAI_API_KEY=sk-xxx DEER_GUI_LOG=debug cargo run -p deer-gui
 ```

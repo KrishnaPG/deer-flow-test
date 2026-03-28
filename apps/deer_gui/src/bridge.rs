@@ -141,7 +141,7 @@ impl BridgeClient {
         info!("App home: {}", app_home.display());
         info!("Deer Flow home: {}", deer_flow_home.display());
 
-        let default_config = repo_root.join("config.yaml");
+        let default_config = manifest_dir.join("config.yaml");
 
         // Forward the DEER_GUI_LOG level to the Python bridge so both sides
         // honour the same env var for log verbosity.
