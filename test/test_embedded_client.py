@@ -44,7 +44,7 @@ def print_block(header: str, body: str | None = None, color: str = "CYAN"):
     print(colored(f"--- end {header} ---\n", color, bright=False))
 
 API_KEY = os.environ.get("OPENCODE_API_KEY", "your-api-key-here")
-MODEL_NAME = "glm-5"
+MODEL_NAME = "big-pickle"
 BASE_URL = "https://opencode.ai/zen/v1"
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
