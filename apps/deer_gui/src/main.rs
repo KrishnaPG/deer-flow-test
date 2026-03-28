@@ -3,10 +3,14 @@
 //! Bootstraps the Bevy engine with window configuration, logging,
 //! diagnostics, EGui overlay, and the orbital camera system.
 
+mod bridge;
 mod camera;
 mod constants;
 mod diagnostics;
 mod models;
+mod scene;
+mod theme;
+mod world;
 
 use bevy::app::App;
 use bevy::log::{info, LogPlugin};
@@ -14,9 +18,13 @@ use bevy::prelude::*;
 use bevy::window::{Window, WindowResolution};
 use bevy_egui::EguiPlugin;
 
+use crate::bridge::BridgePlugin;
 use crate::camera::CameraPlugin;
 use crate::constants::window::*;
 use crate::diagnostics::DiagnosticsPlugin;
+use crate::scene::ScenePlugin;
+use crate::theme::ThemePlugin;
+use crate::world::WorldPlugin;
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -51,8 +59,13 @@ fn main() {
                 }),
         )
         .add_plugins(EguiPlugin::default())
+        .add_plugins(ThemePlugin)
         .add_plugins(DiagnosticsPlugin)
         .add_plugins(CameraPlugin)
+        .add_plugins(bevy_hanabi::HanabiPlugin)
+        .add_plugins(ScenePlugin)
+        .add_plugins(BridgePlugin)
+        .add_plugins(WorldPlugin)
         .run();
 }
 
