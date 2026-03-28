@@ -23,8 +23,13 @@ use crate::constants::visual::{
 pub fn tet_glow_system(
     time: Res<Time>,
     monolith_query: Query<&MeshMaterial3d<StandardMaterial>, With<TetMonolith>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    materials: Option<ResMut<Assets<StandardMaterial>>>,
 ) {
+    // Gracefully no-op when AssetPlugin is absent (e.g. headless / test).
+    let Some(mut materials) = materials else {
+        return;
+    };
+
     let elapsed = time.elapsed_secs();
     let phase = (elapsed * BEACON_PULSE_HZ * std::f32::consts::TAU).sin();
     // Map sin [-1,1] to [TET_GLOW_MIN, TET_GLOW_MAX]

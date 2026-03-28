@@ -101,7 +101,9 @@ fn t_cam_03_interpolation_moves_toward_target() {
         .target_yaw = 45.0;
 
     // Run several ticks to let interpolation converge.
-    for _ in 0..30 {
+    // With INTERPOLATION_SPEED=4.0 and dt=0.016, lerp factor t=0.064.
+    // Convergence is exponential; 60 ticks gives ~98% convergence.
+    for _ in 0..60 {
         app.update();
     }
 
@@ -109,7 +111,7 @@ fn t_cam_03_interpolation_moves_toward_target() {
     let distance = (cam.yaw_deg - 45.0).abs();
     assert!(
         distance < 5.0,
-        "yaw_deg ({:.2}) should be close to 45.0 after 30 ticks (distance={:.2})",
+        "yaw_deg ({:.2}) should be close to 45.0 after 60 ticks (distance={:.2})",
         cam.yaw_deg,
         distance,
     );

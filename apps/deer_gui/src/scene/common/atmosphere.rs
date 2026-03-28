@@ -104,8 +104,11 @@ impl AtmosphereConfig {
 pub fn atmosphere_transition_system(
     time: Res<Time>,
     mut config: ResMut<AtmosphereConfig>,
-    mut ambient: ResMut<GlobalAmbientLight>,
+    ambient: Option<ResMut<GlobalAmbientLight>>,
 ) {
+    // Gracefully no-op when PbrPlugin/RenderPlugin is absent (e.g. headless / test).
+    let Some(mut ambient) = ambient else { return };
+
     // Already at target — nothing to interpolate.
     if config.progress >= 1.0 {
         return;
