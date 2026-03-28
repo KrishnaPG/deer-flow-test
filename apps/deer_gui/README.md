@@ -49,3 +49,6 @@ or
 ```bash
 OPENAI_API_KEY=sk-xxx DEER_GUI_LOG=debug cargo run -p deer-gui
 ```
+
+# Reference:
+ - Free [2D Spires and 3D Models](https://kenney.nl/assets)
