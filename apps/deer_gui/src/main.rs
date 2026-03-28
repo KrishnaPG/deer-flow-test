@@ -48,8 +48,7 @@ fn main() {
                     filter: log_filter,
                     level: bevy::log::Level::TRACE,
                     ..default()
-                })
-                .disable::<bevy::audio::AudioPlugin>(),
+                }),
         )
         .add_plugins(EguiPlugin::default())
         .add_plugins(DiagnosticsPlugin)

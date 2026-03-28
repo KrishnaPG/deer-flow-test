@@ -1156,7 +1156,7 @@ pub fn tet_theme() -> Theme;
 ## 9. Module: `audio`
 
 **Files:** `src/audio/{mod.rs, events.rs, manager.rs, plugin.rs}`  
-**Purpose:** Ambient loops per scene, one-shot UI sounds via `bevy_kira_audio`.  
+**Purpose:** Ambient loops per scene, one-shot UI sounds via Bevy's built-in `bevy_audio`.  
 **Coupling:** Depends on `constants`. Standalone otherwise.  
 **LOC Budget:** ~250 total (3 files × ~83)
 
@@ -1216,10 +1216,10 @@ impl Plugin for DeerAudioPlugin {
     }
 }
 
-/// Process AudioCommand events using bevy_kira_audio channels.
+/// Process AudioCommand events using Bevy's built-in audio system.
 fn audio_command_system(
     mut commands: EventReader<AudioCommand>,
-    audio: Res<bevy_kira_audio::Audio>,
+    // Bevy's default audio is available via Commands + AudioPlayer component
     manager: ResMut<AudioManager>,
     assets: Res<AssetServer>,
 );

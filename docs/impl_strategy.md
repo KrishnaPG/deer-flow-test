@@ -4,7 +4,7 @@
 
 Migrate `apps/deer_gui` from an eframe/egui chat app to a **Bevy 0.18.1** cinematic game engine
 with a 3D world, ECS-driven entity system, HUD overlay via `bevy_egui`, GPU particle effects via
-`bevy_hanabi`, and spatial audio via `bevy_kira_audio`. The existing `bridge.rs` and `models.rs`
+`bevy_hanabi`, and spatial audio via Bevy's built-in `bevy_audio`. The existing `bridge.rs` and `models.rs`
 are preserved as the data layer. The current 759-line `app.rs` is replaced entirely.
 
 ---
@@ -26,14 +26,13 @@ are preserved as the data layer. The current 759-line `app.rs` is replaced entir
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| `bevy` | `0.18.1` | Game engine (3D renderer, ECS, asset pipeline) |
+| `bevy` | `0.18.1` | Game engine (3D renderer, ECS, asset pipeline, built-in audio) |
 | `bevy_egui` | `0.39` | egui HUD overlay on Bevy render |
 | `bevy_hanabi` | `0.18` | GPU particle effects (agents, trails, weather) |
-| `bevy_kira_audio` | `0.25` | Spatial audio (ambient loops, event sounds) |
 | `bevy_tweening` | `0.15` | Smooth camera interpolation, UI animations |
 | `bevy_prototype_lyon` | `0.16` | 2D shape drawing (minimap, HUD decorations) |
 
-**Note:** `bevy_kira_audio` requires disabling Bevy's default `bevy_audio` + `vorbis` features.
+**Note:** Audio uses Bevy's built-in `bevy_audio` with `vorbis` feature (included in the Bevy feature list).
 Parallax is implemented manually (transform-based depth layers) since `bevy-parallax` doesn't
 support Bevy 0.18.
 
@@ -51,7 +50,6 @@ bevy = { version = "0.18.1", default-features = false, features = [
 ] }
 bevy_egui = "0.39"
 bevy_hanabi = "0.18"
-bevy_kira_audio = "0.25"
 bevy_tweening = "0.15"
 bevy_prototype_lyon = "0.16"
 
@@ -138,7 +136,7 @@ apps/deer_gui/src/
 │   ├── mod.rs
 │   ├── manager.rs              # AudioManager resource, ambient loop control
 │   ├── events.rs               # AudioEvent enum
-│   └── plugin.rs               # AudioPlugin (bevy_kira_audio integration)
+│   └── plugin.rs               # AudioPlugin (Bevy built-in audio integration)
 │
 ├── picking/                    # Entity Selection / Ray Picking
 │   ├── mod.rs
@@ -345,7 +343,7 @@ pub enum UiSound {
 |------|---------|-------------|
 | 1.1 | `Cargo.toml` | Update deps: add Bevy + plugins, remove eframe/egui |
 | 1.2 | `constants.rs` | Create centralized constants file |
-| 1.3 | `main.rs` | Rewrite: `App::new()`, `DefaultPlugins` (minus `bevy_audio`), register plugins |
+| 1.3 | `main.rs` | Rewrite: `App::new()`, `DefaultPlugins` (with `bevy_audio`), register plugins |
 | 1.4 | `camera/components.rs` | `CinematicCamera` component |
 | 1.5 | `camera/systems.rs` | Mouse drag rotation, scroll zoom, smooth interpolation |
 | 1.6 | `camera/plugin.rs` | `CameraPlugin`: startup spawns camera, registers input systems |
@@ -436,7 +434,7 @@ pub enum UiSound {
 |------|---------|-------------|
 | 8.1 | `audio/events.rs` | `AudioCommand` event enum |
 | 8.2 | `audio/manager.rs` | `AudioManager` resource |
-| 8.3 | `audio/plugin.rs` | `AudioPlugin` (bevy_kira_audio integration) |
+| 8.3 | `audio/plugin.rs` | `AudioPlugin` (Bevy built-in audio integration) |
 
 ### Phase 9: Polish & Optimization
 
@@ -471,7 +469,7 @@ theme/ ◄── constants.rs (+ bevy_egui)
     │
 hud/ ◄── world/, theme/, bridge/ (+ bevy_egui)
     │
-audio/ ◄── scene/, constants.rs (+ bevy_kira_audio)
+audio/ ◄── scene/, constants.rs (+ bevy_audio built-in)
     │
 diagnostics/ ◄── (standalone)
     │
@@ -484,11 +482,9 @@ main.rs ◄── all plugins
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins
-            .set(WindowPlugin { ... })
-            .disable::<bevy::audio::AudioPlugin>())
+            .set(WindowPlugin { ... }))
         .add_plugins(EguiPlugin)
         .add_plugins(HanabiPlugin)
-        .add_plugins(bevy_kira_audio::AudioPlugin)
         .add_plugins(TweeningPlugin)
         // Custom plugins
         .add_plugins(DiagnosticsPlugin)

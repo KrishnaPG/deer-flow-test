@@ -18,6 +18,8 @@ bevy = { version = "0.18.1", default-features = false, features = [
     "bevy_scene",
     "bevy_picking",
     "bevy_mesh",
+    "bevy_audio",
+    "vorbis",
     "png",
     "x11",
     "wayland",
@@ -28,7 +30,6 @@ bevy = { version = "0.18.1", default-features = false, features = [
 # ── Bevy ecosystem plugins ──────────────────────────────────────────
 bevy_egui = "0.39"
 bevy_hanabi = "0.18"
-bevy_kira_audio = "0.25"
 bevy_tweening = "0.15"
 bevy_prototype_lyon = "0.16"
 
