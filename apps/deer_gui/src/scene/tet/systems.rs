@@ -9,9 +9,7 @@ use bevy::prelude::{MeshMaterial3d, Query, Res, ResMut, Time, Transform, With};
 
 use super::setup::{DataTrail, TetMonolith};
 use crate::constants::timing::BEACON_PULSE_HZ;
-use crate::constants::visual::{
-    DATA_TRAIL_SPEED, TET_GLOW_MAX, TET_GLOW_MIN, TET_STRUCTURE_RADIUS,
-};
+use crate::constants::visual::{DATA_TRAIL_SPEED, TET_GLOW_MAX, TET_GLOW_MIN};
 use crate::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
@@ -110,7 +108,7 @@ mod tests {
         // They should be near each other (wrap-around)
         // but not identical since it's a multi-turn spiral.
         let dist = (a - b).length();
-        assert!(dist < TET_STRUCTURE_RADIUS * 5.0);
+        assert!(dist < crate::constants::visual::TET_STRUCTURE_RADIUS * 5.0);
     }
 
     #[test]

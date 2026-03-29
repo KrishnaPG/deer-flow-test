@@ -5,7 +5,7 @@
 //! and volume/mute control.
 
 use bevy::audio::{AudioPlayer, PlaybackSettings};
-use bevy::log::{debug, info, trace, warn};
+use bevy::log::{debug, info, trace};
 use bevy::prelude::*;
 
 use super::events::{AudioCommand, UiSound};

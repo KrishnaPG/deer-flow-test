@@ -7,7 +7,7 @@ use bevy::color::{Color, LinearRgba};
 use bevy::log::{debug, trace};
 use serde::Deserialize;
 
-use super::theme::Theme;
+use super::core::Theme;
 
 // ---------------------------------------------------------------------------
 // ThemeDescriptor

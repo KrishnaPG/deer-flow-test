@@ -13,4 +13,4 @@ mod plugin;
 mod systems;
 
 pub use plugin::PickingPlugin;
-pub use systems::PickingCandidates;
+pub use systems::{selection_change_logger_system, PickingCandidates, SelectionChanged};

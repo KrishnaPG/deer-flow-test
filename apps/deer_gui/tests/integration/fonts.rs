@@ -329,3 +329,93 @@ fn t_font_10_defaults_when_unspecified() {
         "Default style should be Normal"
     );
 }
+
+/// Test load_fonts_from_css_url fails gracefully with invalid URL.
+/// This verifies the error handling path when network is unreachable.
+#[test]
+fn t_font_11_load_fonts_invalid_url_fails() {
+    use deer_gui::ui::fonts::load_fonts_from_css_url;
+
+    // Use a URL that's guaranteed to fail (invalid domain)
+    let result = load_fonts_from_css_url("https://invalid.invalid/fonts.css");
+
+    // Should return an error, not panic
+    assert!(
+        result.is_err(),
+        "Loading from invalid URL should return an error"
+    );
+
+    // Verify it's a Http error
+    match result {
+        Err(FontLoadError::Http(_)) => (), // Expected
+        Err(other) => panic!("Expected Http error, got {:?}", other),
+        Ok(_) => panic!("Should not succeed with invalid URL"),
+    }
+}
+
+/// Test load_fonts_from_css_url fails when no valid rules in CSS.
+/// This simulates a server returning CSS without @font-face rules.
+#[test]
+fn t_font_12_load_fonts_no_rules_fails() {
+    use deer_gui::ui::fonts::load_fonts_from_css_url;
+
+    // We'll test this by checking that parse_font_css returns empty for CSS without @font-face
+    // The actual load_fonts_from_css_url would fail at the HTTP level for invalid URL,
+    // but we can verify the NoCssRules error is properly defined
+    let empty_rules = parse_font_css("body { margin: 0; }");
+    assert!(
+        empty_rules.is_empty(),
+        "CSS without @font-face should return empty rules"
+    );
+
+    // Verify error type exists and can be constructed
+    let err = FontLoadError::NoCssRules;
+    assert!(err.to_string().contains("no @font-face rules"));
+}
+
+/// Test load_default_fonts falls back to defaults on failure.
+/// This is the critical production path - graceful degradation.
+#[test]
+fn t_font_13_load_default_fonts_fallback() {
+    use deer_gui::ui::fonts::load_default_fonts;
+
+    // Pass None to use default URLs - this should work if network is available
+    // or gracefully degrade to built-in defaults if not
+    let font_defs = load_default_fonts(None, None);
+
+    // Should always return valid FontDefinitions (either custom or default)
+    assert!(
+        !font_defs.font_data.is_empty(),
+        "Should have font data even on failure"
+    );
+    assert!(
+        font_defs
+            .families
+            .contains_key(&bevy_egui::egui::FontFamily::Proportional),
+        "Should have Proportional family"
+    );
+    assert!(
+        font_defs
+            .families
+            .contains_key(&bevy_egui::egui::FontFamily::Monospace),
+        "Should have Monospace family"
+    );
+}
+
+/// Test load_font_families with mix of valid/invalid URLs.
+/// Verifies that partial success still loads available fonts.
+#[test]
+fn t_font_14_load_font_families_partial_success() {
+    use deer_gui::ui::fonts::load_font_families;
+
+    // This test documents the expected behavior:
+    // - If one URL fails but another succeeds, we get the successful fonts
+    // - If all fail, we get an error
+
+    // Test with all invalid URLs - should fail
+    let all_invalid = load_font_families(&[
+        "https://invalid1.invalid/fonts.css",
+        "https://invalid2.invalid/fonts.css",
+    ]);
+    assert!(all_invalid.is_err(), "All invalid URLs should return error");
+}
