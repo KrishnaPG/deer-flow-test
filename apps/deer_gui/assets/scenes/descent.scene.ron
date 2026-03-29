@@ -1,0 +1,12 @@
+SceneDescriptor(
+    name: "Descent",
+    ambient_audio: "audio/descent_ambient.ogg",
+    gltf_scene: None,
+    theme: "Descent",
+    generators: [
+        (generator: "starfield", params: Starfield(count: 1000, radius: 900.0, emissive: (0.8, 0.9, 1.8, 1.0))),
+        (generator: "cloud_layer", params: CloudLayer(count: 120, speed: 6.0, radius: 400.0, emissive: (0.8, 0.9, 1.8, 1.0))),
+        (generator: "drop_pods", params: DropPods(count: 40, speed: 8.0, emissive: (0.3, 0.8, 0.9, 1.0))),
+        (generator: "static_glow_cluster", params: StaticGlowCluster(count: 20, emissive: (0.9, 0.4, 0.1, 1.0), position: (0.0, -600.0, 0.0), spread: 150.0)),
+    ],
+)

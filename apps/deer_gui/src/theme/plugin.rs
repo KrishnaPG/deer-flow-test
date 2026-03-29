@@ -9,6 +9,8 @@ use bevy::log::{debug, info};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 
+use super::descent_theme::{apply_theme_to_egui as apply_descent_theme, descent_theme};
+use super::precursors_theme::{apply_theme_to_egui as apply_precursors_theme, precursors_theme};
 use super::tet_theme::{apply_theme_to_egui, tet_theme};
 use super::theme::ThemeManager;
 
@@ -27,7 +29,7 @@ impl Plugin for ThemePlugin {
     fn build(&self, app: &mut App) {
         info!("ThemePlugin::build — registering theme systems");
 
-        let manager = ThemeManager::new(vec![tet_theme()]);
+        let manager = ThemeManager::new(vec![tet_theme(), precursors_theme(), descent_theme()]);
 
         app.insert_resource(manager)
             .add_systems(EguiPrimaryContextPass, theme_apply_system);

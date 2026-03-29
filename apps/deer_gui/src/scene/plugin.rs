@@ -10,6 +10,7 @@ use super::common::atmosphere::{atmosphere_transition_system, AtmosphereConfig};
 use super::common::parallax::PreviousCameraPosition;
 use super::common::weather::{weather_transition_system, weather_update_system, WeatherMachine};
 use super::generators::registry::GeneratorRegistry;
+use super::generators::{barge_system, cloud_system, drop_pod_system, traveller_system};
 use super::manager::SceneManager;
 use super::tet::config::TetSceneConfig;
 use super::tet::systems::{data_trail_system, tet_glow_system};
@@ -52,6 +53,10 @@ impl Plugin for ScenePlugin {
                 (
                     tet_glow_system,
                     data_trail_system,
+                    barge_system,
+                    traveller_system,
+                    cloud_system,
+                    drop_pod_system,
                     atmosphere_transition_system,
                     weather_update_system,
                     weather_transition_system,

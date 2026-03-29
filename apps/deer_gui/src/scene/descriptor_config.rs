@@ -5,9 +5,10 @@
 
 use bevy::asset::Assets;
 use bevy::ecs::system::Commands;
+use bevy::ecs::world::World;
 use bevy::log::{debug, info};
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{Entity, Mesh};
+use bevy::prelude::{AssetServer, ChildOf, Entity, Handle, Mesh, Scene, SceneRoot};
 
 use super::descriptor::SceneDescriptor;
 use super::primitives::spawn_root;
@@ -65,6 +66,20 @@ impl SceneConfig for DescriptorSceneConfig {
             self.descriptor.name,
         );
         let root = spawn_root(commands);
+
+        // Load base glTF scene if specified
+        if let Some(gltf_path) = &self.descriptor.gltf_scene {
+            debug!("DescriptorSceneConfig: loading base glTF scene '{gltf_path}'");
+            let path = gltf_path.clone();
+            commands.queue(move |world: &mut World| {
+                let asset_server = world.resource::<AssetServer>();
+                let scene_handle: Handle<Scene> = asset_server.load(format!("{path}#Scene0"));
+                world
+                    .commands()
+                    .spawn((ChildOf(root), SceneRoot(scene_handle)));
+                debug!("DescriptorSceneConfig: queued base glTF '{path}' under root={root:?}");
+            });
+        }
 
         // Generators are resolved and invoked by the plugin system after
         // scene activation. Here we just log the generators for verification.

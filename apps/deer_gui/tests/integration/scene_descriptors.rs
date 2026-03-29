@@ -130,3 +130,83 @@ fn t_desc_05_unknown_generator_logged() {
     let config = DescriptorSceneConfig::new(desc);
     assert_eq!(config.name(), "UnknownGen");
 }
+
+#[test]
+fn t_gltf_01_descriptor_with_gltf_parses() {
+    let ron_str = r#"
+        SceneDescriptor(
+            name: "GltfTest",
+            ambient_audio: "audio/test.ogg",
+            gltf_scene: Some("scenes/custom_level.glb"),
+            theme: "TestTheme",
+            generators: [
+                (generator: "starfield", params: Starfield(count: 100, radius: 400.0, emissive: (1.0, 1.0, 1.0, 1.0))),
+                (generator: "gltf_subscene", params: GltfSubscene(path: "models/watchtower.glb", transform: Some((0.0, 10.0, 0.0)), scale: Some(2.0))),
+            ],
+        )
+    "#;
+    let desc: SceneDescriptor = ron::from_str(ron_str).expect("should parse RON with gltf_scene");
+    assert_eq!(desc.name, "GltfTest");
+    assert_eq!(desc.gltf_scene, Some("scenes/custom_level.glb".to_string()));
+    assert_eq!(desc.generators.len(), 2);
+    match &desc.generators[1].params {
+        GeneratorParams::GltfSubscene {
+            path,
+            transform,
+            scale,
+        } => {
+            assert_eq!(path, "models/watchtower.glb");
+            assert_eq!(*transform, Some([0.0, 10.0, 0.0]));
+            assert!((scale.unwrap() - 2.0).abs() < 0.01);
+        }
+        _ => panic!("expected GltfSubscene params for second generator"),
+    }
+}
+
+#[test]
+fn t_gltf_02_gltf_subscene_generator_runs() {
+    use bevy::asset::AssetPlugin;
+    use bevy::pbr::StandardMaterial;
+    use bevy::prelude::*;
+    use deer_gui::scene::generators::registry::GeneratorRegistry;
+    use deer_gui::scene::primitives::spawn_root;
+
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.init_asset::<Mesh>();
+    app.init_asset::<StandardMaterial>();
+    app.init_asset::<Scene>();
+
+    let registry = GeneratorRegistry::with_builtins();
+    let gen = registry
+        .get("gltf_subscene")
+        .expect("gltf_subscene should be registered");
+
+    let params = GeneratorParams::GltfSubscene {
+        path: "models/test.glb".to_string(),
+        transform: Some([1.0, 2.0, 3.0]),
+        scale: Some(0.5),
+    };
+
+    app.world_mut()
+        .resource_scope(|world: &mut World, mut meshes: Mut<Assets<Mesh>>| {
+            world.resource_scope(
+                |world: &mut World, mut mats: Mut<Assets<StandardMaterial>>| {
+                    let mut commands = world.commands();
+                    let root = spawn_root(&mut commands);
+                    gen(&mut commands, &mut meshes, &mut mats, root, &params);
+                },
+            );
+        });
+    app.world_mut().flush();
+
+    let scene_root_count = app
+        .world_mut()
+        .query_filtered::<Entity, With<bevy::prelude::SceneRoot>>()
+        .iter(app.world())
+        .count();
+    assert!(
+        scene_root_count >= 1,
+        "gen_gltf_subscene should spawn an entity with Bevy SceneRoot; found {scene_root_count}"
+    );
+}
