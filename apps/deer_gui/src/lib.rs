@@ -10,4 +10,5 @@ pub mod models;
 pub mod picking;
 pub mod scene;
 pub mod theme;
+// pub mod ui; // FIXME: fonts.rs has compilation errors (pre-existing)
 pub mod world;

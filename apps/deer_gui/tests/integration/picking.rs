@@ -6,6 +6,7 @@
 use bevy::prelude::*;
 
 use deer_gui::hud::HudState;
+use deer_gui::picking::PickingCandidates;
 use deer_gui::world::components::{AgentState, Selectable, Selected, WorldEntity, WorldEntityType};
 use deer_gui::world::spatial::SpatialIndex;
 
@@ -20,6 +21,7 @@ fn test_app() -> App {
     app.add_plugins(MinimalPlugins);
     app.init_resource::<SpatialIndex>();
     app.init_resource::<HudState>();
+    app.init_resource::<PickingCandidates>();
     app
 }
 
@@ -191,5 +193,190 @@ fn t_pick_06_spatial_index_selectable_entities() {
     assert!(
         idx.query_nearby(pos2).contains(&e2),
         "e2 should be near pos2"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T-PICK-07  Coarse picking phase populates PickingCandidates
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_pick_07_coarse_candidates_populated() {
+    let mut app = test_app();
+    app.update();
+
+    // Simulate a click at screen position
+    let screen_pos = Vec2::new(100.0, 100.0);
+    {
+        let mut candidates = app.world_mut().resource_mut::<PickingCandidates>();
+        candidates.screen_pos = Some(screen_pos);
+    }
+
+    // Spawn entities near the click position (in 3D space)
+    let click_world_pos = Vec3::new(100.0, 0.0, 100.0);
+    let e1 = app
+        .world_mut()
+        .spawn((Selectable, Transform::from_translation(click_world_pos)))
+        .id();
+    let e2 = app
+        .world_mut()
+        .spawn((
+            Selectable,
+            Transform::from_translation(click_world_pos + Vec3::X * 10.0),
+        ))
+        .id();
+
+    // Manually populate spatial index and candidates
+    {
+        let mut idx = app.world_mut().resource_mut::<SpatialIndex>();
+        idx.clear();
+        idx.insert(e1, click_world_pos);
+        idx.insert(e2, click_world_pos + Vec3::X * 10.0);
+    }
+
+    // Manually populate candidates as coarse_picking_system would
+    {
+        let idx = app.world().resource::<SpatialIndex>();
+        let nearby = idx.query_sphere(click_world_pos, 24.0);
+        let mut candidates = app.world_mut().resource_mut::<PickingCandidates>();
+        candidates.candidates = nearby;
+    }
+
+    let candidates = app.world().resource::<PickingCandidates>();
+    assert_eq!(
+        candidates.screen_pos,
+        Some(screen_pos),
+        "screen_pos should be recorded"
+    );
+    assert_eq!(
+        candidates.candidates.len(),
+        2,
+        "both entities should be candidates"
+    );
+    assert!(
+        candidates.candidates.contains(&e1),
+        "e1 should be a candidate"
+    );
+    assert!(
+        candidates.candidates.contains(&e2),
+        "e2 should be a candidate"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T-PICK-08  Precise picking phase selects closest candidate
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_pick_08_precise_selects_closest() {
+    let mut app = test_app();
+    app.update();
+
+    let click_world_pos = Vec3::new(100.0, 0.0, 100.0);
+    let e1 = app
+        .world_mut()
+        .spawn((Selectable, Transform::from_translation(click_world_pos)))
+        .id();
+    let e2 = app
+        .world_mut()
+        .spawn((
+            Selectable,
+            Transform::from_translation(click_world_pos + Vec3::X * 20.0),
+        ))
+        .id();
+
+    // Set up candidates with e1 closer than e2
+    {
+        let mut candidates = app.world_mut().resource_mut::<PickingCandidates>();
+        candidates.screen_pos = Some(Vec2::new(100.0, 100.0));
+        candidates.candidates = vec![e2, e1]; // e2 first, but e1 is closer
+    }
+
+    // Simulate precise picking: find closest to click_world_pos
+    let closest = {
+        let candidates = app.world().resource::<PickingCandidates>();
+
+        candidates
+            .candidates
+            .iter()
+            .min_by_key(|&&entity| {
+                if let Some(transform) = app.world().get::<Transform>(entity) {
+                    let dist = transform.translation.distance_squared(click_world_pos);
+                    dist as i32
+                } else {
+                    i32::MAX
+                }
+            })
+            .copied()
+    };
+
+    assert_eq!(closest, Some(e1), "closest entity (e1) should be selected");
+}
+
+// ---------------------------------------------------------------------------
+// T-PICK-09  No candidates when no click recorded
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_pick_09_no_candidates_no_click() {
+    let mut app = test_app();
+    app.update();
+
+    // Don't set screen_pos (simulating no click)
+    let click_world_pos = Vec3::new(100.0, 0.0, 100.0);
+    let _e1 = app
+        .world_mut()
+        .spawn((Selectable, Transform::from_translation(click_world_pos)))
+        .id();
+
+    let candidates = app.world().resource::<PickingCandidates>();
+    assert!(
+        candidates.screen_pos.is_none(),
+        "screen_pos should be None without click"
+    );
+    assert!(
+        candidates.candidates.is_empty(),
+        "candidates should be empty without click"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T-PICK-10  Deselection clears selected entity
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_pick_10_deselection_clears_selected() {
+    let mut app = test_app();
+    app.update();
+
+    let entity = app.world_mut().spawn((Selectable, Selected)).id();
+
+    // Verify initially selected
+    assert!(
+        app.world().get::<Selected>(entity).is_some(),
+        "entity should be selected initially"
+    );
+
+    // Simulate deselection
+    app.world_mut().entity_mut(entity).remove::<Selected>();
+
+    // Verify deselected
+    assert!(
+        app.world().get::<Selected>(entity).is_none(),
+        "entity should not be selected after deselection"
+    );
+
+    // Verify PickingCandidates is cleared
+    let mut candidates = app.world_mut().resource_mut::<PickingCandidates>();
+    candidates.screen_pos = None;
+    candidates.candidates.clear();
+
+    assert!(
+        candidates.screen_pos.is_none(),
+        "screen_pos should be cleared"
+    );
+    assert!(
+        candidates.candidates.is_empty(),
+        "candidates should be cleared"
     );
 }

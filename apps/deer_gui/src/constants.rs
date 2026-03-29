@@ -111,6 +111,9 @@ pub mod visual {
     pub const DATA_TRAIL_SPEED: f32 = 5.0;
     /// Number of active data-trail particles.
     pub const DATA_TRAIL_COUNT: usize = 100;
+
+    /// Coarse picking radius in pixels for the two-phase picking system.
+    pub const PICKING_COARSE_RADIUS_PX: f32 = 24.0;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,4 +218,22 @@ pub mod descent {
     pub const POD_SPEED: f32 = 8.0;
     /// Radius of the cloud layer distribution.
     pub const CLOUD_RADIUS: f32 = 400.0;
+}
+
+// ---------------------------------------------------------------------------
+// Font URLs for Google Fonts CSS
+// ---------------------------------------------------------------------------
+
+/// Google Fonts CSS URLs and user agent for font loading.
+pub mod fonts {
+    /// IBM Plex Sans CSS URL (body font).
+    pub const DEFAULT_BODY_FONT_CSS: &str =
+        "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap";
+
+    /// JetBrains Mono CSS URL (monospace font).
+    pub const DEFAULT_MONO_FONT_CSS: &str =
+        "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap";
+
+    /// User agent header for font requests (modern browser).
+    pub const FONT_CSS_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 }
