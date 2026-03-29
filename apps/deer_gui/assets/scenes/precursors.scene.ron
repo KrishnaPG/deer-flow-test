@@ -1,0 +1,12 @@
+SceneDescriptor(
+    name: "Precursors",
+    ambient_audio: "audio/precursors_ambient.ogg",
+    gltf_scene: None,
+    theme: "Precursors",
+    generators: [
+        (generator: "starfield", params: Starfield(count: 1500, radius: 800.0, emissive: (1.8, 1.4, 0.8, 1.0))),
+        (generator: "river_barges", params: RiverBarges(count: 60, speed: 3.0, river_radius: 300.0, emissive: (0.6, 0.8, 0.4, 1.0))),
+        (generator: "path_travellers", params: PathTravellers(count: 80, speed: 2.0, path_radius: 250.0, emissive: (0.5, 0.7, 0.3, 1.0))),
+        (generator: "static_glow_cluster", params: StaticGlowCluster(count: 15, emissive: (0.8, 0.6, 0.3, 1.0), position: (800.0, -50.0, 0.0), spread: 100.0)),
+    ],
+)

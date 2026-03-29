@@ -15,9 +15,11 @@ mod integration {
     pub mod models_pipeline;
     pub mod picking;
     pub mod scene_audio;
+    pub mod scene_descent;
     pub mod scene_descriptors;
     pub mod scene_generators;
     pub mod scene_manager;
+    pub mod scene_precursors;
     pub mod scene_primitives;
     pub mod scene_tet;
     pub mod scene_weather;

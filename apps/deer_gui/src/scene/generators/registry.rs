@@ -79,6 +79,7 @@ impl GeneratorRegistry {
             "static_glow_cluster",
             super::static_glow::gen_static_glow_cluster,
         );
+        registry.register("gltf_subscene", super::gltf_subscene::gen_gltf_subscene);
         debug!(
             "GeneratorRegistry::with_builtins — {} generators",
             registry.factories.len(),

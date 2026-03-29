@@ -176,3 +176,43 @@ pub mod aggregation {
     /// Visual-to-real ratio when a swarm cluster is shown.
     pub const SWARM_VISUAL_RATIO: f32 = 0.05;
 }
+
+// ---------------------------------------------------------------------------
+// Precursors scene
+// ---------------------------------------------------------------------------
+
+/// Precursors scene constants — barge and traveller counts, speeds, and radii.
+pub mod precursors {
+    /// Number of river barges in the Precursors scene.
+    pub const BARGE_COUNT: usize = 60;
+    /// Number of path travellers in the Precursors scene.
+    pub const TRAVELLER_COUNT: usize = 80;
+    /// Base speed of river barges (units per frame multiplier).
+    pub const BARGE_SPEED: f32 = 3.0;
+    /// Base speed of path travellers (units per frame multiplier).
+    pub const TRAVELLER_SPEED: f32 = 2.0;
+    /// Radius of the river path for barges.
+    pub const RIVER_RADIUS: f32 = 300.0;
+    /// Radius of the path for travellers.
+    pub const PATH_RADIUS: f32 = 250.0;
+}
+
+// ---------------------------------------------------------------------------
+// Descent scene
+// ---------------------------------------------------------------------------
+
+/// Descent scene visual parameters.
+pub mod descent {
+    /// Number of cloud particles in the cloud layer.
+    pub const CLOUD_COUNT: usize = 120;
+    /// Number of drop pods falling through the scene.
+    pub const POD_COUNT: usize = 40;
+    /// Number of colony beacons (static glow entities).
+    pub const BEACON_COUNT: usize = 20;
+    /// Speed of cloud particles moving upward.
+    pub const CLOUD_SPEED: f32 = 6.0;
+    /// Speed of drop pods falling downward.
+    pub const POD_SPEED: f32 = 8.0;
+    /// Radius of the cloud layer distribution.
+    pub const CLOUD_RADIUS: f32 = 400.0;
+}
