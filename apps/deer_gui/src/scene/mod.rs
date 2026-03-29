@@ -8,10 +8,15 @@ pub mod audio_bridge;
 pub mod common;
 pub mod manager;
 mod plugin;
+pub mod primitives;
 pub mod tet;
 mod traits;
 
 pub use audio_bridge::{scene_audio_bridge_system, SceneAudioState};
 pub use manager::{SceneManager, SceneRoot};
 pub use plugin::ScenePlugin;
+pub use primitives::{
+    entity_scale, fibonacci_sphere_point, spawn_root, spawn_scene_ambient_light, spawn_starfield,
+    Star,
+};
 pub use traits::SceneConfig;
