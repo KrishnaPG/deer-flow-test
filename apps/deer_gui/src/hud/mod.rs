@@ -4,6 +4,7 @@
 //! command interface: top bar, side panels, console, event ticker,
 //! center canvas, and modal overlays.
 
+pub mod adapters;
 mod bottom_console;
 mod center_canvas;
 mod event_ticker;
@@ -11,6 +12,7 @@ mod left_panel;
 mod modal;
 mod plugin;
 mod right_inspector;
+pub mod state_systems;
 mod styles;
 mod top_bar;
 
@@ -23,7 +25,7 @@ pub use styles::{
 
 use bevy::prelude::*;
 
-use crate::models::{ChatMessage, ModelInfo, ThreadRecord, ThreadSummary};
+use crate::models::{ModelInfo, ThreadRecord, ThreadSummary};
 
 // ---------------------------------------------------------------------------
 // HUD state resource
@@ -66,6 +68,8 @@ pub struct HudState {
     pub command_input: String,
     /// Active command mode.
     pub command_mode: CommandMode,
+    /// Pending command to dispatch (set by console, consumed by command_dispatch_system).
+    pub pending_command: Option<PendingCommand>,
 
     // -- Center canvas --
     /// Which center canvas view is active.
@@ -104,6 +108,7 @@ impl Default for HudState {
             event_log: Vec::new(),
             command_input: String::new(),
             command_mode: CommandMode::Direct,
+            pending_command: None,
             center_mode: CenterCanvasMode::WorldView,
             show_modal: None,
             threads: Vec::new(),
@@ -206,6 +211,18 @@ pub enum CommandMode {
     Query,
     /// Emergency halt.
     Halt,
+}
+
+/// A command intent from the console, waiting to be dispatched.
+///
+/// Set by `bottom_console_system` when the user submits a command,
+/// consumed by [`state_systems::command_dispatch_system`].
+#[derive(Debug, Clone)]
+pub struct PendingCommand {
+    /// The command text entered by the user.
+    pub text: String,
+    /// The command mode that was active when submitted.
+    pub mode: CommandMode,
 }
 
 /// Which view is shown in the center canvas.

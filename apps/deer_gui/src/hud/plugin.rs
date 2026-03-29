@@ -1,7 +1,8 @@
 //! [`HudPlugin`] — registers the HUD state resource and all panel systems.
 //!
-//! All HUD systems run during `EguiPrimaryContextPass` and depend on [`HudState`]
-//! being available as a resource. The plugin initializes the state with defaults.
+//! State-maintenance systems (mutation) run during `Update` so they execute
+//! before the `EguiPrimaryContextPass` render systems that read the same
+//! resource. This enforces a clean write-then-read ordering each frame.
 
 use bevy::log::info;
 use bevy::prelude::*;
@@ -13,6 +14,7 @@ use super::event_ticker::event_ticker_system;
 use super::left_panel::left_panel_system;
 use super::modal::modal_system;
 use super::right_inspector::right_inspector_system;
+use super::state_systems::{command_dispatch_system, event_ticker_maintenance_system};
 use super::top_bar::top_bar_system;
 use super::HudState;
 
@@ -23,9 +25,14 @@ use super::HudState;
 /// Registers the HUD overlay subsystem.
 ///
 /// * Inserts the [`HudState`] resource with default values.
-/// * Adds all HUD panel systems to the `EguiPrimaryContextPass` schedule.
+/// * Adds state-maintenance systems to `Update` (mutation phase).
+/// * Adds all HUD panel systems to `EguiPrimaryContextPass` (render phase).
 ///
-/// Panel render order matters for egui layout:
+/// **State systems** (Update — before render):
+/// 1. `event_ticker_maintenance_system` — ages/prunes event log
+/// 2. `command_dispatch_system` — consumes pending commands
+///
+/// **Render systems** (EguiPrimaryContextPass — read-only where possible):
 /// 1. Top bar (claims top edge)
 /// 2. Bottom console (claims bottom edge)
 /// 3. Left panel (claims left side of remaining area)
@@ -39,18 +46,25 @@ impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         info!("HudPlugin::build — registering HUD resources and systems");
 
-        app.init_resource::<HudState>().add_systems(
-            EguiPrimaryContextPass,
-            (
-                top_bar_system,
-                bottom_console_system,
-                left_panel_system,
-                right_inspector_system,
-                center_canvas_system,
-                event_ticker_system,
-                modal_system,
+        app.init_resource::<HudState>()
+            // State-maintenance systems run in Update, before EguiPrimaryContextPass.
+            .add_systems(
+                Update,
+                (event_ticker_maintenance_system, command_dispatch_system),
             )
-                .chain(),
-        );
+            // Render systems run in EguiPrimaryContextPass, reading HudState.
+            .add_systems(
+                EguiPrimaryContextPass,
+                (
+                    top_bar_system,
+                    bottom_console_system,
+                    left_panel_system,
+                    right_inspector_system,
+                    center_canvas_system,
+                    event_ticker_system,
+                    modal_system,
+                )
+                    .chain(),
+            );
     }
 }

@@ -8,6 +8,7 @@
 mod integration {
     pub mod audio;
     pub mod bridge;
+    pub mod bridge_adapter;
     pub mod camera;
     pub mod constants_diagnostics;
     pub mod hud;

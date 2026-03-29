@@ -12,23 +12,142 @@ use bevy::log::{debug, error, info, trace, warn};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use directories::ProjectDirs;
 use serde::Serialize;
-use serde_json::json;
 use uuid::Uuid;
 
 use super::commands::{InboundEnvelope, OutboundCommand};
 use super::dispatch::dispatch_envelope;
 use super::events::BridgeEvent;
+use super::orchestrator::OrchestratorClient;
+use super::payloads::{
+    EmptyPayload, MessageContext, RenameThreadPayload, ResolveArtifactPayload, SendMessagePayload,
+    ThreadIdPayload,
+};
+use super::transport::Transport;
+use crate::constants::perf::LINE_BUFFER_CAPACITY;
+
+// ---------------------------------------------------------------------------
+// ProcessTransport — stdio-based Transport implementation
+// ---------------------------------------------------------------------------
+
+/// Transport implementation that communicates over subprocess stdio.
+///
+/// Wraps a `ChildStdin` (for sending) and a channel receiver (for receiving
+/// lines parsed by the background reader thread).
+pub(super) struct ProcessTransport {
+    stdin: Mutex<ChildStdin>,
+}
+
+impl Transport for ProcessTransport {
+    fn send_line(&self, line: &str) -> std::io::Result<()> {
+        let mut stdin = self
+            .stdin
+            .lock()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "stdin lock poisoned"))?;
+        stdin.write_all(line.as_bytes())?;
+        stdin.write_all(b"\n")?;
+        stdin.flush()?;
+        Ok(())
+    }
+
+    fn recv_line(&self) -> std::io::Result<Option<String>> {
+        // Receiving is handled by the background reader thread, not by this
+        // transport directly.  This method exists for transports that own
+        // their receive path (e.g. TCP, gRPC).  For the subprocess case the
+        // reader thread pushes events via a channel instead.
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "ProcessTransport uses a background reader thread; call BridgeClient::events() instead",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BridgeClient
+// ---------------------------------------------------------------------------
 
 /// Client handle for the Python bridge subprocess.
 ///
 /// Communicates over stdin (JSON commands) / stdout (JSON events).
+/// Uses an [`Arc<dyn Transport>`] internally so the transport layer can be
+/// swapped (e.g. for integration testing over TCP).
 pub struct BridgeClient {
-    stdin: Arc<Mutex<ChildStdin>>,
+    transport: Arc<dyn Transport>,
     events_rx: Receiver<BridgeEvent>,
     _child: Child,
 }
 
 impl BridgeClient {
+    /// Spawn the bridge subprocess and begin reading events.
+    pub fn spawn() -> Result<Self, String> {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let repo_root = manifest_dir
+            .parent()
+            .and_then(Path::parent)
+            .ok_or_else(|| "Failed to resolve repository root".to_string())?
+            .to_path_buf();
+        let bridge_path = manifest_dir.join("python/bridge.py");
+        let python_bin = Self::resolve_python(&repo_root);
+
+        info!("Repo root: {}", repo_root.display());
+        info!("Bridge script: {}", bridge_path.display());
+
+        let (app_home, deer_flow_home) = Self::resolve_directories(&manifest_dir)?;
+        let default_config = manifest_dir.join("config.yaml");
+        let log_level = std::env::var("DEER_GUI_LOG").unwrap_or_default();
+
+        let mut command = Self::build_command(
+            &python_bin,
+            &bridge_path,
+            &repo_root,
+            &app_home,
+            &deer_flow_home,
+            &default_config,
+            &log_level,
+        );
+
+        info!(
+            "Spawning Python bridge: {python_bin} -u {}",
+            bridge_path.display()
+        );
+
+        let mut child = command
+            .spawn()
+            .map_err(|err| format!("Failed to start Python bridge with {python_bin}: {err}"))?;
+
+        info!("Python bridge spawned (pid={})", child.id());
+
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "Failed to capture bridge stdin".to_string())?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "Failed to capture bridge stdout".to_string())?;
+
+        let transport: Arc<dyn Transport> = Arc::new(ProcessTransport {
+            stdin: Mutex::new(stdin),
+        });
+        let (events_tx, events_rx) = unbounded();
+
+        Self::spawn_reader(stdout, events_tx);
+
+        Ok(Self {
+            transport,
+            events_rx,
+            _child: child,
+        })
+    }
+
+    /// Access the event receiver channel.
+    pub fn events(&self) -> &Receiver<BridgeEvent> {
+        &self.events_rx
+    }
+
+    // -----------------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------------
+
     /// Resolve the Python binary to use.
     ///
     /// Priority:
@@ -55,20 +174,8 @@ impl BridgeClient {
         "python3".to_string()
     }
 
-    /// Spawn the bridge subprocess and begin reading events.
-    pub fn spawn() -> Result<Self, String> {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let repo_root = manifest_dir
-            .parent()
-            .and_then(Path::parent)
-            .ok_or_else(|| "Failed to resolve repository root".to_string())?
-            .to_path_buf();
-        let bridge_path = manifest_dir.join("python/bridge.py");
-        let python_bin = Self::resolve_python(&repo_root);
-
-        info!("Repo root: {}", repo_root.display());
-        info!("Bridge script: {}", bridge_path.display());
-
+    /// Resolve application and Deer Flow home directories.
+    fn resolve_directories(manifest_dir: &Path) -> Result<(PathBuf, PathBuf), String> {
         let project_dirs = ProjectDirs::from("ai", "OpenCode", "deer-gui")
             .ok_or_else(|| "Failed to resolve app data directory".to_string())?;
         let app_home = std::env::var("DEER_GUI_HOME")
@@ -84,91 +191,88 @@ impl BridgeClient {
         info!("App home: {}", app_home.display());
         info!("Deer Flow home: {}", deer_flow_home.display());
 
-        let default_config = manifest_dir.join("config.yaml");
-        let log_level = std::env::var("DEER_GUI_LOG").unwrap_or_default();
+        // Suppress unused variable warning — manifest_dir is used for context
+        let _ = manifest_dir;
 
-        let mut command = Command::new(&python_bin);
+        Ok((app_home, deer_flow_home))
+    }
+
+    /// Build the subprocess [`Command`] with all required env vars.
+    fn build_command(
+        python_bin: &str,
+        bridge_path: &Path,
+        repo_root: &Path,
+        app_home: &Path,
+        deer_flow_home: &Path,
+        default_config: &Path,
+        log_level: &str,
+    ) -> Command {
+        let mut command = Command::new(python_bin);
         command
             .arg("-u")
-            .arg(&bridge_path)
-            .current_dir(&repo_root)
-            .env("DEER_GUI_HOME", &app_home)
-            .env("DEER_FLOW_HOME", &deer_flow_home)
-            .env("DEER_GUI_REPO_ROOT", &repo_root)
+            .arg(bridge_path)
+            .current_dir(repo_root)
+            .env("DEER_GUI_HOME", app_home)
+            .env("DEER_FLOW_HOME", deer_flow_home)
+            .env("DEER_GUI_REPO_ROOT", repo_root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
 
         if !log_level.is_empty() {
-            command.env("DEER_GUI_LOG", &log_level);
+            command.env("DEER_GUI_LOG", log_level);
         }
 
         if std::env::var_os("DEER_FLOW_CONFIG_PATH").is_none() && default_config.exists() {
             info!("Using default config: {}", default_config.display());
-            command.env("DEER_FLOW_CONFIG_PATH", &default_config);
+            command.env("DEER_FLOW_CONFIG_PATH", default_config);
         }
 
-        info!(
-            "Spawning Python bridge: {python_bin} -u {}",
-            bridge_path.display()
-        );
-
-        let mut child = command
-            .spawn()
-            .map_err(|err| format!("Failed to start Python bridge with {python_bin}: {err}"))?;
-
-        info!("Python bridge spawned (pid={})", child.id());
-
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| "Failed to capture bridge stdin".to_string())?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| "Failed to capture bridge stdout".to_string())?;
-
-        let stdin = Arc::new(Mutex::new(stdin));
-        let (events_tx, events_rx) = unbounded();
-
-        Self::spawn_reader(stdout, events_tx);
-
-        Ok(Self {
-            stdin,
-            events_rx,
-            _child: child,
-        })
+        command
     }
 
     /// Spawn a background thread that reads stdout lines and dispatches events.
+    ///
+    /// Uses a reusable `String` buffer ([`LINE_BUFFER_CAPACITY`] initial bytes)
+    /// instead of `BufReader::lines()` to avoid allocating a new `String` for
+    /// every line read from the subprocess.
     fn spawn_reader(stdout: impl std::io::Read + Send + 'static, events_tx: Sender<BridgeEvent>) {
         thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                let line = match line {
-                    Ok(line) => line,
+            let mut reader = BufReader::new(stdout);
+            let mut line_buf = String::with_capacity(LINE_BUFFER_CAPACITY);
+
+            loop {
+                line_buf.clear();
+                match reader.read_line(&mut line_buf) {
+                    Ok(0) => {
+                        // EOF — subprocess closed stdout.
+                        trace!("spawn_reader — EOF on bridge stdout");
+                        break;
+                    }
+                    Ok(_) => {
+                        let line = line_buf.trim();
+                        if line.is_empty() {
+                            continue;
+                        }
+
+                        trace!("bridge <- {line}");
+
+                        match serde_json::from_str::<InboundEnvelope>(line) {
+                            Ok(env) => dispatch_envelope(env, &events_tx),
+                            Err(err) => {
+                                error!("Bridge protocol parse error: {err} — raw: {line}");
+                                let _ = events_tx.send(BridgeEvent::Error {
+                                    message: format!("Bridge protocol error: {err}: {line}"),
+                                });
+                            }
+                        }
+                    }
                     Err(err) => {
                         error!("Bridge stdout read error: {err}");
                         let _ = events_tx.send(BridgeEvent::Error {
                             message: format!("Bridge read error: {err}"),
                         });
                         break;
-                    }
-                };
-
-                if line.trim().is_empty() {
-                    continue;
-                }
-
-                trace!("bridge <- {line}");
-
-                match serde_json::from_str::<InboundEnvelope>(&line) {
-                    Ok(env) => dispatch_envelope(env, &events_tx),
-                    Err(err) => {
-                        error!("Bridge protocol parse error: {err} — raw: {line}");
-                        let _ = events_tx.send(BridgeEvent::Error {
-                            message: format!("Bridge protocol error: {err}: {line}"),
-                        });
                     }
                 }
             }
@@ -178,12 +282,7 @@ impl BridgeClient {
         });
     }
 
-    /// Access the event receiver channel.
-    pub fn events(&self) -> &Receiver<BridgeEvent> {
-        &self.events_rx
-    }
-
-    /// Send a JSON command to the bridge and return the request ID.
+    /// Send a JSON command via the transport and return the request ID.
     fn send_command<T: Serialize>(&self, command: &str, payload: T) -> Result<String, String> {
         let id = Uuid::new_v4().to_string();
         let envelope = OutboundCommand {
@@ -194,59 +293,51 @@ impl BridgeClient {
         let line = serde_json::to_string(&envelope).map_err(|err| err.to_string())?;
 
         debug!("Sending command: {command} id={id}");
-        trace!("bridge -> {line}");
+        if line.len() <= 512 {
+            trace!("bridge -> {line}");
+        } else {
+            trace!("bridge -> {}…({} bytes)", &line[..512], line.len());
+        }
 
-        let mut stdin = self
-            .stdin
-            .lock()
-            .map_err(|_| "Failed to lock bridge stdin".to_string())?;
-        stdin.write_all(line.as_bytes()).map_err(|err| {
-            error!("Failed to write to bridge stdin: {err}");
+        self.transport.send_line(&line).map_err(|err| {
+            error!("Failed to send command via transport: {err}");
             err.to_string()
         })?;
-        stdin.write_all(b"\n").map_err(|err| err.to_string())?;
-        stdin.flush().map_err(|err| {
-            error!("Failed to flush bridge stdin: {err}");
-            err.to_string()
-        })?;
+
         Ok(id)
     }
+}
 
-    /// List all threads.
-    pub fn list_threads(&self) -> Result<String, String> {
-        self.send_command("list_threads", json!({}))
+// ---------------------------------------------------------------------------
+// OrchestratorClient implementation
+// ---------------------------------------------------------------------------
+
+impl OrchestratorClient for BridgeClient {
+    fn list_threads(&self) -> Result<String, String> {
+        self.send_command("list_threads", EmptyPayload)
     }
 
-    /// Get a single thread by ID.
-    pub fn get_thread(&self, thread_id: &str) -> Result<String, String> {
-        self.send_command("get_thread", json!({ "thread_id": thread_id }))
+    fn get_thread(&self, thread_id: &str) -> Result<String, String> {
+        self.send_command("get_thread", ThreadIdPayload { thread_id })
     }
 
-    /// Create a new thread.
-    pub fn create_thread(&self) -> Result<String, String> {
-        self.send_command("create_thread", json!({}))
+    fn create_thread(&self) -> Result<String, String> {
+        self.send_command("create_thread", EmptyPayload)
     }
 
-    /// Rename a thread.
-    pub fn rename_thread(&self, thread_id: &str, title: &str) -> Result<String, String> {
-        self.send_command(
-            "rename_thread",
-            json!({ "thread_id": thread_id, "title": title }),
-        )
+    fn rename_thread(&self, thread_id: &str, title: &str) -> Result<String, String> {
+        self.send_command("rename_thread", RenameThreadPayload { thread_id, title })
     }
 
-    /// Delete a thread.
-    pub fn delete_thread(&self, thread_id: &str) -> Result<String, String> {
-        self.send_command("delete_thread", json!({ "thread_id": thread_id }))
+    fn delete_thread(&self, thread_id: &str) -> Result<String, String> {
+        self.send_command("delete_thread", ThreadIdPayload { thread_id })
     }
 
-    /// List available models.
-    pub fn list_models(&self) -> Result<String, String> {
-        self.send_command("list_models", json!({}))
+    fn list_models(&self) -> Result<String, String> {
+        self.send_command("list_models", EmptyPayload)
     }
 
-    /// Send a chat message in a thread.
-    pub fn send_message(
+    fn send_message(
         &self,
         thread_id: &str,
         text: &str,
@@ -269,24 +360,26 @@ impl BridgeClient {
 
         self.send_command(
             "send_message",
-            json!({
-                "thread_id": thread_id,
-                "text": text,
-                "attachments": attachments,
-                "context": {
-                    "model_name": model_name,
-                    "mode": mode,
-                    "reasoning_effort": reasoning_effort,
-                }
-            }),
+            SendMessagePayload {
+                thread_id,
+                text,
+                attachments,
+                context: MessageContext {
+                    model_name,
+                    mode,
+                    reasoning_effort,
+                },
+            },
         )
     }
 
-    /// Resolve an artifact's host path.
-    pub fn resolve_artifact(&self, thread_id: &str, virtual_path: &str) -> Result<String, String> {
+    fn resolve_artifact(&self, thread_id: &str, virtual_path: &str) -> Result<String, String> {
         self.send_command(
             "resolve_artifact",
-            json!({ "thread_id": thread_id, "virtual_path": virtual_path }),
+            ResolveArtifactPayload {
+                thread_id,
+                virtual_path,
+            },
         )
     }
 }
