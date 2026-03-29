@@ -29,11 +29,17 @@ pub fn tet_theme() -> Theme {
         error: bevy::color::Color::srgba(1.0, 0.3, 0.3, 1.0),         // red
         panel_alpha: HUD_PANEL_ALPHA,
         panel_rounding: HUD_PANEL_ROUNDING,
+        // World material colours
+        star_emissive: bevy::color::LinearRgba::new(2.0, 2.0, 2.0, 1.0),
+        monolith_emissive: bevy::color::LinearRgba::new(0.3, 0.5, 1.0, 1.0),
+        trail_emissive: bevy::color::LinearRgba::new(0.0, 1.5, 0.8, 1.0),
+        trail_base_color: bevy::color::Color::srgb(0.0, 0.8, 0.5),
+        monolith_glow_channels: [0.3, 0.5, 1.0],
     }
 }
 
 // ---------------------------------------------------------------------------
-// Bevy Color → egui Color32 conversion
+// Bevy Color -> egui Color32 conversion
 // ---------------------------------------------------------------------------
 
 /// Converts a Bevy [`Color`] to an [`egui::Color32`].

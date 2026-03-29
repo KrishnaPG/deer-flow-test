@@ -14,9 +14,12 @@ mod integration {
     pub mod hud;
     pub mod models_pipeline;
     pub mod picking;
+    pub mod scene_audio;
+    pub mod scene_manager;
     pub mod scene_tet;
     pub mod scene_weather;
     pub mod theme;
+    pub mod theme_world_colors;
     pub mod world;
     pub mod world_extended;
 }

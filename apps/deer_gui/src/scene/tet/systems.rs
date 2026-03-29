@@ -5,13 +5,14 @@
 use bevy::asset::Assets;
 use bevy::log::trace;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{Query, Res, ResMut, Time, Transform};
+use bevy::prelude::{MeshMaterial3d, Query, Res, ResMut, Time, Transform, With};
 
 use super::setup::{DataTrail, TetMonolith};
 use crate::constants::timing::BEACON_PULSE_HZ;
 use crate::constants::visual::{
     DATA_TRAIL_SPEED, TET_GLOW_MAX, TET_GLOW_MIN, TET_STRUCTURE_RADIUS,
 };
+use crate::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
 // TET glow
@@ -24,11 +25,17 @@ pub fn tet_glow_system(
     time: Res<Time>,
     monolith_query: Query<&MeshMaterial3d<StandardMaterial>, With<TetMonolith>>,
     materials: Option<ResMut<Assets<StandardMaterial>>>,
+    theme: Option<Res<ThemeManager>>,
 ) {
     // Gracefully no-op when AssetPlugin is absent (e.g. headless / test).
     let Some(mut materials) = materials else {
         return;
     };
+
+    let glow_channels = theme
+        .as_ref()
+        .map(|tm| tm.current().monolith_glow_channels)
+        .unwrap_or([0.3, 0.5, 1.0]);
 
     let elapsed = time.elapsed_secs();
     let phase = (elapsed * BEACON_PULSE_HZ * std::f32::consts::TAU).sin();
@@ -38,9 +45,9 @@ pub fn tet_glow_system(
     for mat_handle in monolith_query.iter() {
         if let Some(material) = materials.get_mut(&mat_handle.0) {
             material.emissive = bevy::color::LinearRgba::new(
-                0.3 * intensity,
-                0.5 * intensity,
-                1.0 * intensity,
+                glow_channels[0] * intensity,
+                glow_channels[1] * intensity,
+                glow_channels[2] * intensity,
                 1.0,
             );
 
@@ -82,24 +89,11 @@ pub fn data_trail_system(
     }
 }
 
-/// Compute a spiral position (mirrors setup::spiral_position).
-///
-/// Duplicated here intentionally to keep modules loosely coupled —
-/// setup owns spawning, systems owns per-frame motion.
+/// Compute a spiral position — delegates to the shared helper
+/// in [`super::spiral_position`] to avoid duplication.
 fn spiral_position(t: f32, index: usize) -> bevy::math::Vec3 {
-    let phase = index as f32 * 0.618;
-    let angle = t * std::f32::consts::TAU * 3.0 + phase;
-    let r = TET_STRUCTURE_RADIUS * 1.5 + t * TET_STRUCTURE_RADIUS;
-    let y = (t - 0.5) * TET_STRUCTURE_RADIUS * 2.0;
-
-    bevy::math::Vec3::new(r * angle.cos(), y, r * angle.sin())
+    super::spiral_position(t, index)
 }
-
-// ---------------------------------------------------------------------------
-// Imports for Bevy component queries
-// ---------------------------------------------------------------------------
-
-use bevy::prelude::{MeshMaterial3d, With};
 
 // ---------------------------------------------------------------------------
 // Tests
