@@ -13,17 +13,14 @@ use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sp
 use crate::constants::visual::{
     DATA_TRAIL_COUNT, DATA_TRAIL_SPEED, STARFIELD_COUNT, STARFIELD_RADIUS, TET_STRUCTURE_RADIUS,
 };
-use crate::scene::common::parallax::ParallaxLayer;
-use crate::scene::manager::SceneRoot;
 use crate::theme::ThemeManager;
+
+// Re-export Star from primitives for backward compatibility.
+pub use crate::scene::primitives::Star;
 
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
-
-/// Tag for starfield entities.
-#[derive(Component, Debug, Default)]
-pub struct Star;
 
 /// Tag for the central TET monolith entity.
 #[derive(Component, Debug, Default)]
@@ -75,7 +72,7 @@ pub fn spawn_tet_environment(
     materials: &mut Assets<StandardMaterial>,
     theme: Option<&ThemeManager>,
 ) -> Entity {
-    let root = commands.spawn((SceneRoot, Transform::default())).id();
+    let root = crate::scene::primitives::spawn_root(commands);
     debug!("spawn_tet_environment: created scene root={root:?}");
 
     // Extract colours from theme or fall back to TET defaults.
@@ -127,6 +124,8 @@ fn extract_world_colors(
 
 /// Spawns [`STARFIELD_COUNT`] star entities at pseudo-random positions
 /// within a sphere of [`STARFIELD_RADIUS`].
+///
+/// Delegates to the shared primitive, keeping TET-specific constants.
 fn spawn_starfield(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -134,29 +133,14 @@ fn spawn_starfield(
     root: Entity,
     emissive: bevy::color::LinearRgba,
 ) {
-    let star_mesh = meshes.add(Mesh::from(Sphere::new(0.5)));
-    let star_material = materials.add(StandardMaterial {
+    crate::scene::primitives::spawn_starfield(
+        commands,
+        meshes,
+        materials,
+        root,
         emissive,
-        ..Default::default()
-    });
-
-    for i in 0..STARFIELD_COUNT {
-        let pos = pseudo_random_sphere_point(i, STARFIELD_COUNT, STARFIELD_RADIUS);
-        let depth = (pos.length() / STARFIELD_RADIUS).clamp(0.3, 1.0);
-
-        commands.spawn((
-            Star,
-            ChildOf(root),
-            ParallaxLayer::new(depth),
-            Mesh3d(star_mesh.clone()),
-            MeshMaterial3d(star_material.clone()),
-            Transform::from_translation(pos).with_scale(Vec3::splat(random_scale(i))),
-        ));
-    }
-
-    debug!(
-        "spawn_starfield: spawned {} stars under root={root:?}",
         STARFIELD_COUNT,
+        STARFIELD_RADIUS,
     );
 }
 
@@ -235,31 +219,8 @@ fn spawn_data_trails(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Deterministic pseudo-random point on a sphere using golden-ratio
-/// distribution (Fibonacci sphere).
-fn pseudo_random_sphere_point(index: usize, total: usize, radius: f32) -> Vec3 {
-    let golden = (1.0 + 5.0_f32.sqrt()) / 2.0;
-    let i = index as f32;
-    let n = total as f32;
-
-    let theta = 2.0 * std::f32::consts::PI * i / golden;
-    let phi = (1.0 - 2.0 * (i + 0.5) / n).acos();
-
-    // Vary the radius slightly for depth.
-    let r = radius * (0.6 + 0.4 * ((i * 7.13).sin() * 0.5 + 0.5));
-
-    Vec3::new(
-        r * phi.sin() * theta.cos(),
-        r * phi.sin() * theta.sin(),
-        r * phi.cos(),
-    )
-}
-
-/// Deterministic per-star scale variation.
-fn random_scale(index: usize) -> f32 {
-    let i = index as f32;
-    0.3 + 0.7 * ((i * 3.17).sin() * 0.5 + 0.5)
-}
+// Re-export geometry helpers from primitives.
+pub use crate::scene::primitives::{entity_scale, fibonacci_sphere_point};
 
 /// Compute a spiral position for a data trail at parametric position `t`.
 ///
@@ -277,9 +238,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pseudo_random_sphere_within_radius() {
+    fn fibonacci_sphere_within_radius() {
+        use crate::scene::primitives::fibonacci_sphere_point;
         for i in 0..100 {
-            let p = pseudo_random_sphere_point(i, 100, 800.0);
+            let p = fibonacci_sphere_point(i, 100, 800.0);
             assert!(p.length() <= 800.0 + 1e-3);
         }
     }
@@ -292,9 +254,10 @@ mod tests {
     }
 
     #[test]
-    fn random_scale_in_range() {
+    fn entity_scale_in_range() {
+        use crate::scene::primitives::entity_scale;
         for i in 0..200 {
-            let s = random_scale(i);
+            let s = entity_scale(i);
             assert!(s >= 0.29 && s <= 1.01, "scale {} out of range", s);
         }
     }

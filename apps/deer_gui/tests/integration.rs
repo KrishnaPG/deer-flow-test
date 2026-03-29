@@ -16,6 +16,7 @@ mod integration {
     pub mod picking;
     pub mod scene_audio;
     pub mod scene_manager;
+    pub mod scene_primitives;
     pub mod scene_tet;
     pub mod scene_weather;
     pub mod theme;
