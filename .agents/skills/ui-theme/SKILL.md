@@ -109,7 +109,7 @@ Use animations purposefully to delight without distraction.
 Transform backgrounds from static to dynamic storytelling.
 
 **Techniques:**
-- **Layered CSS gradients**: Multiple color stops, radial or linear
+- **Layered gradients**: Multiple color stops, radial or linear
 - **Geometric patterns**: Grid, diagonal lines, waves, noise
 - **Contextual effects**: Match overall aesthetic (see "Lively" section)
 - **Depth layers**: Subtle shadow or gradient changes across Z-axis
