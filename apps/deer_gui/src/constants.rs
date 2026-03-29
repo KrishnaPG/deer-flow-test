@@ -142,6 +142,26 @@ pub mod weather {
 }
 
 // ---------------------------------------------------------------------------
+// Performance / pre-allocation
+// ---------------------------------------------------------------------------
+
+/// Buffer sizes and capacity hints for hot-path pre-allocation.
+pub mod perf {
+    /// Initial capacity for the bridge event queue (events per frame).
+    ///
+    /// Matches [`super::timing::BRIDGE_POLL_MAX_PER_FRAME`] so the queue
+    /// never reallocates during normal operation.
+    pub const EVENT_QUEUE_CAPACITY: usize = 64;
+
+    /// Initial capacity (bytes) for the reader-thread line buffer.
+    ///
+    /// 4 KiB covers the vast majority of bridge JSON messages without
+    /// reallocation; messages exceeding this grow the buffer once and it
+    /// stays enlarged for the process lifetime.
+    pub const LINE_BUFFER_CAPACITY: usize = 4096;
+}
+
+// ---------------------------------------------------------------------------
 // Aggregation
 // ---------------------------------------------------------------------------
 

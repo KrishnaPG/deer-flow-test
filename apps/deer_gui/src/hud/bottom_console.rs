@@ -3,13 +3,16 @@
 //! Provides a text input field for sending commands to agents,
 //! a mode selector (Direct / Brainstorm / Query / Halt), and
 //! an execute button.
+//!
+//! Commands are placed into [`HudState::pending_command`] as intents;
+//! actual dispatch happens in [`super::state_systems::command_dispatch_system`].
 
 use bevy::log::{debug, trace};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 use super::styles::glass_panel_frame;
-use super::{CommandMode, HudState};
+use super::{CommandMode, HudState, PendingCommand};
 
 // ---------------------------------------------------------------------------
 // System
@@ -34,7 +37,7 @@ pub fn bottom_console_system(mut contexts: EguiContexts, mut hud: ResMut<HudStat
                 ui.separator();
                 render_command_input(ui, &mut hud);
                 ui.separator();
-                render_execute_button(ui, &hud);
+                render_execute_button(ui, &mut hud);
             });
         });
 }
@@ -83,27 +86,31 @@ fn render_command_input(ui: &mut egui::Ui, hud: &mut HudState) {
 }
 
 /// Renders the execute button.
-fn render_execute_button(ui: &mut egui::Ui, hud: &HudState) {
+fn render_execute_button(ui: &mut egui::Ui, hud: &mut HudState) {
     let button_color = mode_color(hud.command_mode);
     let button = egui::Button::new(egui::RichText::new("Execute").color(egui::Color32::WHITE))
         .fill(button_color.gamma_multiply(0.6));
 
     if ui.add(button).clicked() {
         debug!("bottom_console — execute button clicked");
-        // Command submission is handled elsewhere; we just log intent here.
+        submit_command(hud);
     }
 }
 
-/// Processes a command submission from the input field.
+/// Places a command intent into [`HudState::pending_command`] and clears the input.
 fn submit_command(hud: &mut HudState) {
-    let cmd = hud.command_input.trim().to_string();
-    if cmd.is_empty() {
+    let text = hud.command_input.trim().to_string();
+    if text.is_empty() {
         return;
     }
     debug!(
-        "bottom_console::submit_command — mode={:?} cmd='{}'",
-        hud.command_mode, cmd
+        "bottom_console::submit_command — mode={:?} text='{}'",
+        hud.command_mode, text
     );
+    hud.pending_command = Some(PendingCommand {
+        text,
+        mode: hud.command_mode,
+    });
     hud.command_input.clear();
 }
 

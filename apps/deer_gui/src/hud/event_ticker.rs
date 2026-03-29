@@ -2,12 +2,15 @@
 //!
 //! Renders recent event log entries in a floating overlay above
 //! the bottom console. Entries fade out based on their age.
+//!
+//! **Render-only**: mutation (aging, pruning, capping) lives in
+//! [`super::state_systems::event_ticker_maintenance_system`].
 
 use bevy::log::trace;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
-use crate::constants::timing::{EVENT_TICKER_FADE_SECS, EVENT_TICKER_MAX_ENTRIES};
+use crate::constants::timing::EVENT_TICKER_FADE_SECS;
 
 use super::styles::event_severity_color;
 use super::HudState;
@@ -16,30 +19,14 @@ use super::HudState;
 // System
 // ---------------------------------------------------------------------------
 
-/// Renders the event ticker overlay with fading log entries.
+/// Renders the event ticker overlay (read-only access to [`HudState`]).
 ///
-/// This system ages event entries each frame and renders visible ones.
-pub fn event_ticker_system(mut contexts: EguiContexts, mut hud: ResMut<HudState>, time: Res<Time>) {
+/// Filters visible entries (age < fade threshold) and draws them
+/// in a floating overlay anchored to the bottom-right.
+pub fn event_ticker_system(mut contexts: EguiContexts, hud: Res<HudState>) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
-
-    let dt = time.delta_secs();
-
-    // Age all entries
-    for entry in &mut hud.event_log {
-        entry.age_secs += dt;
-    }
-
-    // Prune entries that have fully faded
-    hud.event_log
-        .retain(|e| e.age_secs < EVENT_TICKER_FADE_SECS * 2.0);
-
-    // Cap the list to prevent unbounded growth
-    if hud.event_log.len() > EVENT_TICKER_MAX_ENTRIES {
-        let drain_count = hud.event_log.len() - EVENT_TICKER_MAX_ENTRIES;
-        hud.event_log.drain(0..drain_count);
-    }
 
     // Only render if there are visible entries
     let visible: Vec<_> = hud

@@ -9,7 +9,7 @@ use bevy::picking::prelude::*;
 use bevy::prelude::*;
 
 use crate::hud::HudState;
-use crate::world::components::{Selectable, Selected, WorldEntity, WorldEntityType};
+use crate::world::components::{Selectable, Selected, WorldEntity};
 use crate::world::spatial::SpatialIndex;
 
 // ---------------------------------------------------------------------------
@@ -153,47 +153,16 @@ pub fn deselection_system(
 /// Syncs the currently selected entity's data to [`HudState::selected_entity`].
 ///
 /// Reads the `Selected` entity's `WorldEntity` component and maps
-/// its data into the HUD inspector format.
+/// its data into the HUD inspector format via [`crate::hud::adapters`].
 pub fn selection_sync_system(
     mut hud: ResMut<HudState>,
     selected_query: Query<(Entity, &WorldEntity), With<Selected>>,
 ) {
-    use crate::hud::{EntityInspectorData, InspectorDetails};
-
     let selected = selected_query.iter().next();
 
     match selected {
         Some((_entity, world_entity)) => {
-            let details = match &world_entity.entity_type {
-                WorldEntityType::Agent(state) => InspectorDetails::Agent {
-                    state: format!("{:?}", state),
-                    tokens_used: 0,
-                    context_size: 0,
-                    pending_actions: Vec::new(),
-                },
-                WorldEntityType::Mission { progress } => InspectorDetails::Mission {
-                    progress: *progress,
-                    assigned_agents: 0,
-                    description: String::new(),
-                },
-                WorldEntityType::Artifact { artifact_type } => InspectorDetails::Artifact {
-                    artifact_type: format!("{:?}", artifact_type),
-                    size_bytes: 0,
-                    path: String::new(),
-                },
-                WorldEntityType::Swarm { agent_count } => InspectorDetails::Agent {
-                    state: format!("Swarm({})", agent_count),
-                    tokens_used: 0,
-                    context_size: 0,
-                    pending_actions: Vec::new(),
-                },
-            };
-
-            let inspector_data = EntityInspectorData {
-                entity_id: world_entity.entity_id.clone(),
-                display_name: world_entity.entity_id.clone(),
-                details,
-            };
+            let inspector_data = crate::hud::adapters::world_entity_to_inspector(world_entity);
 
             if hud
                 .selected_entity
