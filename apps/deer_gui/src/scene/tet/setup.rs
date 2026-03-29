@@ -4,16 +4,18 @@
 
 use bevy::asset::Assets;
 use bevy::color::Color;
-use bevy::ecs::system::{Commands, ResMut};
+use bevy::ecs::system::{Commands, Res, ResMut};
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{Component, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
+use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
 
 use crate::constants::visual::{
     DATA_TRAIL_COUNT, DATA_TRAIL_SPEED, STARFIELD_COUNT, STARFIELD_RADIUS, TET_STRUCTURE_RADIUS,
 };
 use crate::scene::common::parallax::ParallaxLayer;
+use crate::scene::manager::SceneRoot;
+use crate::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
 // Components
@@ -40,13 +42,14 @@ pub struct DataTrail {
 // Startup system
 // ---------------------------------------------------------------------------
 
-/// Top-level startup system registered by [`ScenePlugin`].
+/// Top-level startup system (legacy entry-point, kept for compatibility).
 ///
 /// Delegates to [`spawn_tet_environment`] with fresh asset stores.
 pub fn tet_scene_setup_system(
     mut commands: Commands,
     meshes: Option<ResMut<Assets<Mesh>>>,
     materials: Option<ResMut<Assets<StandardMaterial>>>,
+    theme: Option<Res<ThemeManager>>,
 ) {
     // Gracefully no-op when AssetPlugin is absent (e.g. headless / test).
     let (Some(mut meshes), Some(mut materials)) = (meshes, materials) else {
@@ -54,19 +57,68 @@ pub fn tet_scene_setup_system(
     };
 
     info!("tet_scene_setup_system — begin");
-    spawn_tet_environment(&mut commands, &mut meshes, &mut materials);
-    info!("tet_scene_setup_system — complete");
+    let theme_ref = theme.as_deref();
+    let root = spawn_tet_environment(&mut commands, &mut meshes, &mut materials, theme_ref);
+    info!("tet_scene_setup_system — complete, root={root:?}");
 }
 
 /// Spawn all TET scene entities: starfield, monolith, and data trails.
+///
+/// Returns the root [`Entity`] tagged with [`SceneRoot`] that parents
+/// all spawned entities. Despawning this entity removes the entire scene.
+///
+/// When `theme` is `Some`, material colours are read from the active
+/// theme; otherwise sensible defaults (matching the TET palette) are used.
 pub fn spawn_tet_environment(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    theme: Option<&ThemeManager>,
+) -> Entity {
+    let root = commands.spawn((SceneRoot, Transform::default())).id();
+    debug!("spawn_tet_environment: created scene root={root:?}");
+
+    // Extract colours from theme or fall back to TET defaults.
+    let (star_em, mono_em, trail_em, trail_base) = extract_world_colors(theme);
+
+    spawn_starfield(commands, meshes, materials, root, star_em);
+    spawn_monolith(commands, meshes, materials, root, mono_em);
+    spawn_data_trails(commands, meshes, materials, root, trail_em, trail_base);
+
+    root
+}
+
+/// Extracts world-material colours from the active theme, or returns
+/// hard-coded TET defaults when no [`ThemeManager`] is available.
+fn extract_world_colors(
+    theme: Option<&ThemeManager>,
+) -> (
+    bevy::color::LinearRgba,
+    bevy::color::LinearRgba,
+    bevy::color::LinearRgba,
+    Color,
 ) {
-    spawn_starfield(commands, meshes, materials);
-    spawn_monolith(commands, meshes, materials);
-    spawn_data_trails(commands, meshes, materials);
+    match theme {
+        Some(tm) => {
+            let t = tm.current();
+            debug!("extract_world_colors: using theme '{}'", t.name);
+            (
+                t.star_emissive,
+                t.monolith_emissive,
+                t.trail_emissive,
+                t.trail_base_color,
+            )
+        }
+        None => {
+            debug!("extract_world_colors: no ThemeManager, using TET defaults");
+            (
+                bevy::color::LinearRgba::new(2.0, 2.0, 2.0, 1.0),
+                bevy::color::LinearRgba::new(0.3, 0.5, 1.0, 1.0),
+                bevy::color::LinearRgba::new(0.0, 1.5, 0.8, 1.0),
+                Color::srgb(0.0, 0.8, 0.5),
+            )
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -77,12 +129,14 @@ pub fn spawn_tet_environment(
 /// within a sphere of [`STARFIELD_RADIUS`].
 fn spawn_starfield(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    root: Entity,
+    emissive: bevy::color::LinearRgba,
 ) {
     let star_mesh = meshes.add(Mesh::from(Sphere::new(0.5)));
     let star_material = materials.add(StandardMaterial {
-        emissive: bevy::color::LinearRgba::new(2.0, 2.0, 2.0, 1.0),
+        emissive,
         ..Default::default()
     });
 
@@ -92,6 +146,7 @@ fn spawn_starfield(
 
         commands.spawn((
             Star,
+            ChildOf(root),
             ParallaxLayer::new(depth),
             Mesh3d(star_mesh.clone()),
             MeshMaterial3d(star_material.clone()),
@@ -99,7 +154,10 @@ fn spawn_starfield(
         ));
     }
 
-    debug!("spawn_starfield: spawned {} stars", STARFIELD_COUNT);
+    debug!(
+        "spawn_starfield: spawned {} stars under root={root:?}",
+        STARFIELD_COUNT,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -109,25 +167,28 @@ fn spawn_starfield(
 /// Spawns the central TET monolith — an icosphere with emissive material.
 fn spawn_monolith(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    root: Entity,
+    emissive: bevy::color::LinearRgba,
 ) {
     let monolith_mesh = meshes.add(Mesh::from(Sphere::new(TET_STRUCTURE_RADIUS)));
     let monolith_material = materials.add(StandardMaterial {
-        emissive: bevy::color::LinearRgba::new(0.3, 0.5, 1.0, 1.0),
+        emissive,
         ..Default::default()
     });
 
     commands.spawn((
         TetMonolith,
+        ChildOf(root),
         Mesh3d(monolith_mesh),
         MeshMaterial3d(monolith_material),
         Transform::from_translation(Vec3::ZERO),
     ));
 
     debug!(
-        "spawn_monolith: TET at origin, radius={}",
-        TET_STRUCTURE_RADIUS
+        "spawn_monolith: TET at origin, radius={}, root={root:?}",
+        TET_STRUCTURE_RADIUS,
     );
 }
 
@@ -138,13 +199,16 @@ fn spawn_monolith(
 /// Spawns [`DATA_TRAIL_COUNT`] data-trail markers along spiral paths.
 fn spawn_data_trails(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    root: Entity,
+    emissive: bevy::color::LinearRgba,
+    base_color: Color,
 ) {
     let trail_mesh = meshes.add(Mesh::from(Sphere::new(0.3)));
     let trail_material = materials.add(StandardMaterial {
-        emissive: bevy::color::LinearRgba::new(0.0, 1.5, 0.8, 1.0),
-        base_color: Color::srgb(0.0, 0.8, 0.5),
+        emissive,
+        base_color,
         ..Default::default()
     });
 
@@ -154,6 +218,7 @@ fn spawn_data_trails(
 
         commands.spawn((
             DataTrail { t, index: i },
+            ChildOf(root),
             Mesh3d(trail_mesh.clone()),
             MeshMaterial3d(trail_material.clone()),
             Transform::from_translation(pos),
@@ -161,8 +226,8 @@ fn spawn_data_trails(
     }
 
     debug!(
-        "spawn_data_trails: spawned {} trails, speed={}",
-        DATA_TRAIL_COUNT, DATA_TRAIL_SPEED
+        "spawn_data_trails: spawned {} trails, speed={}, root={root:?}",
+        DATA_TRAIL_COUNT, DATA_TRAIL_SPEED,
     );
 }
 
@@ -197,13 +262,10 @@ fn random_scale(index: usize) -> f32 {
 }
 
 /// Compute a spiral position for a data trail at parametric position `t`.
+///
+/// Delegates to the shared helper in [`super::spiral_position`].
 fn spiral_position(t: f32, index: usize) -> Vec3 {
-    let phase = index as f32 * 0.618; // golden ratio offset per trail
-    let angle = t * std::f32::consts::TAU * 3.0 + phase;
-    let r = TET_STRUCTURE_RADIUS * 1.5 + t * TET_STRUCTURE_RADIUS;
-    let y = (t - 0.5) * TET_STRUCTURE_RADIUS * 2.0;
-
-    Vec3::new(r * angle.cos(), y, r * angle.sin())
+    super::spiral_position(t, index)
 }
 
 // ---------------------------------------------------------------------------

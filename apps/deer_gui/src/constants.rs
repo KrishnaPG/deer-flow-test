@@ -74,6 +74,10 @@ pub mod timing {
     pub const WEATHER_TRANSITION_SECS: f32 = 3.0;
     /// Beacon pulse frequency (Hz).
     pub const BEACON_PULSE_HZ: f32 = 2.0;
+    /// Default fade-in duration (seconds) when starting scene ambient audio.
+    pub const SCENE_AUDIO_FADE_IN_SECS: f32 = 2.0;
+    /// Default fade-out duration (seconds) when stopping scene ambient audio.
+    pub const SCENE_AUDIO_FADE_OUT_SECS: f32 = 1.5;
 }
 
 // ---------------------------------------------------------------------------

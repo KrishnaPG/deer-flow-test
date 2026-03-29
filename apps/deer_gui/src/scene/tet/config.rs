@@ -1,12 +1,13 @@
 //! TET scene configuration — implements [`SceneConfig`] for the TET environment.
 
 use bevy::asset::Assets;
-use bevy::ecs::system::{Commands, ResMut};
+use bevy::ecs::system::Commands;
 use bevy::log::info;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::Mesh;
+use bevy::prelude::{Entity, Mesh};
 
 use crate::scene::traits::SceneConfig;
+use crate::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
 // TetSceneConfig
@@ -27,14 +28,15 @@ impl SceneConfig for TetSceneConfig {
     fn spawn_environment(
         &self,
         commands: &mut Commands,
-        meshes: &mut ResMut<Assets<Mesh>>,
-        materials: &mut ResMut<Assets<StandardMaterial>>,
-    ) {
+        meshes: &mut Assets<Mesh>,
+        materials: &mut Assets<StandardMaterial>,
+        theme: Option<&ThemeManager>,
+    ) -> Entity {
         info!("TetSceneConfig::spawn_environment — spawning TET scene");
-        super::setup::spawn_tet_environment(commands, meshes, materials);
+        super::setup::spawn_tet_environment(commands, meshes, materials, theme)
     }
 
-    fn ambient_audio_track(&self) -> &str {
+    fn ambient_audio_track(&self) -> &'static str {
         "audio/tet_ambient.ogg"
     }
 }

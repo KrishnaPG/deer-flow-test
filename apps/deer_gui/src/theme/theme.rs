@@ -46,6 +46,18 @@ pub struct Theme {
     pub panel_alpha: f32,
     /// Panel corner rounding (pixels).
     pub panel_rounding: f32,
+
+    // -- World-colour roles (3-D scene materials) --
+    /// Emissive colour for the star field entities.
+    pub star_emissive: bevy::color::LinearRgba,
+    /// Base emissive colour for the central monolith/structure.
+    pub monolith_emissive: bevy::color::LinearRgba,
+    /// Base emissive colour for data trail particles.
+    pub trail_emissive: bevy::color::LinearRgba,
+    /// Base colour for data trail particles.
+    pub trail_base_color: Color,
+    /// Glow multiplier channels for monolith pulse (RGB, applied as intensity * channel).
+    pub monolith_glow_channels: [f32; 3],
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +167,11 @@ mod tests {
             error: Color::WHITE,
             panel_alpha: 0.75,
             panel_rounding: 8.0,
+            star_emissive: bevy::color::LinearRgba::new(2.0, 2.0, 2.0, 1.0),
+            monolith_emissive: bevy::color::LinearRgba::new(0.3, 0.5, 1.0, 1.0),
+            trail_emissive: bevy::color::LinearRgba::new(0.0, 1.5, 0.8, 1.0),
+            trail_base_color: Color::srgb(0.0, 0.8, 0.5),
+            monolith_glow_channels: [0.3, 0.5, 1.0],
         }
     }
 
