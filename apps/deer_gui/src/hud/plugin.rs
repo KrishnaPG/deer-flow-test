@@ -16,7 +16,7 @@ use super::modal::modal_system;
 use super::right_inspector::right_inspector_system;
 use super::state_systems::{command_dispatch_system, event_ticker_maintenance_system};
 use super::top_bar::top_bar_system;
-use super::HudState;
+use super::{HudFragmentRegistry, HudState};
 
 // ---------------------------------------------------------------------------
 // Plugin
@@ -47,6 +47,7 @@ impl Plugin for HudPlugin {
         info!("HudPlugin::build — registering HUD resources and systems");
 
         app.init_resource::<HudState>()
+            .init_resource::<HudFragmentRegistry>()
             // State-maintenance systems run in Update, before EguiPrimaryContextPass.
             .add_systems(
                 Update,

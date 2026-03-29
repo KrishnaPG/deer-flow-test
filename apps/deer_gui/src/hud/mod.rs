@@ -15,6 +15,7 @@ mod right_inspector;
 pub mod state_systems;
 mod styles;
 mod top_bar;
+pub mod transclusion;
 
 // Re-export the plugin and the shared state.
 pub use plugin::HudPlugin;
@@ -22,6 +23,7 @@ pub use styles::{
     agent_state_color, draw_progress_bar, glass_panel_frame, mission_status_color,
     side_panel_frame, top_bar_frame,
 };
+pub use transclusion::{HudFragment, HudFragmentRegistry};
 
 use bevy::prelude::*;
 

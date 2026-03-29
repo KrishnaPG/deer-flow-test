@@ -11,7 +11,9 @@ mod integration {
     pub mod bridge_adapter;
     pub mod camera;
     pub mod constants_diagnostics;
+    // pub mod fonts; // FIXME: depends on ui/fonts.rs which has compilation errors (pre-existing)
     pub mod hud;
+    pub mod hud_transclusion;
     pub mod models_pipeline;
     pub mod picking;
     pub mod scene_audio;

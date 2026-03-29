@@ -8,6 +8,7 @@ use bevy::log::{debug, info, trace};
 use bevy::picking::prelude::*;
 use bevy::prelude::*;
 
+use crate::constants::visual::PICKING_COARSE_RADIUS_PX;
 use crate::hud::HudState;
 use crate::world::components::{Selectable, Selected, WorldEntity};
 use crate::world::spatial::SpatialIndex;
@@ -25,6 +26,24 @@ pub struct EntityClicked(pub Entity);
 pub struct SelectionChanged {
     pub old: Option<Entity>,
     pub new: Option<Entity>,
+}
+
+// ---------------------------------------------------------------------------
+// PickingCandidates resource (inter-phase communication)
+// ---------------------------------------------------------------------------
+
+/// Inter-phase resource for two-phase picking (coarse → precise).
+///
+/// The coarse phase records the screen position and populates candidate entities.
+/// The precise phase selects the closest candidate and emits an `EntityClicked` message.
+#[derive(Resource, Debug, Default)]
+pub struct PickingCandidates {
+    /// Screen position of the click (in pixels).
+    pub screen_pos: Option<Vec2>,
+    /// World position of the click (in 3D world space).
+    pub world_pos: Option<Vec3>,
+    /// Candidate entities found in the coarse phase.
+    pub candidates: Vec<Entity>,
 }
 
 // ---------------------------------------------------------------------------
@@ -49,23 +68,112 @@ pub fn spatial_index_rebuild_system(
 }
 
 // ---------------------------------------------------------------------------
-// Click observer handler
+// Click observer handler (Phase 1: Record click position)
 // ---------------------------------------------------------------------------
 
-/// Observer callback for `Pointer<Click>` events on selectable entities.
+/// Observer callback for `Pointer<Click>` events.
 ///
-/// This function is registered as an observer and fires when any entity
-/// with `Selectable` + `Pickable` receives a click.
-pub fn on_entity_clicked(
-    event: On<Pointer<Click>>,
+/// Records the click position for the two-phase picking pipeline.
+/// The actual selection is handled by `coarse_picking_system` and `precise_picking_system`.
+pub fn on_entity_clicked(event: On<Pointer<Click>>, mut candidates: ResMut<PickingCandidates>) {
+    // For now, record that a click occurred
+    // In a full implementation, we would get the hit position from the picking backend
+    debug!("on_entity_clicked — entity={:?}", event.event_target());
+
+    // Note: In this simplified version, we track that a click occurred
+    // The actual world position would need to be determined by raycasting
+    candidates.screen_pos = Some(Vec2::ZERO); // Placeholder
+    candidates.world_pos = None; // Will be populated by raycast if needed
+    candidates.candidates.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Coarse picking phase (Phase 2: Find candidate entities)
+// ---------------------------------------------------------------------------
+
+/// Coarse picking phase: finds candidate entities near the click position.
+///
+/// Uses the spatial index to find all selectable entities within a radius
+/// of the clicked position. Populates `PickingCandidates::candidates`.
+pub fn coarse_picking_system(
+    mut candidates: ResMut<PickingCandidates>,
+    index: Res<SpatialIndex>,
     selectables: Query<(), With<Selectable>>,
+) {
+    let Some(world_pos) = candidates.world_pos else {
+        // If no world position is set, we can't do coarse picking
+        return;
+    };
+
+    // Query spatial index for candidates within coarse radius
+    let radius = PICKING_COARSE_RADIUS_PX;
+    let found = index.query_sphere(world_pos, radius);
+
+    // Filter to only selectable entities
+    candidates.candidates = found
+        .into_iter()
+        .filter(|&entity| selectables.get(entity).is_ok())
+        .collect();
+
+    trace!(
+        "coarse_picking_system — world_pos={:?} radius={} candidates={}",
+        world_pos,
+        radius,
+        candidates.candidates.len()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Precise picking phase (Phase 3: Select closest candidate)
+// ---------------------------------------------------------------------------
+
+/// Precise picking phase: selects the closest candidate entity.
+///
+/// From the candidates populated by `coarse_picking_system`, finds the
+/// closest entity to the click position and emits an `EntityClicked` message.
+pub fn precise_picking_system(
+    mut candidates: ResMut<PickingCandidates>,
+    transforms: Query<&Transform, With<Selectable>>,
     mut click_messages: MessageWriter<EntityClicked>,
 ) {
-    let entity = event.event_target();
-    if selectables.get(entity).is_ok() {
-        debug!("on_entity_clicked — entity={:?}", entity);
+    let Some(world_pos) = candidates.world_pos else {
+        return;
+    };
+
+    if candidates.candidates.is_empty() {
+        trace!("precise_picking_system — no candidates to evaluate");
+        return;
+    }
+
+    // Find the closest candidate by squared distance
+    let closest = candidates
+        .candidates
+        .iter()
+        .filter_map(|&entity| {
+            transforms.get(entity).ok().map(|transform| {
+                let dist_sq = transform.translation.distance_squared(world_pos);
+                (entity, dist_sq)
+            })
+        })
+        .min_by(|(_, dist_a), (_, dist_b)| {
+            dist_a
+                .partial_cmp(dist_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, _)| entity);
+
+    if let Some(entity) = closest {
+        debug!(
+            "precise_picking_system — selected closest entity={:?}",
+            entity
+        );
         click_messages.write(EntityClicked(entity));
     }
+
+    // Clear candidates for next frame
+    candidates.candidates.clear();
+    candidates.screen_pos = None;
+    candidates.world_pos = None;
 }
 
 // ---------------------------------------------------------------------------

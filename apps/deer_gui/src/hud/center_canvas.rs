@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 use super::styles::glass_panel_frame;
-use super::{CenterCanvasMode, HudState};
+use super::{CenterCanvasMode, HudFragmentRegistry, HudState};
 
 // ---------------------------------------------------------------------------
 // System
@@ -21,7 +21,11 @@ use super::{CenterCanvasMode, HudState};
 /// Renders the center canvas with mode-specific content.
 ///
 /// In `WorldView` mode, no panel is drawn — the 3D world shows through.
-pub fn center_canvas_system(mut contexts: EguiContexts, hud: Res<HudState>) {
+pub fn center_canvas_system(
+    mut contexts: EguiContexts,
+    hud: Res<HudState>,
+    fragment_registry: Res<HudFragmentRegistry>,
+) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
@@ -48,6 +52,12 @@ pub fn center_canvas_system(mut contexts: EguiContexts, hud: Res<HudState>) {
             CenterCanvasMode::SwarmMonitor => render_swarm_monitor(ui),
             CenterCanvasMode::ArtifactGraph => render_artifact_graph(ui),
             CenterCanvasMode::Forensics => render_forensics(ui),
+        }
+
+        // Render registered fragments after built-in content
+        if !fragment_registry.is_empty() {
+            ui.separator();
+            render_fragment_tabs(ui, &fragment_registry);
         }
     });
 }
@@ -150,4 +160,24 @@ fn render_forensics(ui: &mut egui::Ui) {
             .color(egui::Color32::from_rgb(128, 128, 128))
             .italics(),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Fragment rendering
+// ---------------------------------------------------------------------------
+
+/// Renders all registered HUD fragments as collapsible sections.
+///
+/// Each fragment is rendered with its title as a collapsible header,
+/// and its render callback is invoked when expanded.
+fn render_fragment_tabs(ui: &mut egui::Ui, registry: &HudFragmentRegistry) {
+    ui.heading("External Fragments");
+    ui.add_space(8.0);
+
+    for fragment in registry.fragments() {
+        ui.collapsing(&fragment.title, |ui| {
+            (fragment.render)(ui);
+        });
+        ui.add_space(4.0);
+    }
 }
