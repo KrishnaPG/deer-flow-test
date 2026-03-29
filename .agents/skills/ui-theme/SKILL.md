@@ -142,50 +142,56 @@ Every element should connect to a unified aesthetic vision. Choose from these di
 2. **Establish visual language**: Colors, typography, texture, patterns, and UI shapes that match
 3. **Connect everything**: Colors tie to environment/season, typography matches tone/era, motion feels natural to place
 4. **Tell a story**: Users should sense the intentional aesthetic, even subconsciously.
-5. **Guide attention with contrast**: Use contrast strategically to direct user focus (see "Contrast as Navigation" below)
+5. **Guide the user with contrast**: Use contrast like a film director uses light, weather, stillness, and crowding to decide what the viewer feels first, last, and most intensely (see "Cinematic Contrast" below)
 
-### Contrast as Navigation
+### Cinematic Contrast
 
-Contrast is your tool to guide user attention and establish visual hierarchy. Contrast goes beyond color. Use multiple contrast types strategically:
+Contrast is not decoration. It is staging. It tells the eye where to land, what to fear, what to trust, and what to remember.
 
-**Types of Contrast:**
+Think cinematically: a quiet figure against a storm, one banner moving in a field of stillness, a bright doorway at the end of a dark corridor, a lone rider crossing a wide empty plain. Great contrast creates emotional gravity before the user reads a word.
 
-| Contrast Type | Purpose | How to Use | Examples |
-|---------------|---------|-----------|----------|
-| **Color Contrast** | Distinguish elements, highlight interactive states | Place accent colors on neutral backgrounds; use high saturation for CTAs | Bright gold button on muted background; error red on dark surface |
-| **Motion Contrast** | Direct attention to changes, signal state shifts | Animate primary actions while keeping secondary actions static; use varied speeds | Page load with staggered reveals vs. static secondary content; primary CTA pulses while others are still |
-| **Size Contrast** | Establish hierarchy, focus on key content | Use 3x+ size jumps for important elements; avoid uniform sizing | Hero heading 3x body text; small labels, large primary content |
-| **Depth Contrast** | Create layering, separate foreground from background | Use shadows, blur, opacity changes, z-index layers | Sharp, clear primary content with blurred background; elevated cards casting shadows on surface |
+Inspired by the discipline of classic cinema: use contrast to create tension, rhythm, scale, and inevitability. Do not just make one thing brighter. Make that thing feel destined.
 
-**Contrast Purposes:**
+**Creative forms of contrast:**
 
-- **Direct Focus**: High contrast on CTAs, key information, or critical user actions
-- **Clarify Hierarchy**: Size and depth contrast show what matters most
-- **Signal States**: Color and motion contrast indicate interactive elements or state changes
-- **Create Rhythm**: Alternating contrast (bold → quiet → bold) guides the eye through content
-- **Establish Depth**: Depth contrast separates information layers and prevents flatness
-- **Manage Cognitive Load**: Contrast reduces visual noise by creating clear zones of attention
+| Contrast Form | What it does | How to use it in UI |
+|---------------|--------------|---------------------|
+| **Stillness vs. Movement** | Makes the moving element feel important or alive | Keep most of the interface calm, then animate only the critical path: a CTA, active step, notification, or selected card |
+| **Emptiness vs. Density** | Creates pressure, solitude, significance, or relief | Surround a primary message with generous empty space, then place dense metadata or controls elsewhere so the user knows what matters |
+| **Order vs. Chaos** | Signals safety against danger, system against entropy | Use rigid grids and disciplined alignment for core workflows; introduce rough texture, asymmetry, or broken rhythm only where tension or energy is useful; or Vice-versa |
+| **Light vs. Weather** | Gives atmosphere and urgency | Use soft surfaces for the baseline, then add haze, rain-like linework, glow, dust, fog, or shadow only around major moments or sections |
+| **Monument vs. Detail** | Establishes hierarchy through scale and permanence | Make one element feel architectural: a massive heading, oversized number, or dominant panel; let secondary details feel fine-grained and human |
+| **Silence vs. Ornament** | Prevents visual fatigue and makes ornament meaningful | Keep most surfaces restrained; reserve pattern, illustration, texture, or flourish for the moment that deserves ceremony |
+| **Near vs. Far** | Creates longing, orientation, and narrative depth | Sharpen the current focal plane and soften distant layers with blur, fade, reduced contrast, smaller scale, or atmospheric color shifts |
+| **Ritual vs. Interruption** | Makes state changes feel consequential | Build a steady interaction rhythm, then break it deliberately for warnings, confirmations, unlocks, or irreversible actions |
+| **Human vs. Machine** | Creates character and memorable tension | Pair precise grids and technical UI with warm textures, imperfect illustrations, serif typography, or tactile color accents |
+| **Seasonal Contrast** | Grounds the interface in time and mood | Contrast winter austerity with hearth-like warmth, noon clarity with dusk mystery, dry stone with wet reflections, harvest richness with archival restraint |
 
-**Application Strategy:**
+**What contrast is for:**
 
-1. **Identify the critical path**: What should users see and interact with first?
-2. **Apply contrast thoughtfully**: Use ONE dominant contrast point per section (avoid overwhelming)
-3. **Layer contrast types**: Combine color + size, or motion + depth for reinforcement
-4. **Reserve extreme contrast for priority**: Bold contrasts for CTAs, subtle contrasts for supporting elements
-5. **Test focus flow**: Follow the contrast gradients—do they guide users naturally through the interface?
+- **Attention**: goes first to the element that breaks the established visual climate
+- **Meaning**: Contrast tells users whether something is sacred, dangerous, alive, dormant, temporary, or structural
+- **Pacing**: Alternating calm and intensity creates rhythm; everything loud means nothing is loud
+- **Memory**: Users remember the moment where the interface changed weather, scale, or silence
+- **Hierarchy**: Contrast determines what feels primary, ceremonial, supporting, or background without relying on labels alone
+- **Emotion**: Contrast turns an interface from arranged components into a scene with tension and release
 
-**Examples:**
-- **High-priority CTA**: Accent color (high saturation) + larger size + subtle animation on hover
-- **Navigation**: Subtle color contrast (muted) with motion highlight on active state
-- **Error states**: Bright red + slight upward motion + increased depth shadow
-- **Background information**: Reduced opacity/blur + smaller type + no animation
+**How to compose contrast well:**
 
----
+1. **Establish a baseline climate**: Decide what "normal" feels like first - quiet, foggy, dry, ceremonial, industrial, pastoral, severe
+2. **Choose the interruption**: Define what deserves contrast - the CTA, the key metric, the active step, the warning, the hero statement
+3. **Use one dominant break per scene**: Each section should have a primary contrast event; too many and the whole thing flattens
+4. **Stack contrast with intent**: Combine two or three forms when something truly matters - e.g. stillness + accent color + elevation
+5. **Let contrast fit the world**: In a medieval theme, contrast may come from torchlight and parchment emptiness; in a research lab, from sterile grids and sudden signal glows
+6. **Preserve aftermath**: After a high-contrast moment, let nearby elements relax so the important thing keeps its force
 
-**Aesthetic Examples with Contrast Integration:**
-- "Medieval marketplace, dusk, autumn": Warm golds, rich browns, serif typography, parchment textures, lantern-glow shadows + **gold accents on key actions (color + depth contrast)**
-- "Research lab, futuristic, dawn": Cool blues, monospace fonts, geometric shapes, clean glass effects, soft reveal animations + **sharp accent on primary CTAs (color + motion contrast)**
-- "Deep forest, twilight, pastoral": Deep greens and purples, hand-drawn fonts, organic shapes, rustling wind sounds (if applicable) + **emerald highlights with smooth, gentle animations (color + motion contrast)**
+**World-building examples:**
+
+- **Medieval marketplace, dusk, autumn**: Use crowded texture at the edges but keep the trade action isolated in a pool of lantern light; primary actions feel like lit stalls in a dark square
+- **Research lab, futuristic, dawn**: Keep the UI clinically still and pale, then use one sharp spectral accent and subtle pulse only for live systems or primary actions
+- **Deep forest, twilight, pastoral**: Let most surfaces feel soft, mossy, and receded; bring focus forward with a single clear path, firefly-like glow, or crisp hand-lettered callout
+- **Industrial archive, winter morning**: Use severe alignment, cold paper tones, and restrained typography; key records emerge through warmth, density, and a slight rise in contrast like a document pulled into light
+- **Orbital navigation deck, storm alert**: Maintain a quiet starfield and measured interface rhythm, then interrupt with directional sweeps, warning bands, and sudden illumination to create urgency
 
 ## Workflow: How Agents Should Use This Skill
 
