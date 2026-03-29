@@ -9,6 +9,7 @@ use super::audio_bridge::{scene_audio_bridge_system, SceneAudioState};
 use super::common::atmosphere::{atmosphere_transition_system, AtmosphereConfig};
 use super::common::parallax::PreviousCameraPosition;
 use super::common::weather::{weather_transition_system, weather_update_system, WeatherMachine};
+use super::generators::registry::GeneratorRegistry;
 use super::manager::SceneManager;
 use super::tet::config::TetSceneConfig;
 use super::tet::systems::{data_trail_system, tet_glow_system};
@@ -40,6 +41,7 @@ impl Plugin for ScenePlugin {
         );
 
         app.insert_resource(manager)
+            .insert_resource(GeneratorRegistry::with_builtins())
             .init_resource::<AtmosphereConfig>()
             .init_resource::<PreviousCameraPosition>()
             .init_resource::<WeatherMachine>()

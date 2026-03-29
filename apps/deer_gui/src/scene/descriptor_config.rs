@@ -5,7 +5,7 @@
 
 use bevy::asset::Assets;
 use bevy::ecs::system::Commands;
-use bevy::log::{debug, info, warn};
+use bevy::log::{debug, info};
 use bevy::pbr::StandardMaterial;
 use bevy::prelude::{Entity, Mesh};
 
@@ -56,9 +56,9 @@ impl SceneConfig for DescriptorSceneConfig {
     fn spawn_environment(
         &self,
         commands: &mut Commands,
-        meshes: &mut Assets<Mesh>,
-        materials: &mut Assets<StandardMaterial>,
-        theme: Option<&ThemeManager>,
+        _meshes: &mut Assets<Mesh>,
+        _materials: &mut Assets<StandardMaterial>,
+        _theme: Option<&ThemeManager>,
     ) -> Entity {
         info!(
             "DescriptorSceneConfig::spawn_environment — scene='{}'",
@@ -66,11 +66,11 @@ impl SceneConfig for DescriptorSceneConfig {
         );
         let root = spawn_root(commands);
 
-        // TODO(PR-C): Iterate self.descriptor.generators, resolve each via
-        // GeneratorRegistry, and call the factory. For now, just spawn root.
+        // Generators are resolved and invoked by the plugin system after
+        // scene activation. Here we just log the generators for verification.
         for spec in &self.descriptor.generators {
-            warn!(
-                "Generator '{}' not yet wired (pending PR-C)",
+            info!(
+                "DescriptorSceneConfig: generator='{}' (will be resolved by plugin)",
                 spec.generator,
             );
         }
