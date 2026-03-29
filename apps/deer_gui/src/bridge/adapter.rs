@@ -199,7 +199,7 @@ pub fn parse_done_event(data: Value) -> Result<BridgeEvent, AdapterError> {
     let thread_id = remove_string(&mut obj, "thread_id", "parse_done_event")?;
     let usage: Option<Usage> = obj
         .remove("usage")
-        .map(|u| serde_json::from_value(u))
+        .map(serde_json::from_value)
         .transpose()
         .map_err(|e| AdapterError {
             context: "parse_done_event/Usage",

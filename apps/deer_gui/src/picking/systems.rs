@@ -22,7 +22,14 @@ use crate::world::spatial::SpatialIndex;
 pub struct EntityClicked(pub Entity);
 
 /// Message emitted when the selection changes.
+///
+/// # TODO
+/// Currently emitted but not consumed. Add consumers for:
+/// - Audio feedback on selection change
+/// - Telemetry/logging
+/// - Reactive UI updates beyond HUD sync
 #[derive(Message, Debug)]
+#[allow(dead_code)]
 pub struct SelectionChanged {
     pub old: Option<Entity>,
     pub new: Option<Entity>,
@@ -251,6 +258,25 @@ pub fn deselection_system(
             old: Some(entity),
             new: None,
         });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Selection change logging system
+// ---------------------------------------------------------------------------
+
+/// Logs selection changes for debugging and telemetry.
+///
+/// Consumes [`SelectionChanged`] messages and logs the old/new entity IDs.
+/// This system ensures the message queue doesn't grow unbounded.
+pub fn selection_change_logger_system(mut change_messages: MessageReader<SelectionChanged>) {
+    for SelectionChanged { old, new } in change_messages.read() {
+        match (old, new) {
+            (None, Some(new)) => info!("Entity {:?} selected", new),
+            (Some(old), None) => info!("Entity {:?} deselected", old),
+            (Some(old), Some(new)) => info!("Selection changed: {:?} → {:?}", old, new),
+            (None, None) => trace!("Selection change with no entities"),
+        }
     }
 }
 

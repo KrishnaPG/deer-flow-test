@@ -7,7 +7,7 @@
 use bevy::log::{debug, trace};
 use bevy_egui::egui;
 
-use super::theme::Theme;
+use super::core::Theme;
 use crate::constants::visual::{HUD_PANEL_ALPHA, HUD_PANEL_ROUNDING};
 
 // ---------------------------------------------------------------------------

@@ -9,10 +9,10 @@ use bevy::log::{debug, info};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 
+use super::core::ThemeManager;
 use super::descent_theme::descent_theme;
 use super::precursors_theme::precursors_theme;
 use super::tet_theme::{apply_theme_to_egui, tet_theme};
-use super::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
 // Plugin

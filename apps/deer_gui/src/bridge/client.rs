@@ -42,7 +42,7 @@ impl Transport for ProcessTransport {
         let mut stdin = self
             .stdin
             .lock()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "stdin lock poisoned"))?;
+            .map_err(|_| std::io::Error::other("stdin lock poisoned"))?;
         stdin.write_all(line.as_bytes())?;
         stdin.write_all(b"\n")?;
         stdin.flush()?;
