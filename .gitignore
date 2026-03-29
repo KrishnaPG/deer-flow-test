@@ -61,7 +61,6 @@ apps/nemo-config/backend/.tmp_*.yml
 target/
 Cargo.lock
 
-.agents
 .kilo
 .kilocode
 skills-lock.json
