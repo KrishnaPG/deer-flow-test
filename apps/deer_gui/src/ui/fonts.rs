@@ -4,12 +4,13 @@
 //! download font files, and build egui::FontDefinitions for custom typography.
 //! Supports IBM Plex Sans (body) and JetBrains Mono (monospace).
 
+use crate::constants::fonts::FONT_CSS_USER_AGENT;
 use bevy::log::{debug, info, trace, warn};
 use bevy_egui::egui;
 use regex::Regex;
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::Arc;
-use crate::constants::fonts::FONT_CSS_USER_AGENT;
 
 /// Errors that can occur during font loading operations.
 #[derive(Debug, thiserror::Error)]
@@ -65,7 +66,12 @@ pub struct FontFaceRule {
 
 impl FontFaceRule {
     /// Create a new font face rule.
-    pub fn new(family: impl Into<String>, weight: u16, style: FontStyle, url: impl Into<String>) -> Self {
+    pub fn new(
+        family: impl Into<String>,
+        weight: u16,
+        style: FontStyle,
+        url: impl Into<String>,
+    ) -> Self {
         Self {
             family: family.into(),
             weight,
@@ -101,7 +107,12 @@ impl ResolvedFont {
 
     /// Generate a unique identifier for this font variant.
     pub fn identifier(&self) -> String {
-        format!("{}-{}-{}", self.family.replace(' ', "-"), self.weight, self.style)
+        format!(
+            "{}-{}-{}",
+            self.family.replace(' ', "-"),
+            self.weight,
+            self.style
+        )
     }
 }
 
@@ -136,54 +147,49 @@ impl ResolvedFont {
 /// ```
 pub fn parse_font_css(css: &str) -> Vec<FontFaceRule> {
     trace!("Parsing CSS content ({} bytes)", css.len());
-    
+
     let mut rules = Vec::new();
-    
+
     // Regex to match @font-face blocks
-    let font_face_regex = Regex::new(
-        r"@font-face\s*\{([^}]+)\}"
-    ).expect("Failed to compile font-face regex");
-    
+    let font_face_regex =
+        Regex::new(r"@font-face\s*\{([^}]+)\}").expect("Failed to compile font-face regex");
+
     // Regexes to extract properties within a font-face block
-    let family_regex = Regex::new(
-        r#"font-family\s*:\s*['"]([^'"]+)['"]|font-family\s*:\s*([^;'"\s]+)"#
-    ).expect("Failed to compile family regex");
-    
-    let weight_regex = Regex::new(
-        r"font-weight\s*:\s*(\d+)"
-    ).expect("Failed to compile weight regex");
-    
-    let style_regex = Regex::new(
-        r"font-style\s*:\s*(\w+)"
-    ).expect("Failed to compile style regex");
-    
-    let url_regex = Regex::new(
-        r"src:\s*url\(\s*['\"]?([^'\"\)]+)['\"]?\s*\)"
-    ).expect("Failed to compile URL regex");
-    
+    let family_regex =
+        Regex::new(r#"font-family\s*:\s*['"]([^'"]+)['"]|font-family\s*:\s*([^;'"\s]+)"#)
+            .expect("Failed to compile family regex");
+
+    let weight_regex =
+        Regex::new(r"font-weight\s*:\s*(\d+)").expect("Failed to compile weight regex");
+
+    let style_regex = Regex::new(r"font-style\s*:\s*(\w+)").expect("Failed to compile style regex");
+
+    let url_regex = Regex::new("src:\\s*url\\(\\s*['\"]?([^'\"\\)]+)['\"]?\\s*\\)")
+        .expect("Failed to compile URL regex");
+
     for cap in font_face_regex.captures_iter(css) {
         let block = &cap[1];
         trace!("Processing @font-face block");
-        
+
         // Extract font family
         let family = family_regex
             .captures(block)
             .and_then(|c| c.get(1).or_else(|| c.get(2)))
             .map(|m| m.as_str().trim().to_string())
             .unwrap_or_default();
-        
+
         if family.is_empty() {
             warn!("Skipping @font-face block: missing font-family");
             continue;
         }
-        
+
         // Extract font weight (default to 400)
         let weight = weight_regex
             .captures(block)
             .and_then(|c| c.get(1))
             .and_then(|m| m.as_str().parse::<u16>().ok())
             .unwrap_or(400);
-        
+
         // Extract font style (default to Normal)
         let style = style_regex
             .captures(block)
@@ -196,27 +202,29 @@ pub fn parse_font_css(css: &str) -> Vec<FontFaceRule> {
                 }
             })
             .unwrap_or(FontStyle::Normal);
-        
+
         // Extract URL (may be quoted or unquoted)
         let url = url_regex
             .captures(block)
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().trim().to_string())
             .unwrap_or_default();
-        
+
         if url.is_empty() {
             warn!("Skipping @font-face block for '{}': missing URL", family);
             continue;
         }
-        
+
         trace!(
             "Parsed font rule: family='{}', weight={}, style={}",
-            family, weight, style
+            family,
+            weight,
+            style
         );
-        
+
         rules.push(FontFaceRule::new(family, weight, style, url));
     }
-    
+
     debug!("Parsed {} font rules from CSS", rules.len());
     rules
 }
@@ -236,26 +244,24 @@ pub fn parse_font_css(css: &str) -> Vec<FontFaceRule> {
 /// Returns `FontLoadError::Http` if the request fails or returns a non-200 status.
 pub fn fetch_font_bytes(url: &str) -> Result<Vec<u8>, FontLoadError> {
     trace!("Fetching font bytes from: {}", url);
-    
+
     let response = ureq::get(url)
         .header("User-Agent", FONT_CSS_USER_AGENT)
         .call()
         .map_err(|e| FontLoadError::Http(format!("Request failed: {e}")))?;
-    
+
     let status = response.status();
     if status != 200 {
-        return Err(FontLoadError::Http(
-            format!("HTTP {status} for URL: {url}")
-        ));
+        return Err(FontLoadError::Http(format!("HTTP {status} for URL: {url}")));
     }
-    
+
     let mut bytes = Vec::new();
     response
         .into_body()
         .into_reader()
         .read_to_end(&mut bytes)
         .map_err(FontLoadError::Io)?;
-    
+
     trace!("Fetched {} bytes from {}", bytes.len(), url);
     Ok(bytes)
 }
@@ -275,24 +281,22 @@ pub fn fetch_font_bytes(url: &str) -> Result<Vec<u8>, FontLoadError> {
 /// Returns `FontLoadError::Http` if the request fails.
 pub fn fetch_font_css(url: &str) -> Result<String, FontLoadError> {
     trace!("Fetching font CSS from: {}", url);
-    
+
     let response = ureq::get(url)
         .header("User-Agent", FONT_CSS_USER_AGENT)
         .call()
         .map_err(|e| FontLoadError::Http(format!("Request failed: {e}")))?;
-    
+
     let status = response.status();
     if status != 200 {
-        return Err(FontLoadError::Http(
-            format!("HTTP {status} for URL: {url}")
-        ));
+        return Err(FontLoadError::Http(format!("HTTP {status} for URL: {url}")));
     }
-    
+
     let css = response
         .into_body()
         .read_to_string()
-        .map_err(FontLoadError::Io)?;
-    
+        .map_err(|e| FontLoadError::Http(format!("Failed to read response body: {e}")))?;
+
     debug!("Fetched {} bytes of CSS from {}", css.len(), url);
     Ok(css)
 }
@@ -318,14 +322,14 @@ pub fn fetch_font_css(url: &str) -> Result<String, FontLoadError> {
 /// each weight as a separate font entry.
 pub fn build_font_definitions(fonts: &[ResolvedFont]) -> egui::FontDefinitions {
     let mut font_definitions = egui::FontDefinitions::default();
-    
+
     if fonts.is_empty() {
         warn!("No fonts provided, returning default font definitions");
         return font_definitions;
     }
-    
+
     debug!("Building font definitions from {} fonts", fonts.len());
-    
+
     // Group fonts by family
     let mut fonts_by_family: HashMap<String, Vec<&ResolvedFont>> = HashMap::new();
     for font in fonts {
@@ -334,53 +338,53 @@ pub fn build_font_definitions(fonts: &[ResolvedFont]) -> egui::FontDefinitions {
             .or_default()
             .push(font);
     }
-    
+
     // Track which families we've assigned to which egui families
     let mut assigned_proportional = false;
     let mut assigned_monospace = false;
-    
+
     for (family, family_fonts) in fonts_by_family {
-        info!("Configuring font family '{}' with {} variants", family, family_fonts.len());
-        
+        info!(
+            "Configuring font family '{}' with {} variants",
+            family,
+            family_fonts.len()
+        );
+
         // Determine which egui font family to use
-        let egui_family = if family.to_lowercase().contains("mono") {
-            if !assigned_monospace {
-                assigned_monospace = true;
-                egui::FontFamily::Monospace
-            } else {
-                egui::FontFamily::Proportional
-            }
+        let egui_family = if family.to_lowercase().contains("mono") && !assigned_monospace {
+            assigned_monospace = true;
+            egui::FontFamily::Monospace
+        } else if !family.to_lowercase().contains("mono") && !assigned_proportional {
+            assigned_proportional = true;
+            egui::FontFamily::Proportional
+        } else if family.to_lowercase().contains("mono") {
+            egui::FontFamily::Proportional
         } else {
-            if !assigned_proportional {
-                assigned_proportional = true;
-                egui::FontFamily::Proportional
-            } else {
-                egui::FontFamily::Monospace
-            }
+            egui::FontFamily::Monospace
         };
-        
+
         // Register each font variant
         for font in family_fonts {
             let font_name = font.identifier();
-            
+
             // Insert the font data (wrapped in Arc)
             let font_data = egui::FontData::from_owned(font.bytes.clone());
             font_definitions
                 .font_data
                 .insert(font_name.clone(), Arc::new(font_data));
-            
+
             // Add to the appropriate font family
             let font_list = font_definitions
                 .families
                 .entry(egui_family.clone())
                 .or_default();
-            
+
             // Insert with priority based on weight (higher weight = lower priority index)
             // This ensures normal weight (400) comes first
             if !font_list.contains(&font_name) {
                 font_list.push(font_name);
             }
-            
+
             trace!(
                 "Registered font: {} (family: {:?}, weight: {})",
                 font.identifier(),
@@ -389,16 +393,24 @@ pub fn build_font_definitions(fonts: &[ResolvedFont]) -> egui::FontDefinitions {
             );
         }
     }
-    
+
     // Ensure we have fallback fonts configured
-    if font_definitions.families.get(&egui::FontFamily::Proportional).map_or(true, |v| v.is_empty()) {
+    if font_definitions
+        .families
+        .get(&egui::FontFamily::Proportional)
+        .is_none_or(|v| v.is_empty())
+    {
         debug!("No proportional fonts assigned, using default");
     }
-    
-    if font_definitions.families.get(&egui::FontFamily::Monospace).map_or(true, |v| v.is_empty()) {
+
+    if font_definitions
+        .families
+        .get(&egui::FontFamily::Monospace)
+        .is_none_or(|v| v.is_empty())
+    {
         debug!("No monospace fonts assigned, using default");
     }
-    
+
     font_definitions
 }
 
@@ -435,22 +447,25 @@ pub fn build_font_definitions(fonts: &[ResolvedFont]) -> egui::FontDefinitions {
 /// ```
 pub fn load_fonts_from_css_url(url: &str) -> Result<Vec<ResolvedFont>, FontLoadError> {
     info!("Loading fonts from CSS URL: {}", url);
-    
+
     // Fetch and parse CSS
     let css = fetch_font_css(url)?;
     let rules = parse_font_css(&css);
-    
+
     if rules.is_empty() {
         warn!("No @font-face rules found in CSS from: {}", url);
         return Err(FontLoadError::NoCssRules);
     }
-    
-    info!("Found {} font rules, downloading font files...", rules.len());
-    
+
+    info!(
+        "Found {} font rules, downloading font files...",
+        rules.len()
+    );
+
     // Download each font file
     let mut resolved_fonts = Vec::with_capacity(rules.len());
     let mut failed_downloads = 0usize;
-    
+
     for rule in rules {
         match fetch_font_bytes(&rule.url) {
             Ok(bytes) => {
@@ -470,20 +485,17 @@ pub fn load_fonts_from_css_url(url: &str) -> Result<Vec<ResolvedFont>, FontLoadE
             Err(e) => {
                 warn!(
                     "Failed to download font {} (weight: {}) from {}: {}",
-                    rule.family,
-                    rule.weight,
-                    rule.url,
-                    e
+                    rule.family, rule.weight, rule.url, e
                 );
                 failed_downloads += 1;
             }
         }
     }
-    
+
     if resolved_fonts.is_empty() {
         return Err(FontLoadError::NoCssRules);
     }
-    
+
     if failed_downloads > 0 {
         warn!(
             "Downloaded {}/{} fonts ({} failed)",
@@ -494,7 +506,7 @@ pub fn load_fonts_from_css_url(url: &str) -> Result<Vec<ResolvedFont>, FontLoadE
     } else {
         info!("Successfully downloaded all {} fonts", resolved_fonts.len());
     }
-    
+
     Ok(resolved_fonts)
 }
 
@@ -514,7 +526,7 @@ pub fn load_fonts_from_css_url(url: &str) -> Result<Vec<ResolvedFont>, FontLoadE
 pub fn load_font_families(urls: &[&str]) -> Result<Vec<ResolvedFont>, FontLoadError> {
     let mut all_fonts = Vec::new();
     let mut any_success = false;
-    
+
     for url in urls {
         match load_fonts_from_css_url(url) {
             Ok(fonts) => {
@@ -526,12 +538,16 @@ pub fn load_font_families(urls: &[&str]) -> Result<Vec<ResolvedFont>, FontLoadEr
             }
         }
     }
-    
+
     if !any_success {
         return Err(FontLoadError::NoCssRules);
     }
-    
-    info!("Loaded {} total fonts from {} families", all_fonts.len(), urls.len());
+
+    info!(
+        "Loaded {} total fonts from {} families",
+        all_fonts.len(),
+        urls.len()
+    );
     Ok(all_fonts)
 }
 
@@ -553,12 +569,15 @@ pub fn load_default_fonts(
     mono_font_url: Option<&str>,
 ) -> egui::FontDefinitions {
     use crate::constants::fonts::{DEFAULT_BODY_FONT_CSS, DEFAULT_MONO_FONT_CSS};
-    
+
     let body_url = body_font_url.unwrap_or(DEFAULT_BODY_FONT_CSS);
     let mono_url = mono_font_url.unwrap_or(DEFAULT_MONO_FONT_CSS);
-    
-    info!("Loading default fonts: body={}, mono={}", body_url, mono_url);
-    
+
+    info!(
+        "Loading default fonts: body={}, mono={}",
+        body_url, mono_url
+    );
+
     match load_font_families(&[body_url, mono_url]) {
         Ok(fonts) => build_font_definitions(&fonts),
         Err(e) => {
@@ -580,7 +599,12 @@ mod tests {
 
     #[test]
     fn test_font_face_rule_creation() {
-        let rule = FontFaceRule::new("Test Font", 400, FontStyle::Normal, "https://example.com/font.woff2");
+        let rule = FontFaceRule::new(
+            "Test Font",
+            400,
+            FontStyle::Normal,
+            "https://example.com/font.woff2",
+        );
         assert_eq!(rule.family, "Test Font");
         assert_eq!(rule.weight, 400);
         assert_eq!(rule.style, FontStyle::Normal);
