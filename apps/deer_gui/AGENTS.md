@@ -13,9 +13,11 @@ Below rules and CONSTRAINTS are vital for good quality code, and non-negotiable:
    - Test edge cases and error conditions;
    - Use Bevy's testing utilities and patterns;
    - Make tests maintainable and reliable;
-   - NO unit tests, NO mocks; Test the real features end to end;
+   - Do not create mocks or unit tests; Test the real features end to end;
  - enable dynamic tracing, debug-logs for all methods; Dev should be able to pin-point exactly where a bug is just by reviewing the logs and performance metrics;  
- - every module should be reusable in different projects; Coupling should be VERY LOW;
- - Consider ECS best practices
- - Minimize entity lookups and iterations
- - Use modern Bevy best practices and efficient patterns
+ - every module should be reusable in other projects; Coupling should be VERY LOW;
+ - Use modern Bevy best practices and efficient patterns;
+   - Use ECS best practices
+   - Minimize entity lookups and iterations
+ - For Python, always use virtual env
+ - Use `/tmp` for any quick tests, and NEVER write anything to user HOME folder;
