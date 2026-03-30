@@ -48,7 +48,7 @@ fn main() {
                 })
                 .set(LogPlugin {
                     filter: log_filter,
-                    level: bevy::log::Level::TRACE,
+                    level: bevy::log::Level::INFO,
                     ..default()
                 }),
         )
