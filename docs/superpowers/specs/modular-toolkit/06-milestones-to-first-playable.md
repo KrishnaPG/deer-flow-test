@@ -115,6 +115,7 @@ Build and test:
 - actor cloud view
 - telemetry map view
 - scene host integration points
+- world projection rules for chat/task/artifact-driven world updates
 
 Prove in:
 
@@ -124,6 +125,7 @@ Exit criteria:
 
 - spatial views render typed view models
 - selection and focus events flow back through reusable contracts
+- projected world objects can be traced back to canonical chat/task/artifact state
 
 ### M6 - First Playable Composition
 

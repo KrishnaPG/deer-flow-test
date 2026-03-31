@@ -61,6 +61,7 @@ What it validates:
 - panel registry is data-driven
 - layout serialization is stable
 - views can be arranged, embedded, and reused without `deer_gui`
+- fixture-backed world projections can be previewed before game composition
 
 ### `apps/deer_gui`
 

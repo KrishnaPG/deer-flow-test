@@ -63,6 +63,12 @@ For chat-oriented modules, acceptance should also include:
 - artifact access coverage for both persisted and in-flight outputs
 - clarification interrupt coverage
 
+For world-projection modules, acceptance should also include:
+
+- fixture-driven projection tests from canonical records to world markers
+- stable ID/linkage tests between transcript state and world objects
+- interaction tests for drill-down from world object back to chat/artifact detail
+
 ## Anti-Patterns
 
 Avoid:
