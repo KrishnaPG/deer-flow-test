@@ -13,11 +13,11 @@
 - [ ] immutable lineage fields are defined
 - [ ] generator-agnostic mapping rules exist
 - [ ] view taxonomy and LOD rules exist
-- [ ] carrier-first core and typed extension model are defined
-- [ ] level-prefixed semantic extensions are defined
-- [ ] carrier/orchestration families are defined
-- [ ] representation families are defined
-- [ ] governance/operational families are defined
+- [ ] shared base, mandatory modules, and profile-driven module model are defined
+- [ ] level-prefixed semantic extensions are defined as a profile-driven module
+- [ ] mandatory carrier/orchestration module families are defined
+- [ ] profile-driven representation families are defined
+- [ ] profile-driven governance/operational families are defined
 - [ ] universal vs conditional metadata envelopes are defined
 - [ ] mutable status is modeled append-only, not as in-place updates
 - [ ] proof-app-first sequencing remains in force

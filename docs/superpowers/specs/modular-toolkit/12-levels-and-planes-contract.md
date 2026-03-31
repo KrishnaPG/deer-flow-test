@@ -200,14 +200,15 @@ Every persisted or projected record of interest should be able to declare:
 
 ## Family Rule
 
-Levels and planes are not the same thing as record families.
+Levels and planes are not the same thing as module classification or record
+families.
 
 The ontology should distinguish:
 
-- carrier/core records
-- typed semantic extensions
-- typed representation/index extensions
-- governance/operational extensions
+- mandatory carrier/orchestration module records
+- profile-driven level-prefixed semantic extensions
+- profile-driven representation/index module records
+- profile-driven governance/operational module records
 
 Planes remain orthogonal dimensions, while representation families such as
 `AsIsRepresentationRecord`, `ChunkRecord`, and `EmbeddingRecord` make those

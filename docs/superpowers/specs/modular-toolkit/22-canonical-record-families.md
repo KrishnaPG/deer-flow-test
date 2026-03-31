@@ -3,7 +3,7 @@
 **Date:** 2026-03-31
 **Status:** Draft revision
 
-## Carrier-First Core Families
+## Mandatory Carrier/Orchestration Module Families
 
 - `RunRecord`
 - `SessionRecord`
@@ -15,7 +15,7 @@
 - `RuntimeStatusRecord`
 - `DeliveryRecord`
 
-## Typed Semantic Extensions
+## Profile-Driven Semantic Module Families
 
 - `L0_SourceRecord`
 - `L1_SanitizedRecord`
@@ -25,13 +25,13 @@
 - `L5_PrescriptionRecord`
 - `L6_OutcomeRecord`
 
-## Typed Representation / Index Extensions
+## Profile-Driven Representation / Index Module Families
 
 - `AsIsRepresentationRecord`
 - `ChunkRecord`
 - `EmbeddingRecord`
 
-## Typed Governance / Operational Extensions
+## Profile-Driven Governance / Operational Module Families
 
 - `IntentRecord`
 - `TransformRecord`
@@ -60,6 +60,7 @@ Each family must later define:
 - allowed level/plane occupancy
 - required lineage fields
 - downstream consumers
-- whether it belongs to the carrier-first core, a typed semantic extension, a
-  typed representation extension, a governance/operational extension, or a
-  structural family
+- whether it belongs to the mandatory carrier/orchestration module, the
+  profile-driven semantic module, the profile-driven representation/index
+  module, the profile-driven governance/operational module, or a structural
+  family

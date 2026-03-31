@@ -1,4 +1,4 @@
-# Design: Modular Toolkit - Carrier Core And Typed Extensions Contract
+# Design: Modular Toolkit - Shared Base, Mandatory Modules, And Profile-Driven Modules Contract
 
 **Date:** 2026-03-31
 **Status:** Draft revision
@@ -14,13 +14,14 @@ That means engineers adding a new backend or building a new UI should not need t
 
 The winning shape is:
 
-- a carrier-first core for everyday work
-- typed extensions for semantic, representation, and governance concerns when
-  they add real value
+- a shared base for identity, correlation, and lineage
+- mandatory modules for everyday work
+- profile-driven modules for semantic, representation, and governance concerns
+  when they add real value
 
-## Carrier-First Core
+## Mandatory Carrier/Orchestration Module
 
-The default integration and UI-facing core is:
+The default integration and UI-facing mandatory module is:
 
 - `RunRecord`
 - `SessionRecord`
@@ -32,13 +33,13 @@ The default integration and UI-facing core is:
 - `RuntimeStatusRecord`
 - `DeliveryRecord`
 
-All core records must carry:
+All canonical records share this base metadata:
 
 - `IdentityMeta`
 - `CorrelationMeta`
 - `LineageMeta`
 
-## Typed Semantic Extensions
+## Profile-Driven Semantic Module
 
 Semantic meaning is attached through level-prefixed extension families:
 
@@ -55,7 +56,7 @@ These are not the everyday integration surface for every backend.
 They are promoted to first-class use where product, retrieval, replay, or world
 projection needs them.
 
-## Typed Representation Extensions
+## Profile-Driven Representation Module
 
 Representation concerns attach through:
 
@@ -72,7 +73,7 @@ Representation policy:
   `L1..L4`, optional/policy-driven for `L5..L6`, and generally not default for
   `L0`
 
-## Typed Governance And Operational Extensions
+## Profile-Driven Governance And Operational Module
 
 Governance and operational concerns attach through records such as:
 
@@ -92,9 +93,9 @@ Heavier runtime extensions may be added later where needed.
 
 ## Attachment Rule
 
-Carrier/core identity is the primary anchor.
+Mandatory-module identity is the primary anchor for everyday integration.
 
-Typed extensions may either:
+Profile-driven module records may either:
 
 - carry their own IDs with mandatory backlinks to carrier IDs, or
 - be derived views over carrier-linked truth where no standalone identity is
@@ -104,10 +105,9 @@ Backlinks are mandatory either way.
 
 ## Anti-Drift Rule
 
-Do not force every backend to populate every extension family.
+Do not force every backend to populate every profile-driven module family.
 
 Backend mappings should populate:
 
-- the carrier-first core by default
-- semantic, representation, and governance extensions only where supported and
-  valuable
+- the shared base and mandatory modules by default
+- profile-driven modules only where supported and valuable
