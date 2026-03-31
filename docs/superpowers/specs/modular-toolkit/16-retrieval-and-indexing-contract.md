@@ -21,7 +21,7 @@ These are not interchangeable and should be modeled explicitly.
 
 ## Tri-Plane Interpretation
 
-The planes map to explicit representation/index record families.
+The planes map to explicit typed representation/index extensions.
 
 ### As-Is Plane
 
@@ -31,7 +31,7 @@ Use for:
 - canonical file preview
 - provenance anchor
 
-Representation family:
+Representation extension:
 
 - `AsIsRepresentationRecord`
 
@@ -44,7 +44,7 @@ Use for:
 - transcript slices
 - partial content previews
 
-Representation family:
+Representation extension:
 
 - `ChunkRecord`
 
@@ -56,7 +56,7 @@ Use for:
 - nearest-neighbor discovery
 - retrieval hints
 
-Representation family:
+Representation extension:
 
 - `EmbeddingRecord`
 
@@ -71,8 +71,8 @@ Records used by retrieval-aware views should preserve:
 
 - source semantic or carrier record references
 - linked `AsIsRepresentationRecord` references
-- linked `ChunkRecord` references
-- linked `EmbeddingRecord` references
+- linked `ChunkRecord` references where chunking is justified
+- linked `EmbeddingRecord` references where embedding/indexing is justified
 - chunking strategy
 - retrieval/index provider metadata
 - readiness state
@@ -105,3 +105,5 @@ Do not model chunking and embeddings as hidden implementation details.
 
 They affect what the user is actually seeing and how trustworthy or partial that
 view is.
+
+Do not assume every semantic level automatically gets chunked and embedded.

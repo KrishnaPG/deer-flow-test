@@ -12,7 +12,7 @@ together.
 
 ## Taxonomy
 
-This taxonomy describes the semantic spine of discovery objects.
+This taxonomy describes typed semantic extensions over the carrier-first core.
 
 It does not describe every record family in the ontology.
 
@@ -124,7 +124,7 @@ At minimum they should distinguish:
 
 Carrier records such as `SessionRecord`, `MessageRecord`, `TaskRecord`, and
 `ArtifactRecord` are not themselves discovery kinds. They carry, reference, or
-present discovery objects.
+present these typed semantic extensions.
 
 Representation families such as `AsIsRepresentationRecord`, `ChunkRecord`, and
 `EmbeddingRecord` are also not discovery kinds.

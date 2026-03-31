@@ -7,13 +7,13 @@
 
 | Record Family | L0 | L1 | L2 | L3 | L4 | L5 | L6 | As-Is | Chunks | Embeddings |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `SourceRecord` | yes | no | no | no | no | no | no | optional | optional | no |
-| `SanitizedRecord` | no | yes | no | no | no | no | no | optional | optional | no |
-| `ViewRecord` | no | no | yes | no | no | no | no | optional | optional | optional |
-| `InsightRecord` | no | no | optional | yes | no | no | no | optional | optional | optional |
-| `PredictionRecord` | no | no | optional | optional | yes | no | no | optional | optional | optional |
-| `PrescriptionRecord` | no | no | optional | optional | optional | yes | no | optional | optional | optional |
-| `OutcomeRecord` | no | no | optional | optional | optional | optional | yes | optional | optional | optional |
+| `L0_SourceRecord` | yes | no | no | no | no | no | no | optional | exceptional | no |
+| `L1_SanitizedRecord` | no | yes | no | no | no | no | no | yes | typical | typical |
+| `L2_ViewRecord` | no | no | yes | no | no | no | no | yes | typical | typical |
+| `L3_InsightRecord` | no | no | optional | yes | no | no | no | yes | typical | typical |
+| `L4_PredictionRecord` | no | no | optional | optional | yes | no | no | yes | typical | typical |
+| `L5_PrescriptionRecord` | no | no | optional | optional | optional | yes | no | yes | optional | optional |
+| `L6_OutcomeRecord` | no | no | optional | optional | optional | optional | yes | yes | optional | optional |
 | `RunRecord` | optional | optional | yes | optional | optional | optional | optional | optional | no | no |
 | `SessionRecord` | optional | optional | yes | optional | optional | optional | optional | optional | no | no |
 | `TaskRecord` | optional | optional | yes | yes | optional | optional | optional | optional | no | no |
@@ -23,9 +23,9 @@
 | `ClarificationRecord` | optional | optional | yes | optional | optional | optional | optional | optional | no | no |
 | `RuntimeStatusRecord` | yes | yes | yes | optional | optional | optional | optional | optional | no | no |
 | `DeliveryRecord` | optional | optional | yes | optional | optional | optional | optional | optional | no | no |
-| `AsIsRepresentationRecord` | optional | optional | optional | optional | optional | optional | optional | yes | no | no |
-| `ChunkRecord` | optional | optional | optional | optional | optional | optional | optional | no | yes | no |
-| `EmbeddingRecord` | optional | optional | optional | optional | optional | optional | optional | no | no | yes |
+| `AsIsRepresentationRecord` | allowed | allowed | allowed | allowed | allowed | allowed | allowed | yes | no | no |
+| `ChunkRecord` | exceptional | typical | typical | typical | typical | optional | optional | no | yes | no |
+| `EmbeddingRecord` | no | typical | typical | typical | typical | optional | optional | no | no | yes |
 | `IntentRecord` | optional | optional | yes | optional | optional | optional | optional | optional | no | no |
 | `TransformRecord` | optional | optional | yes | yes | yes | yes | yes | optional | optional | optional |
 | `ExclusionRecord` | optional | optional | yes | optional | optional | optional | optional | optional | no | no |

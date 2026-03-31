@@ -3,17 +3,7 @@
 **Date:** 2026-03-31
 **Status:** Draft revision
 
-## Semantic Spine Families
-
-- `SourceRecord`
-- `SanitizedRecord`
-- `ViewRecord`
-- `InsightRecord`
-- `PredictionRecord`
-- `PrescriptionRecord`
-- `OutcomeRecord`
-
-## Carrier / Orchestration Families
+## Carrier-First Core Families
 
 - `RunRecord`
 - `SessionRecord`
@@ -25,13 +15,23 @@
 - `RuntimeStatusRecord`
 - `DeliveryRecord`
 
-## Representation / Index Families
+## Typed Semantic Extensions
+
+- `L0_SourceRecord`
+- `L1_SanitizedRecord`
+- `L2_ViewRecord`
+- `L3_InsightRecord`
+- `L4_PredictionRecord`
+- `L5_PrescriptionRecord`
+- `L6_OutcomeRecord`
+
+## Typed Representation / Index Extensions
 
 - `AsIsRepresentationRecord`
 - `ChunkRecord`
 - `EmbeddingRecord`
 
-## Governance / Operational Families
+## Typed Governance / Operational Extensions
 
 - `IntentRecord`
 - `TransformRecord`
@@ -60,4 +60,6 @@ Each family must later define:
 - allowed level/plane occupancy
 - required lineage fields
 - downstream consumers
-- whether it is semantic, carrier, representation, governance, or structural
+- whether it belongs to the carrier-first core, a typed semantic extension, a
+  typed representation extension, a governance/operational extension, or a
+  structural family

@@ -13,7 +13,8 @@
 - [ ] immutable lineage fields are defined
 - [ ] generator-agnostic mapping rules exist
 - [ ] view taxonomy and LOD rules exist
-- [ ] semantic spine families are defined
+- [ ] carrier-first core and typed extension model are defined
+- [ ] level-prefixed semantic extensions are defined
 - [ ] carrier/orchestration families are defined
 - [ ] representation families are defined
 - [ ] governance/operational families are defined
