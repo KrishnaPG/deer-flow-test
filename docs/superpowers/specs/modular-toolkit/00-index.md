@@ -29,6 +29,7 @@ Core position:
 | `05-tdd-by-contract.md` | test strategy and module-first TDD workflow |
 | `06-milestones-to-first-playable.md` | milestone ladder from toolkit to playable app |
 | `07-chat-and-artifact-pipeline.md` | live chat, streaming, uploads, and artifact-access mapping |
+| `08-chat-to-world-bridging.md` | how generic chat state projects into RTS/RPG world state |
 
 ## Stable Decisions
 
@@ -51,6 +52,7 @@ Read in this order:
 5. `05-tdd-by-contract.md`
 6. `06-milestones-to-first-playable.md`
 7. `07-chat-and-artifact-pipeline.md`
+8. `08-chat-to-world-bridging.md`
 
 ## Superseded Document
 

@@ -14,6 +14,7 @@
 | `crates/pipeline/normalizers` | raw schema to canonical domain transforms |
 | `crates/pipeline/derivations` | canonical domain to typed view models |
 | `crates/runtime/read_models` | transient client-side state |
+| `crates/runtime/world_projection` | generic projection host for app/world mappings |
 | `crates/views/scene3d` | generic 3D scene host and actor primitives |
 | `crates/views/graph_view` | generic graph and lineage renderer |
 | `crates/views/chat_thread` | transcript, composer, tool-call, and clarification surfaces |
@@ -162,6 +163,31 @@ Authority rule:
 - backend owns persisted truth
 - client owns transient experience state
 
+### World Projection
+
+Purpose:
+
+- map canonical domain state into composition-specific world semantics without
+  polluting reusable chat or view modules
+
+Owns:
+
+- projection rules from generic records into world objects
+- stable IDs linking transcript state, artifacts, alerts, and world markers
+- app-facing semantic grouping for macro and micro views
+
+Examples:
+
+- thread session -> command channel or dialogue anchor
+- run progress -> task-force or squad status
+- clarification request -> intervention opportunity
+- artifact record -> world item, codex entry, or unlock marker
+
+Rule:
+
+- reusable modules stay generic
+- world metaphor mapping lives in projection rules at the runtime/app boundary
+
 ## Layering Rule
 
 No reusable component may jump layers.
@@ -175,3 +201,4 @@ Bad:
 Good:
 
 - raw source -> normalizer -> domain -> derivation -> view -> panel -> app
+- raw source -> normalizer -> domain -> world projection -> scene/hud derivation -> app
