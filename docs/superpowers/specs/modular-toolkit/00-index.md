@@ -53,6 +53,9 @@ Core position:
 | `29-world-projection-object-contract.md` | source-linked world object families and allowed semantics |
 | `30-library-decision-matrix.md` | exact OSS choices per implementation stage |
 | `31-custom-code-boundaries.md` | what remains custom and what must not be custom first |
+| `32-interactive-chat-lifecycle.md` | generator-agnostic lifecycle for interactive chat-oriented clients |
+| `33-chat-event-and-state-mapping.md` | generic chat event families and canonical mapping rules |
+| `34-chat-artifact-lifecycle.md` | generic upload/output/presentation/retrieval lifecycle for chat artifacts |
 
 ## Stable Decisions
 
@@ -99,6 +102,9 @@ Read in this order:
 29. `29-world-projection-object-contract.md`
 30. `30-library-decision-matrix.md`
 31. `31-custom-code-boundaries.md`
+32. `32-interactive-chat-lifecycle.md`
+33. `33-chat-event-and-state-mapping.md`
+34. `34-chat-artifact-lifecycle.md`
 
 ## Superseded Document
 
