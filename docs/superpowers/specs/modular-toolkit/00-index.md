@@ -40,6 +40,19 @@ Core position:
 | `16-retrieval-and-indexing-contract.md` | mediated reads, chunking, embeddings, and index/backlink contracts |
 | `17-view-taxonomy-and-lod.md` | thumbnail/tooltip/panel/world view taxonomy and context rules |
 | `18-generator-mapping-matrix.md` | how DeerFlow, PocketFlow, Rowboat, Hermes, and others map into canonical contracts |
+| `19-ui-state-server-boundary.md` | exact allowed and forbidden UI/runtime boundary assumptions |
+| `20-intent-and-mediated-read-model.md` | external read/write payload families and mediated access rules |
+| `21-implementation-readiness-checklist.md` | hard no-go gate before any crate/runtime implementation |
+| `22-canonical-record-families.md` | generator-agnostic canonical record families |
+| `23-correlation-and-identity-contract.md` | identity and correlation contract for all major record families |
+| `24-level-plane-lineage-matrix.md` | occupancy matrix across levels, planes, and lineage needs |
+| `25-generator-capability-matrix.md` | rich/sparse support map per generator and record family |
+| `26-normalizer-promotion-rules.md` | level promotion rules from raw capture to higher-order outputs |
+| `27-raw-envelope-family-catalog.md` | pre-canonical raw envelope families |
+| `28-entity-view-matrix.md` | field and context expectations per entity and view tier |
+| `29-world-projection-object-contract.md` | source-linked world object families and allowed semantics |
+| `30-library-decision-matrix.md` | exact OSS choices per implementation stage |
+| `31-custom-code-boundaries.md` | what remains custom and what must not be custom first |
 
 ## Stable Decisions
 
@@ -73,6 +86,19 @@ Read in this order:
 16. `16-retrieval-and-indexing-contract.md`
 17. `17-view-taxonomy-and-lod.md`
 18. `18-generator-mapping-matrix.md`
+19. `19-ui-state-server-boundary.md`
+20. `20-intent-and-mediated-read-model.md`
+21. `21-implementation-readiness-checklist.md`
+22. `22-canonical-record-families.md`
+23. `23-correlation-and-identity-contract.md`
+24. `24-level-plane-lineage-matrix.md`
+25. `25-generator-capability-matrix.md`
+26. `26-normalizer-promotion-rules.md`
+27. `27-raw-envelope-family-catalog.md`
+28. `28-entity-view-matrix.md`
+29. `29-world-projection-object-contract.md`
+30. `30-library-decision-matrix.md`
+31. `31-custom-code-boundaries.md`
 
 ## Superseded Document
 

@@ -103,3 +103,18 @@ Reject or re-scope work if any answer is yes:
 
 When `writing-plans` begins, plans should be organized by reusable slices and
 proof milestones, not by one giant app-first feature list.
+
+## Discovery Prerequisite Rule
+
+Do not write or execute crate-level implementation plans until the discovery-first
+spec tranche through `docs/superpowers/specs/modular-toolkit/31-custom-code-boundaries.md`
+is approved.
+
+This block includes:
+
+- crate creation
+- Cargo/workspace edits
+- module skeletons
+- foundation/runtime/view implementation
+- proof-app implementation
+- `deer_gui` composition work
