@@ -2,6 +2,28 @@
 
 **Core Paradigm:** Real-Time, Low-Latency First with Guaranteed Reliability and Absolute Immutability.
 
+## Data Storage Levels
+Data exists in the storage at multiple levels as below:
+  - L0: the "crude/raw data", usually obtained directly from generators, such as server logs, telemetry, sensors, audio/video feeds, archives, files etc.
+  - L1: the "sanitized" version of L0; e.g. impute missing fields, remove NULL entries, date format conversions, file format conversions etc. 
+  - L2: the "views" on top of L1; May contain additional derived fields, specific column projections, joined table projections so on.
+    - this is where the domain models are usually mapped;
+    - same data may lead to multiple "views" based on the target requirements; e.g. same sales data may need different views for Marketing team vs Sales team;
+    - e.g. joined views in data lake, different crop regions of image, segments of audio, extracted voice channels of video etc.
+  - L3: the "aggregates/insights" on top of L2; 
+    - e.g. rolling window aggregations (min/max/avg/sum etc.), historical insights (how many customers churned, what went wrong at what point,  etc.), identified objects/persons/locations in a video/image/audio stream etc. 
+    - these are discoveries in data or historical facts aggregated to give insights on the past trends
+  - L4: the "predictions" on top of L2 + L3; 
+    - e.g. what-if analysis results, customer churn predictions, generated music, face-swapped videos, real-time auto-translated audios, morphed images, research reports etc.
+    - these are future/unrealistic projections that do not exist in reality (in the current or past data), but purely creative/anticipatory based on past data/trajectories;
+  - L5: the "prescriptions" for L4 outcomes;
+    - these are "corrective"/"supportive"/"backup" strategies/plans/actions to "counter"/"improve" the L4 outcomes; 
+    - these are hypothetical plans that are currently not active, but if enacted, they may influence the future (thus rendering the L4 projections obsolete);
+    - e.g. "price discount plans" created to address the possible customer churn predicted at L4;
+    - conundrum: if L5 plans/actions are successful, one will see L4 predictions not matching the reality (because the L5 either prevents a bad situation successfully or further improves a good situation significantly, thus making the L4 predictions go wrong, which is exactly what the L5 goal is: controlling the future outcomes)
+
+In a storage system it is possible to have data reside at all these L0 to L5 levels physically (in the form of files)
+
 ## 1. Architectural Mandate: Storage-Native, Mediated-Read
 
 To prevent the State Server from becoming a write bottleneck, to ensure ultra-low latency, and to guarantee absolute data provenance, the system strictly enforces the following "Storage-Native" data flow:
@@ -22,31 +44,31 @@ To prevent the State Server from becoming a write bottleneck, to ensure ultra-lo
 
 ## 2. Stakeholders & Access Matrix
 
-| Stakeholder / Component | Role | Access Type | Data Handled / Transferred |
-| :--- | :--- | :--- | :--- |
-| **Data Generators (Agents / Workers)** | Thin Clients | API POST / Stream | Generates data, delegates all storage/retry complexity to the Storage Service. |
-| **Storage Service** | Reliable Ingress / Dual-Dispatch | Write (S3) / Pub (NATS) | Handles cryptographic hashing, persistent queueing, S3 commits, stream micro-batching, and parallel Event Bus emits. |
-| **LiveKit Egress** | Raw Media Transport | Direct S3 Write | Offloads L0 Raw Media (WebRTC audio/video) ingestion from agents. Writes to temp S3 landing zones. |
-| **State Server** | Hot Cache & ABAC Gatekeeper | Subscribes / Read Proxy | Listens to Event Bus for the latest activity ("Hot Window"). Mediates all external reads, querying DBs for historical data ("Warm Cache"). Enforces ABAC. |
-| **Control Center (Operator)** | Active Human Operator | External Write (Intents) / Read | Submits `intents` via State Server. Reads real-time updates from State Server. |
-| **Observer UI** | Read-Only Viewer | Read via State Server | Reads best-effort, ABAC-filtered data strictly through the State Server. |
-| **Event Bus (NATS JetStream)** | Write-Ahead Log / Claim Check | Pub/Sub | High-volume fanout for newly written Storage pointers (URIs), live stream tokens, and pipeline progress updates. |
-| **ClickHouse** | Relational/OLAP View | Storage Mount (Read) | Mounts and queries the "As-Is" and "Chunks" Object Storage. Acts as the join engine. |
-| **Milvus & Sync Workers** | Vector Search View | Async Ingest (Read) | Sync Workers listen to NATS, read "Embeddings" from Storage, and index them into Milvus. |
-| **lakeFS / S3** | The Single Source of Truth | Storage (Truth) | Stores all raw files, intents, exclusions, chunks, and vector parquet files physically organized by the Tri-Plane hierarchy. |
+| Stakeholder / Component                | Role                             | Access Type                     | Data Handled / Transferred                                                                                                                                |
+| :------------------------------------- | :------------------------------- | :------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Data Generators (Agents / Workers)** | Thin Clients                     | API POST / Stream               | Generates data, delegates all storage/retry complexity to the Storage Service.                                                                            |
+| **Storage Service**                    | Reliable Ingress / Dual-Dispatch | Write (S3) / Pub (NATS)         | Handles cryptographic hashing, persistent queueing, S3 commits, stream micro-batching, and parallel Event Bus emits.                                      |
+| **LiveKit Egress**                     | Raw Media Transport              | Direct S3 Write                 | Offloads L0 Raw Media (WebRTC audio/video) ingestion from agents. Writes to temp S3 landing zones.                                                        |
+| **State Server**                       | Hot Cache & ABAC Gatekeeper      | Subscribes / Read Proxy         | Listens to Event Bus for the latest activity ("Hot Window"). Mediates all external reads, querying DBs for historical data ("Warm Cache"). Enforces ABAC. |
+| **Control Center (Operator)**          | Active Human Operator            | External Write (Intents) / Read | Submits `intents` via State Server. Reads real-time updates from State Server.                                                                            |
+| **Observer UI**                        | Read-Only Viewer                 | Read via State Server           | Reads best-effort, ABAC-filtered data strictly through the State Server.                                                                                  |
+| **Event Bus (NATS JetStream)**         | Write-Ahead Log / Claim Check    | Pub/Sub                         | High-volume fanout for newly written Storage pointers (URIs), live stream tokens, and pipeline progress updates.                                          |
+| **ClickHouse**                         | Relational/OLAP View             | Storage Mount (Read)            | Mounts and queries the "As-Is" and "Chunks" Object Storage. Acts as the join engine.                                                                      |
+| **Milvus & Sync Workers**              | Vector Search View               | Async Ingest (Read)             | Sync Workers listen to NATS, read "Embeddings" from Storage, and index them into Milvus.                                                                  |
+| **lakeFS / S3**                        | The Single Source of Truth       | Storage (Truth)                 | Stores all raw files, intents, exclusions, chunks, and vector parquet files physically organized by the Tri-Plane hierarchy.                              |
 
 ---
 
 ## 3. Data Architecture & Sources of Truth
 
-| Data Category | Tier | Absolute Source of Truth (Storage) | Database View (Search/Compute) | State Server View (Cache) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Live Activity (Intents)** | Transients | `s3://.../as_is/L0/intents` | ClickHouse (Mounted) | **Hot Cache** (Memory via NATS) |
-| **Historical State** | Canonical | `s3://.../as_is/L0/events` | ClickHouse (Mounted) | **Warm Cache** (Memory/Redis) |
-| **Artifacts (Raw)** | **L0: Crude Data** | `s3://.../as_is/L0` (lakeFS) | - | Authorized Pointers (Pre-Signed URLs) |
-| **Artifacts (Chunks)** | **L1-L4: Segments** | `s3://.../chunks/L1-L4` | ClickHouse (Mounted Text/Payload) | Warm/Hot Cache Proxy |
-| **Artifacts (Vectors)** | **L1-L4: Embeddings**| `s3://.../embeddings/L1-L4` | Milvus (Vectors + `chunk_hash`) | Warm/Hot Cache Proxy |
-| **Compliance Ledger** | **Exclusions** | `s3://.../exclusions/` | ClickHouse / Milvus (Anti-Join Filter) | Enforced via DB Views |
+| Data Category               | Tier                  | Absolute Source of Truth (Storage) | Database View (Search/Compute)         | State Server View (Cache)             |
+| :-------------------------- | :-------------------- | :--------------------------------- | :------------------------------------- | :------------------------------------ |
+| **Live Activity (Intents)** | Transients            | `s3://.../as_is/L0/intents`        | ClickHouse (Mounted)                   | **Hot Cache** (Memory via NATS)       |
+| **Historical State**        | Canonical             | `s3://.../as_is/L0/events`         | ClickHouse (Mounted)                   | **Warm Cache** (Memory/Redis)         |
+| **Artifacts (Raw)**         | **L0: Crude Data**    | `s3://.../as_is/L0` (lakeFS)       | -                                      | Authorized Pointers (Pre-Signed URLs) |
+| **Artifacts (Chunks)**      | **L1-L4: Segments**   | `s3://.../chunks/L1-L4`            | ClickHouse (Mounted Text/Payload)      | Warm/Hot Cache Proxy                  |
+| **Artifacts (Vectors)**     | **L1-L4: Embeddings** | `s3://.../embeddings/L1-L4`        | Milvus (Vectors + `chunk_hash`)        | Warm/Hot Cache Proxy                  |
+| **Compliance Ledger**       | **Exclusions**        | `s3://.../exclusions/`             | ClickHouse / Milvus (Anti-Join Filter) | Enforced via DB Views                 |
 
 ---
 
