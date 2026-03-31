@@ -13,18 +13,12 @@ The active architecture direction is toolkit-first.
 
 ## Workstream Authority Map
 
-| Workstream | Decision Status | Implementation Status | Canonical Docs | Notes |
-| --- | --- | --- | --- | --- |
-| `modular-toolkit` | draft revision, active | pre-planning | `docs/superpowers/specs/modular-toolkit/00-index.md`, `docs/superpowers/specs/modular-toolkit/09-non-negotiables.md`, `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md` | this is the main architecture line to follow |
-| `hybrid-data-game` | draft input, active | not started | `docs/superpowers/specs/2026-03-31-hybrid-data-game-design.md` | product and game framing input for toolkit composition |
-| `scifi-rts-hud` | active visual reference | not started | `docs/superpowers/specs/scifi-rts-hud/2026-03-30-scifi-rts-hud-design.md` | HUD look-and-feel reference |
-| `multi-scene-themes` | approved, narrower scope | implementation-specific | `docs/superpowers/specs/multi-scene-themes/00-index.md` | valid `deer_gui` scene/theme design, but not the newer top-level architecture |
-
-## Superseded
-
-These are not active sources of truth:
-
-- `docs/superpowers/specs/2026-03-31-modular-toolkit-architecture-design.md` -> superseded by `docs/superpowers/specs/modular-toolkit/00-index.md`
+| Workstream           | Decision Status          | Implementation Status   | Canonical Docs                                                                                                                                                                           | Notes                                                                         |
+| -------------------- | ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `modular-toolkit`    | draft revision, active   | pre-planning            | `docs/superpowers/specs/modular-toolkit/00-index.md`, `docs/superpowers/specs/modular-toolkit/09-non-negotiables.md`, `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md` | this is the main architecture line to follow                                  |
+| `hybrid-data-game`   | draft input, active      | not started             | `docs/superpowers/specs/2026-03-31-hybrid-data-game-design.md`                                                                                                                           | product and game framing input for toolkit composition                        |
+| `scifi-rts-hud`      | active visual reference  | not started             | `docs/superpowers/specs/scifi-rts-hud/2026-03-30-scifi-rts-hud-design.md`                                                                                                                | HUD look-and-feel reference                                                   |
+| `multi-scene-themes` | approved, narrower scope | implementation-specific | `docs/superpowers/specs/multi-scene-themes/00-index.md`                                                                                                                                  | valid `deer_gui` scene/theme design, but not the newer top-level architecture |
 
 ## In Progress
 
