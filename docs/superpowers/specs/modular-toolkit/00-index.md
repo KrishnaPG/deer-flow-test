@@ -30,6 +30,8 @@ Core position:
 | `06-milestones-to-first-playable.md` | milestone ladder from toolkit to playable app |
 | `07-chat-and-artifact-pipeline.md` | live chat, streaming, uploads, and artifact-access mapping |
 | `08-chat-to-world-bridging.md` | how generic chat state projects into RTS/RPG world state |
+| `09-non-negotiables.md` | top architectural principles that must survive planning and implementation |
+| `10-planning-guardrails.md` | mandatory planning and milestone guardrails to prevent drift |
 
 ## Stable Decisions
 
@@ -53,6 +55,8 @@ Read in this order:
 6. `06-milestones-to-first-playable.md`
 7. `07-chat-and-artifact-pipeline.md`
 8. `08-chat-to-world-bridging.md`
+9. `09-non-negotiables.md`
+10. `10-planning-guardrails.md`
 
 ## Superseded Document
 
