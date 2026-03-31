@@ -20,6 +20,7 @@ Start with:
 | Topic | Entry | Status |
 | --- | --- | --- |
 | `multi-scene-themes` | `docs/superpowers/plans/multi-scene-themes/00-index.md` | existing execution plan set |
+| `modular-toolkit` | `docs/superpowers/plans/modular-toolkit/00-index.md` | active implementation plan set |
 
 ## Usage Rule
 
