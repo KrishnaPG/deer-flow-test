@@ -2,7 +2,7 @@
 
 **Core Paradigm:** Real-Time, Low-Latency First with Guaranteed Reliability and Absolute Immutability.
 
-## Data Storage Levels
+## Data Levels
 Data exists in the storage at multiple levels as below:
   - L0: the "crude/raw data", usually obtained directly from generators, such as server logs, telemetry, sensors, audio/video feeds, archives, files etc.
   - L1: the "sanitized" version of L0; e.g. impute missing fields, remove NULL entries, date format conversions, file format conversions etc. 
@@ -21,8 +21,12 @@ Data exists in the storage at multiple levels as below:
     - these are hypothetical plans that are currently not active, but if enacted, they may influence the future (thus rendering the L4 projections obsolete);
     - e.g. "price discount plans" created to address the possible customer churn predicted at L4;
     - conundrum: if L5 plans/actions are successful, one will see L4 predictions not matching the reality (because the L5 either prevents a bad situation successfully or further improves a good situation significantly, thus making the L4 predictions go wrong, which is exactly what the L5 goal is: controlling the future outcomes)
+  - L6: the "deviations" between what was projected in L4 and what is observed in reality;
+    - this level records the success/failure of L4 predictions
+    - if there was an L5 entry that influenced the success/failure, this level captures those details (of what L5 strategy worked, did not work etc.);
 
-In a storage system it is possible to have data reside at all these L0 to L5 levels physically (in the form of files)
+In a storage system it is possible to have data reside at all these L0 to L6 levels physically (in the form of files/objects/blogs); No data item exists in isolation and there is always a lineage of where it comes from, how it got transformed and how it influenced the reality, before the next cycle repeats all over;
+
 
 ## 1. Architectural Mandate: Storage-Native, Mediated-Read
 

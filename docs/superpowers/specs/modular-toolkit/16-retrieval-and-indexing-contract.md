@@ -1,0 +1,91 @@
+# Design: Modular Toolkit - Retrieval And Indexing Contract
+
+**Date:** 2026-03-31
+**Status:** Draft revision
+
+## Why This File Exists
+
+The toolkit needs to respect the tri-plane storage and mediated-read model when
+supporting search, retrieval, replay, and artifact inspection.
+
+## Retrieval Rule
+
+The toolkit should assume that read surfaces may be backed by:
+
+- hot-cache/live event windows
+- warm-cache mediated responses
+- DB/index views over storage
+- direct authorized pointers to storage objects
+
+These are not interchangeable and should be modeled explicitly.
+
+## Tri-Plane Interpretation
+
+### As-Is Plane
+
+Use for:
+
+- original payload access
+- canonical file preview
+- provenance anchor
+
+### Chunks Plane
+
+Use for:
+
+- segmented search results
+- timeline segments
+- transcript slices
+- partial content previews
+
+### Embeddings Plane
+
+Use for:
+
+- semantic search
+- nearest-neighbor discovery
+- retrieval hints
+
+Rule:
+
+- embeddings point back to chunks, and chunks point back to As-Is truth
+
+## Canonical Contract Needs
+
+Records used by retrieval-aware views should preserve:
+
+- source payload reference
+- chunk reference(s)
+- embedding/index reference(s)
+- chunking strategy
+- retrieval/index provider metadata
+- readiness state
+
+## Mediated Read Requirement
+
+Artifact, replay, and search-oriented views should be designed around mediated
+responses such as:
+
+- authorized previews
+- chunk-based summaries
+- search hits with backlinks
+- replay windows
+- semantic recall results
+
+Not direct local file assumptions.
+
+## UI Implication
+
+Inspectors and shelves should be able to show:
+
+- where the visible payload came from
+- whether it is a full source object, a chunk, or an embedding-backed retrieval
+  result
+- whether the payload is ready, indexed, or still in progress
+
+## Anti-Drift Rule
+
+Do not model chunking and embeddings as hidden implementation details.
+
+They affect what the user is actually seeing and how trustworthy or partial that
+view is.
