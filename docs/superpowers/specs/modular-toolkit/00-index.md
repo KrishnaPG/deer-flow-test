@@ -32,6 +32,14 @@ Core position:
 | `08-chat-to-world-bridging.md` | how generic chat state projects into RTS/RPG world state |
 | `09-non-negotiables.md` | top architectural principles that must survive planning and implementation |
 | `10-planning-guardrails.md` | mandatory planning and milestone guardrails to prevent drift |
+| `11-state-server-alignment.md` | how toolkit architecture aligns with storage-native state-server rules |
+| `12-levels-and-planes-contract.md` | L0-L5 and As-Is/Chunks/Embeddings contract dimensions |
+| `13-lineage-and-immutability-contract.md` | hash-based provenance, append-only lineage, and correlation requirements |
+| `14-data-trajectory-model.md` | how data moves across levels, transforms, and future outcomes |
+| `15-discovery-object-taxonomy.md` | taxonomy for artifacts, views, insights, predictions, and prescriptions |
+| `16-retrieval-and-indexing-contract.md` | mediated reads, chunking, embeddings, and index/backlink contracts |
+| `17-view-taxonomy-and-lod.md` | thumbnail/tooltip/panel/world view taxonomy and context rules |
+| `18-generator-mapping-matrix.md` | how DeerFlow, PocketFlow, Rowboat, Hermes, and others map into canonical contracts |
 
 ## Stable Decisions
 
@@ -57,6 +65,14 @@ Read in this order:
 8. `08-chat-to-world-bridging.md`
 9. `09-non-negotiables.md`
 10. `10-planning-guardrails.md`
+11. `11-state-server-alignment.md`
+12. `12-levels-and-planes-contract.md`
+13. `13-lineage-and-immutability-contract.md`
+14. `14-data-trajectory-model.md`
+15. `15-discovery-object-taxonomy.md`
+16. `16-retrieval-and-indexing-contract.md`
+17. `17-view-taxonomy-and-lod.md`
+18. `18-generator-mapping-matrix.md`
 
 ## Superseded Document
 
