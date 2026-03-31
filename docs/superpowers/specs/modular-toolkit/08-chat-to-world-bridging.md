@@ -22,13 +22,23 @@ The bridge happens through a dedicated world-projection layer.
 
 It consumes canonical records such as:
 
-- `ThreadSession`
-- `MessageRecord`
-- `ToolCallRecord`
-- `ArtifactRecord`
-- `RunProgressRecord`
-- `ClarificationRequest`
-- agent, queue, and knowledge records from the same canonical domain
+- carrier/orchestration records such as:
+  - `SessionRecord`
+  - `RunRecord`
+  - `TaskRecord`
+  - `MessageRecord`
+  - `ToolCallRecord`
+  - `ArtifactRecord`
+  - `ClarificationRecord`
+  - `RuntimeStatusRecord`
+- semantic spine records where applicable:
+  - `ViewRecord`
+  - `InsightRecord`
+  - `PredictionRecord`
+  - `PrescriptionRecord`
+  - `OutcomeRecord`
+- representation and structural records when relevant for drill-down and
+  context
 
 It produces `deer_gui`-facing world objects and view models.
 
@@ -47,17 +57,17 @@ It is the place where app-specific metaphor mapping is allowed.
 
 ## What The Bridge Owns
 
-### 1. Semantic Projection
+### 1. World Projection
 
 It decides how generic backend truth becomes game meaning.
 
 Examples:
 
-- thread session -> command channel, council scene, or dialogue anchor
-- subtask progress -> task-force status or specialist action in flight
-- clarification request -> intervention prompt or decision beacon
+- session -> command channel, council scene, or dialogue anchor
+- task progress -> task beacon or specialist action in flight
+- clarification record -> intervention prompt or decision beacon
 - artifact record -> world item, upgrade, codex entry, or mission reward
-- tool activity -> operational event, queue action, or tactical ping
+- insight/prediction/prescription/outcome records -> world overlays and prompts
 
 ### 2. Stable Cross-View Identity
 
@@ -92,11 +102,13 @@ The bridge must not:
 
 | Canonical Record | World Projection | Macro Use | Micro Use |
 | --- | --- | --- | --- |
-| `ThreadSession` | `WorldConversationAnchor` | command channel node | dialogue scene entry |
-| `RunProgressRecord` | `WorldTaskForceState` | fleet activity/status | squad action beat |
-| `ClarificationRequest` | `WorldInterventionPrompt` | alert beacon | decision dialogue |
+| `SessionRecord` | `WorldConversationAnchor` | command channel node | dialogue scene entry |
+| `TaskRecord` | `WorldTaskBeacon` | fleet activity/status | squad action beat |
+| `PrescriptionRecord` or `ClarificationRecord` | `WorldPrescriptionPrompt` | alert beacon | decision dialogue |
 | `ArtifactRecord` | `WorldArtifactUnlock` | upgrade/cargo output | codex/loot detail |
-| `ToolCallRecord` | `WorldOperationEvent` | queue/event feed | inspected action step |
+| `InsightRecord` | `WorldInsightOverlay` | macro insight overlay | inspected finding |
+| `PredictionRecord` | `WorldPredictionOverlay` | forecast overlay | inspected forecast |
+| `OutcomeRecord` | `WorldOutcomeMarker` | outcome marker | inspected evaluation |
 
 ## Interaction Pattern
 

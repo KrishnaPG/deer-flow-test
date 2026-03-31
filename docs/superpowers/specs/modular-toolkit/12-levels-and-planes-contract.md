@@ -9,14 +9,14 @@ The toolkit cannot treat "raw" and "derived" as enough.
 
 The state-server architecture distinguishes both:
 
-- levels `L0` through `L5`
+- levels `L0` through `L6`
 - planes `as_is`, `chunks`, and `embeddings`
 
 These must become first-class contract dimensions.
 
 ## Levels
 
-### L0 - Crude / Raw
+### L0 - Source
 
 Examples:
 
@@ -25,6 +25,10 @@ Examples:
 - source files
 - media feeds
 - archives
+
+Canonical semantic family:
+
+- `SourceRecord`
 
 Meaning:
 
@@ -38,6 +42,10 @@ Examples:
 - cleaned payloads
 - converted file formats
 - null-imputed records
+
+Canonical semantic family:
+
+- `SanitizedRecord`
 
 Meaning:
 
@@ -53,6 +61,10 @@ Examples:
 - segment/crop/channel outputs
 - reusable toolkit-facing canonical views
 
+Canonical semantic family:
+
+- `ViewRecord`
+
 Meaning:
 
 - the first layer where domain-facing and client-facing views are shaped
@@ -66,6 +78,10 @@ Examples:
 - anomaly findings
 - knowledge extraction
 - identified objects/relations
+
+Canonical semantic family:
+
+- `InsightRecord`
 
 Meaning:
 
@@ -81,6 +97,10 @@ Examples:
 - generated future outcomes
 - creative projections
 
+Canonical semantic family:
+
+- `PredictionRecord`
+
 Meaning:
 
 - non-observed projected futures or speculative outputs
@@ -94,10 +114,32 @@ Examples:
 - optimization actions
 - decision support actions
 
+Canonical semantic family:
+
+- `PrescriptionRecord`
+
 Meaning:
 
 - hypothetical actions intended to influence future outcomes and possibly render
   an L4 prediction obsolete
+
+### L6 - Outcomes / Deviations
+
+Examples:
+
+- evaluation of predicted vs observed outcomes
+- assessment of prescription effect
+- deviation reports
+- adjudication of what really happened relative to expectations
+
+Canonical semantic family:
+
+- `OutcomeRecord`
+
+Meaning:
+
+- an explicit evaluation layer linking prior L4/L5 chains to later observed
+  evidence
 
 ## Planes
 
@@ -156,6 +198,21 @@ Every persisted or projected record of interest should be able to declare:
 - source plane
 - whether it is storage-native, index-native, or client-transient
 
+## Family Rule
+
+Levels and planes are not the same thing as record families.
+
+The ontology should distinguish:
+
+- semantic spine records
+- carrier/orchestration records
+- representation/index records
+- governance/operational records
+
+Planes remain orthogonal dimensions, while representation families such as
+`AsIsRepresentationRecord`, `ChunkRecord`, and `EmbeddingRecord` make those
+planes first-class in the ontology.
+
 ## Toolkit Interpretation
 
 The toolkit should treat these as independent from UI layers.
@@ -166,6 +223,7 @@ Examples:
 - an anomaly marker may be an L3 insight
 - a forecast card may be L4
 - an intervention prompt may be L5
+- an evaluated deviation card may be L6
 
 ## Required Record Metadata
 

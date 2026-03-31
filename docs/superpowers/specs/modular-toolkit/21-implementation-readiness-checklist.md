@@ -8,11 +8,17 @@
 - [ ] storage truth vs client truth is explicitly documented
 - [ ] mediated read boundary is explicitly documented
 - [ ] intent/write boundary is explicitly documented
-- [ ] L0-L5 semantics are attached to canonical record design
+- [ ] L0-L6 semantics are attached to canonical record design
 - [ ] planes (`as_is`, `chunks`, `embeddings`) are attached to canonical record design
 - [ ] immutable lineage fields are defined
 - [ ] generator-agnostic mapping rules exist
 - [ ] view taxonomy and LOD rules exist
+- [ ] semantic spine families are defined
+- [ ] carrier/orchestration families are defined
+- [ ] representation families are defined
+- [ ] governance/operational families are defined
+- [ ] universal vs conditional metadata envelopes are defined
+- [ ] mutable status is modeled append-only, not as in-place updates
 - [ ] proof-app-first sequencing remains in force
 - [ ] no reusable feature is allowed to debut in `apps/deer_gui`
 - [ ] storage-native invariants are documented:

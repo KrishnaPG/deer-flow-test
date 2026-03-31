@@ -10,7 +10,7 @@
 - L2 view shaping -> L3 insights
 - L2/L3 -> L4 predictions
 - L4 -> L5 prescriptions
-- later observed outcomes append new L0-L3 records linked back to prior L4/L5 chains
+- later observed evidence plus prior L4/L5 chains -> L6 outcomes
 
 ## Rule
 
@@ -18,9 +18,7 @@ Normalizers do not invent arbitrary future-state semantics.
 
 They promote records according to explicit rules and declared producers.
 
-## Explicit Scope Note
-
-L6 deviation modeling is out of scope for this tranche.
-
-For now, the discovery tranche requires preserving the lineage needed to relate
-later observed outcomes back to L4/L5 chains.
+Governance and operational records such as `TransformRecord`, `IntentRecord`,
+`ExclusionRecord`, `ConflictRecord`, `ResolutionRecord`, `DedupRecord`,
+`BatchRecord`, `ReplayCheckpointRecord`, and `WriteOperationRecord` may be
+emitted alongside promotion, rather than being forced into the semantic spine.

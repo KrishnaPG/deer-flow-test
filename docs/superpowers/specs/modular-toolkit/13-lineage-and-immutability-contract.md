@@ -57,16 +57,41 @@ A record should be able to answer:
 - what later records depend on me?
 - what view, insight, prediction, or prescription chain am I part of?
 
-## Minimum Metadata Envelopes
+## Metadata Envelope Rule
 
-The discovery tranche should define shared metadata envelopes equivalent to:
+Shared metadata envelopes must be composable and immutable-safe.
 
-- `LineageMeta`
-- `StoragePlacementMeta`
+### Universal Envelopes
+
+All first-class record families should carry:
+
+- `IdentityMeta`
 - `CorrelationMeta`
-- `DownstreamConsumerMeta`
+- `LineageMeta`
 
-These can later be mapped into strongly typed Rust structs.
+### Conditional Envelopes
+
+Families may additionally carry, when applicable:
+
+- `LevelMeta`
+- `RepresentationMeta`
+- `TransformMeta`
+- `PolicyVisibilityMeta`
+- `ReadinessMeta`
+
+## Immutable-Safe Rule
+
+Metadata that changes over time must not be modeled as an in-place update to an
+existing record.
+
+That means:
+
+- readiness/progress changes append new records
+- exclusion or suppression appends new records
+- conflict resolution appends new records
+- forward links are reconstructed by query when possible
+
+Mutable status must not be smuggled into old records under the name of metadata.
 
 ## View Requirement
 

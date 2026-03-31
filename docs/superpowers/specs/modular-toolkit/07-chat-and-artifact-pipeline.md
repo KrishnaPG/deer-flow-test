@@ -61,19 +61,42 @@ Examples:
 - artifact lists -> canonical artifact records
 - clarification tool messages -> clarification records
 
-### Canonical Domain Layer
+### Canonical Record Layer
 
-This layer gives the rest of the toolkit stable concepts such as:
+This layer gives the rest of the toolkit stable concepts across the ontology
+families.
 
-- `ThreadSession`
-- `MessageRecord`
-- `ToolCallRecord`
-- `ArtifactRecord`
-- `ClarificationRequest`
-- `RunProgressRecord`
+For chat-oriented pipelines, the most important families are:
+
+- carrier/orchestration:
+  - `SessionRecord`
+  - `RunRecord`
+  - `MessageRecord`
+  - `ToolCallRecord`
+  - `ArtifactRecord`
+  - `ClarificationRecord`
+  - `TaskRecord`
+  - `RuntimeStatusRecord`
+- semantic spine where applicable:
+  - `SourceRecord`
+  - `SanitizedRecord`
+  - `ViewRecord`
+  - `InsightRecord`
+  - `PredictionRecord`
+  - `PrescriptionRecord`
+  - `OutcomeRecord`
+- representation/index:
+  - `AsIsRepresentationRecord`
+  - `ChunkRecord`
+  - `EmbeddingRecord`
+- governance/operational:
+  - `IntentRecord`
+  - `TransformRecord`
+  - `WriteOperationRecord`
+  - `ReplayCheckpointRecord`
 
 That is the key architectural move: chat is not treated as a one-off widget. It
-becomes domain state that multiple apps can inspect.
+becomes a canonical multi-family state model that multiple apps can inspect.
 
 ### Derivation Layer
 

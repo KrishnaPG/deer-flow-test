@@ -3,16 +3,17 @@
 **Date:** 2026-03-31
 **Status:** Draft revision
 
-| Entity | Thumbnail Fields | Tooltip Fields | Panel Fields | World Fields |
-| --- | --- | --- | --- | --- |
-| agent | identity, status | role, task, health | assignments, history, outputs | optional unit/beacon fields |
-| session | title, state | last turn, counts | transcript, composer, provenance | anchor/beacon fields |
-| artifact | type, status | preview, producer | full metadata, provenance, actions | optional unlock/marker fields |
-| task | state, severity | owner, blocker | subtasks, timings, dependencies | beacon/hotspot fields |
-| replay event | type, time | summary, cause | payload, before/after, links | optional pulse/ghost fields |
-| insight | type, confidence | summary, source | rationale, provenance, related records | optional overlay fields |
-| prediction | type, confidence, horizon | summary, assumptions | full forecast, assumptions, lineage | optional overlay fields |
-| prescription | urgency, type | action summary, target | full plan, expected effect, lineage | prompt/marker fields |
+| Entity | Ontology Family | Thumbnail Fields | Tooltip Fields | Panel Fields | World Fields |
+| --- | --- | --- | --- | --- | --- |
+| agent | carrier/view-derived | identity, status | role, task, health | assignments, history, outputs | optional unit/beacon fields |
+| `SessionRecord` | carrier/orchestration | title, state | last turn, counts | transcript, composer, provenance | `WorldConversationAnchor` fields |
+| `ArtifactRecord` | carrier/orchestration | type, status | preview, producer | full metadata, provenance, actions | optional `WorldArtifactUnlock` fields |
+| `TaskRecord` | carrier/orchestration | state, severity | owner, blocker | subtasks, timings, dependencies | `WorldTaskBeacon` fields |
+| replay event | governance/view-derived | type, time | summary, cause | payload, before/after, links | optional pulse/ghost fields |
+| `InsightRecord` | semantic spine | type, confidence | summary, source | rationale, provenance, related records | `WorldInsightOverlay` fields |
+| `PredictionRecord` | semantic spine | type, confidence, horizon | summary, assumptions | full forecast, assumptions, lineage | `WorldPredictionOverlay` fields |
+| `PrescriptionRecord` | semantic spine | urgency, type | action summary, target | full plan, expected effect, lineage | `WorldPrescriptionPrompt` fields |
+| `OutcomeRecord` | semantic spine | verdict, delta | summary, comparison | full evaluation, evidence, lineage | `WorldOutcomeMarker` fields |
 
 ## Required Contract Fields Per Entry
 

@@ -12,6 +12,13 @@ together.
 
 ## Taxonomy
 
+This taxonomy describes the semantic spine of discovery objects.
+
+It does not describe every record family in the ontology.
+
+Carrier/orchestration, representation/index, and governance/operational records
+are separate ontology families.
+
 ### Source Object
 
 Definition:
@@ -27,6 +34,18 @@ Examples:
 - raw log object
 - cleaned transcript payload
 - uploaded file
+
+### Sanitized Object
+
+Definition:
+
+- an L1 cleaned or normalized derivative of source capture
+
+Examples:
+
+- normalized transcript payload
+- cleaned metadata view
+- format-normalized object
 
 ### View Object
 
@@ -102,6 +121,13 @@ At minimum they should distinguish:
 - prediction
 - prescription
 - outcome
+
+Carrier records such as `SessionRecord`, `MessageRecord`, `TaskRecord`, and
+`ArtifactRecord` are not themselves discovery kinds. They carry, reference, or
+present discovery objects.
+
+Representation families such as `AsIsRepresentationRecord`, `ChunkRecord`, and
+`EmbeddingRecord` are also not discovery kinds.
 
 ## Anti-Drift Rule
 

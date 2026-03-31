@@ -27,3 +27,7 @@ Every major record family must declare:
 - parent/source identity references
 - correlation fields it requires
 - source cardinality assumptions
+
+Identity-bearing truth must remain immutable once written.
+
+Conditional runtime/readiness state should not be treated as record identity.

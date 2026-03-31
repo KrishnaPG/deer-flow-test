@@ -22,7 +22,7 @@ Strengths:
 
 Natural fit:
 
-- session/run/message/tool/artifact-heavy flows
+- carrier/orchestration-heavy flows with rich chat, tool, and artifact behavior
 
 ### PocketFlow
 
@@ -35,7 +35,7 @@ Strengths:
 
 Natural fit:
 
-- workflow topology and execution lifecycle
+- carrier/orchestration plus structural workflow topology and execution lifecycle
 
 ### Rowboat
 
@@ -48,7 +48,7 @@ Strengths:
 
 Natural fit:
 
-- knowledge and file-provenance enriched orchestration
+- representation/provenance-heavy flows with knowledge and file lineage
 
 ### Hermes Agent
 
@@ -61,18 +61,16 @@ Strengths:
 
 Natural fit:
 
-- session/task/delivery-centric orchestration
+- carrier/orchestration-heavy flows with delivery, scheduling, and runtime state
 
 ## Canonical Model Rule
 
-The canonical model should be centered on:
+The canonical model should be centered on four ontology families:
 
-- runs and sessions
-- tasks and progress
-- messages and tool activity
-- artifacts and outputs
-- provenance and trajectory
-- optional graph and knowledge projections
+- semantic spine
+- carrier/orchestration
+- representation/index
+- governance/operational
 
 Graph structure should be supported, but not required as the only source truth.
 
@@ -82,8 +80,8 @@ Each generator family should eventually have a mapping spec that answers:
 
 - what raw event families it emits
 - what storage levels and planes it naturally populates
-- what canonical records it can populate richly
-- what canonical records it can only populate sparsely
+- what ontology families it can populate richly
+- what ontology families it can only populate sparsely
 - what view tiers it supports directly vs indirectly
 
 ## Anti-Drift Rule
