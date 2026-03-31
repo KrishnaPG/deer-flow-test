@@ -12,7 +12,9 @@ together.
 
 ## Taxonomy
 
-This taxonomy describes typed semantic extensions over the carrier-first core.
+This taxonomy describes the level-prefixed semantic extensions as a
+profile-driven semantic module layered over the shared base and attached to
+mandatory carrier/orchestration records.
 
 It does not describe every record family in the ontology.
 
@@ -122,9 +124,9 @@ At minimum they should distinguish:
 - prescription
 - outcome
 
-Carrier records such as `SessionRecord`, `MessageRecord`, `TaskRecord`, and
-`ArtifactRecord` are not themselves discovery kinds. They carry, reference, or
-present these typed semantic extensions.
+Carrier/orchestration records such as `SessionRecord`, `MessageRecord`,
+`TaskRecord`, and `ArtifactRecord` are not themselves discovery kinds. They
+carry, reference, or present those level-prefixed semantic extensions.
 
 Representation families such as `AsIsRepresentationRecord`, `ChunkRecord`, and
 `EmbeddingRecord` are also not discovery kinds.
