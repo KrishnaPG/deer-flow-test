@@ -19,6 +19,9 @@
 - approval/denial intent
 - intervention intent
 
+These should become first-class `IntentRecord` statements in the canonical
+ontology, not just transient UI commands.
+
 ## Required Metadata
 
 - ABAC result or visibility scope
@@ -31,8 +34,8 @@
 Intent handling must follow this pattern:
 
 1. validate intent and policy scope
-2. append intent as storage-backed truth or append-only event
-3. emit event bus notification or mediated progress
+2. append `IntentRecord` as storage-backed truth or append-only event
+3. emit `WriteOperationRecord` or related mediated progress
 4. surface later observed state as a result of the append-only flow
 
 Shortcut mutation models are forbidden.

@@ -21,6 +21,8 @@ These are not interchangeable and should be modeled explicitly.
 
 ## Tri-Plane Interpretation
 
+The planes map to explicit representation/index record families.
+
 ### As-Is Plane
 
 Use for:
@@ -28,6 +30,10 @@ Use for:
 - original payload access
 - canonical file preview
 - provenance anchor
+
+Representation family:
+
+- `AsIsRepresentationRecord`
 
 ### Chunks Plane
 
@@ -38,6 +44,10 @@ Use for:
 - transcript slices
 - partial content previews
 
+Representation family:
+
+- `ChunkRecord`
+
 ### Embeddings Plane
 
 Use for:
@@ -46,17 +56,23 @@ Use for:
 - nearest-neighbor discovery
 - retrieval hints
 
+Representation family:
+
+- `EmbeddingRecord`
+
 Rule:
 
 - embeddings point back to chunks, and chunks point back to As-Is truth
+- embeddings are representation/index records only, never source truth
 
 ## Canonical Contract Needs
 
 Records used by retrieval-aware views should preserve:
 
-- source payload reference
-- chunk reference(s)
-- embedding/index reference(s)
+- source semantic or carrier record references
+- linked `AsIsRepresentationRecord` references
+- linked `ChunkRecord` references
+- linked `EmbeddingRecord` references
 - chunking strategy
 - retrieval/index provider metadata
 - readiness state

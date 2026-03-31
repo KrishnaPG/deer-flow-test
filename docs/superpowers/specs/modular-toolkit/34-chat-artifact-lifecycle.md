@@ -24,6 +24,10 @@ Examples:
 - upload queue item
 - local attachment selection
 
+Rule:
+
+- staged input is client-transient and not yet canonical persisted truth
+
 ### 2. Accepted Input
 
 Definition:
@@ -35,6 +39,12 @@ Examples:
 
 - accepted upload
 - source object acknowledged by the system
+
+Canonical implication:
+
+- `ArtifactRecord` as carrier/orchestration record
+- linked `SourceRecord` or `SanitizedRecord`
+- linked `AsIsRepresentationRecord`
 
 ### 3. In-Flight Output
 
@@ -49,6 +59,11 @@ Examples:
 - partial file generation
 - delayed preview pipeline
 
+Canonical implication:
+
+- `ArtifactRecord` plus governance/operational records such as
+  `WriteOperationRecord` and related runtime/progress state
+
 ### 4. Presented Artifact
 
 Definition:
@@ -61,6 +76,11 @@ Examples:
 - output shown in artifact shelf
 - file added to result context
 
+Canonical implication:
+
+- carrier/presentation state on `ArtifactRecord`
+- payload access still comes through linked representation records
+
 ### 5. Previewable Artifact
 
 Definition:
@@ -72,6 +92,10 @@ Examples:
 - markdown preview
 - snippet preview
 - authorized image preview
+
+Canonical implication:
+
+- preview payload comes from linked `AsIsRepresentationRecord` or `ChunkRecord`
 
 ### 6. Retrievable Artifact
 
@@ -86,18 +110,22 @@ Examples:
 - pointer-based open
 - retrieval/search hit with backlinks
 
-### 7. Projected Artifact
+Canonical implication:
+
+- retrieval mode and pointer semantics are representation/retrieval concerns,
+  not raw artifact identity
+
+### 7. Downstream Projection
 
 Definition:
 
-- an artifact that has been projected into another downstream surface such as a
-  world marker, codex item, replay link, or planning object
+- an artifact-linked downstream projection into another surface such as a world
+  object, replay link, codex entry, or planning object
 
-Examples:
+Rule:
 
-- world unlock
-- replay-linked output
-- insight overlay source
+- this is not an artifact lifecycle state by itself; it is a downstream
+  projection backed by artifact, semantic, and representation links
 
 ## Lifecycle Rule
 

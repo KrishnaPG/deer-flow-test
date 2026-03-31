@@ -20,7 +20,7 @@ The toolkit must model not just state, but movement across levels.
 
 The generic trajectory is:
 
-`source capture -> sanitation -> view shaping -> insight discovery -> prediction -> prescription -> observed outcome`
+`source capture -> sanitation -> view shaping -> insight discovery -> prediction -> prescription -> outcome`
 
 ## Stage Model
 
@@ -90,10 +90,11 @@ Examples:
 - interventions
 - operator recommendations
 
-### Stage G - Observed Outcome
+### Stage G - Outcome
 
-Typically future L0-L3 records that can validate or invalidate earlier L4/L5
-chains.
+Typically L6.
+
+Outcome records evaluate later observed evidence against earlier L4/L5 chains.
 
 This matters because a successful prescription may intentionally make a prior
 prediction "wrong."
@@ -109,6 +110,15 @@ Records should be able to encode trajectory relationships such as:
 - `influences`
 - `observed_outcome_of`
 - `supersedes`
+
+Operational and governance records may also participate in trajectory:
+
+- `intent_causes`
+- `transforms`
+- `deduplicates`
+- `batches`
+- `resolves_conflict_for`
+- `checkpoints_replay_for`
 
 ## UI Implication
 
