@@ -13,3 +13,6 @@
 [submodule "3rdParty/claude-prism"]
 	path = 3rdParty/claude-prism
 	url = https://github.com/delibae/claude-prism.git
+[submodule "3rdParty/PraisonAI"]
+	path = 3rdParty/PraisonAI
+	url = https://github.com/MervinPraison/PraisonAI.git

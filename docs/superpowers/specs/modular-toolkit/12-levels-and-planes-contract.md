@@ -26,9 +26,9 @@ Examples:
 - media feeds
 - archives
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `SourceRecord`
+- `L0_SourceRecord`
 
 Meaning:
 
@@ -43,9 +43,9 @@ Examples:
 - converted file formats
 - null-imputed records
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `SanitizedRecord`
+- `L1_SanitizedRecord`
 
 Meaning:
 
@@ -61,9 +61,9 @@ Examples:
 - segment/crop/channel outputs
 - reusable toolkit-facing canonical views
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `ViewRecord`
+- `L2_ViewRecord`
 
 Meaning:
 
@@ -79,9 +79,9 @@ Examples:
 - knowledge extraction
 - identified objects/relations
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `InsightRecord`
+- `L3_InsightRecord`
 
 Meaning:
 
@@ -97,9 +97,9 @@ Examples:
 - generated future outcomes
 - creative projections
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `PredictionRecord`
+- `L4_PredictionRecord`
 
 Meaning:
 
@@ -114,9 +114,9 @@ Examples:
 - optimization actions
 - decision support actions
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `PrescriptionRecord`
+- `L5_PrescriptionRecord`
 
 Meaning:
 
@@ -132,9 +132,9 @@ Examples:
 - deviation reports
 - adjudication of what really happened relative to expectations
 
-Canonical semantic family:
+Canonical semantic extension:
 
-- `OutcomeRecord`
+- `L6_OutcomeRecord`
 
 Meaning:
 
@@ -204,14 +204,21 @@ Levels and planes are not the same thing as record families.
 
 The ontology should distinguish:
 
-- semantic spine records
-- carrier/orchestration records
-- representation/index records
-- governance/operational records
+- carrier/core records
+- typed semantic extensions
+- typed representation/index extensions
+- governance/operational extensions
 
 Planes remain orthogonal dimensions, while representation families such as
 `AsIsRepresentationRecord`, `ChunkRecord`, and `EmbeddingRecord` make those
-planes first-class in the ontology.
+planes usable in practice.
+
+Representation policy is selective rather than uniform:
+
+- `AsIsRepresentationRecord` is broadly universal
+- `ChunkRecord` is typical for `L1..L4`
+- `EmbeddingRecord` is a derivative of `ChunkRecord`, not a default for every
+  level
 
 ## Toolkit Interpretation
 

@@ -56,6 +56,7 @@ Core position:
 | `32-interactive-chat-lifecycle.md` | generator-agnostic lifecycle for interactive chat-oriented clients |
 | `33-chat-event-and-state-mapping.md` | generic chat event families and canonical mapping rules |
 | `34-chat-artifact-lifecycle.md` | generic upload/output/presentation/retrieval lifecycle for chat artifacts |
+| `35-carrier-core-and-typed-extensions-contract.md` | carrier-first core model and typed extension attachment rules |
 
 ## Stable Decisions
 
@@ -105,6 +106,7 @@ Read in this order:
 32. `32-interactive-chat-lifecycle.md`
 33. `33-chat-event-and-state-mapping.md`
 34. `34-chat-artifact-lifecycle.md`
+35. `35-carrier-core-and-typed-extensions-contract.md`
 
 ## Superseded Document
 
