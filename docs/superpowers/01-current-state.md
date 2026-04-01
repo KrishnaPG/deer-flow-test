@@ -11,6 +11,11 @@ The active architecture direction is toolkit-first.
 - reusable modules and proof apps come before first playable composition
 - chat/artifacts/replay/world state are part of one layered design
 
+## Progress Source
+
+- Use `docs/superpowers/specs/modular-toolkit/21-implementation-readiness-checklist.md` and `docs/superpowers/plans/2026-04-01-functional-game-gap-plan-index.md` as the authoritative progress trackers.
+- Do not expect a separate root status-board doc; keep progress state in those tracker files.
+
 ## Workstream Authority Map
 
 | Workstream           | Decision Status          | Implementation Status   | Canonical Docs                                                                                                                                                                           | Notes                                                                         |
