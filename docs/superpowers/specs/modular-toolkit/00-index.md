@@ -73,6 +73,9 @@ Core position:
 - Reusable modules must stay app-agnostic.
 - Tool apps must consume the same reusable modules as runtime apps.
 - `deer_gui` is one composition target, not the monolithic center.
+- planning stays blocked until the reconciled spec line through
+  `41-final-integration-tranche.md` is accepted under
+  `10-planning-guardrails.md`
 
 ## Reading Order
 

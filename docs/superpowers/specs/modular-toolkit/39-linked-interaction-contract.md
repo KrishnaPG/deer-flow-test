@@ -22,6 +22,13 @@ panels, and shell modes behave as one dashboard.
   mediated reads
 - side-by-side hosted views do not count as linked unless they participate in the
   same declared interaction contract
+- navigational world gestures and camera movement are not command-target changes
+- linked state must remain deterministic across broker failover and policy
+  invalidation
+- `filtering` is required only for shell modes that declare shared filter
+  semantics
+- linked gestures may prefill command context, but may not silently advance
+  intent lifecycle
 
 ## Linked Interaction Contract
 
@@ -33,6 +40,12 @@ Every linked interaction contract must define:
 - required stable join keys and filter dimensions
 - required metadata at the point of use
 - broker responsibilities
+- broker owner by interaction type
+- state durability and rehydration classification
+- temporal/failover semantics, where relevant
+- policy invalidation behavior, where relevant
+- command-surface lifecycle entry boundaries, where the shell mode is
+  actionable
 - degradation behavior
 - unsupported conditions
 
@@ -286,6 +299,7 @@ Required basis:
 
 Allowed sources:
 
+- `ActionDeckView`
 - `InspectorTabsView`
 - `AttentionQueueView`
 - `ArtifactAccessView`
@@ -296,6 +310,7 @@ Allowed sources:
 
 Required receivers where declared:
 
+- `ActionDeckView`
 - `CommandConsoleView`
 - `IntentComposerView`
 - intervention or approval surfaces
@@ -304,6 +319,168 @@ Degradation rule:
 
 - may degrade to a prefilled draft only when the mediated intent path remains
   available
+
+### `command_target`
+
+Purpose:
+
+- normalize the current actionable target bundle for mediated command flow
+
+Required basis:
+
+- actor and session context
+- canonical target refs
+- scope
+- provenance
+- policy visibility
+- broker sequence or epoch
+
+Allowed sources:
+
+- selection-capable views
+- `InspectorTabsView`
+- `ActionDeckView`
+- `CommandConsoleView`
+- `IntentComposerView`
+- `ReplayActivityView`
+- world picks
+
+Required receivers where declared:
+
+- `ActionDeckView`
+- `CommandConsoleView`
+- `IntentComposerView`
+- intervention or approval surfaces
+
+Degradation rule:
+
+- may degrade to prefilled draft context only when explicit operator promotion
+  into editable draft remains required
+
+### `viewport_navigation`
+
+Purpose:
+
+- reposition the active world camera without changing canonical target state
+
+Required basis:
+
+- viewport or camera target
+- navigation origin
+- zoom or extent semantics
+- broker epoch
+
+Allowed sources:
+
+- `TacticalWorldView`
+- `MinimapView`
+
+Required receivers where declared:
+
+- world camera surfaces
+- minimap viewport locators
+
+Degradation rule:
+
+- may degrade to local-only navigation only when the shell mode does not require
+  linked world/minimap navigation
+
+### `camera_sync`
+
+Purpose:
+
+- keep world and minimap camera state aligned bidirectionally
+
+Required basis:
+
+- camera position
+- zoom
+- frustum or bounds
+- broker epoch
+- origin panel and emission sequence
+
+Allowed sources:
+
+- `TacticalWorldView`
+- `MinimapView`
+
+Required receivers where declared:
+
+- `WorldViewportPanel`
+- `MinimapPanel`
+
+Degradation rule:
+
+- no acceptable degradation when a shell mode declares bidirectional sync as
+  required
+
+### `replay_cursor`
+
+Purpose:
+
+- identify the singular active temporal inspection point shared across
+  replay-capable surfaces
+
+Required basis:
+
+- `sequence_id`, `event_time`, or `checkpoint_id`
+- source stream or canonical record family
+- broker epoch
+- origin panel and emission sequence
+- resolution mode: `live_tail`, `checkpoint`, or `historical_event`
+
+Allowed sources:
+
+- replay scrubbers
+- `EventFeedView`
+- `ReplayActivityView`
+- world timelines
+
+Required receivers where declared:
+
+- replay/detail views
+- inspector summaries
+- queue/event surfaces
+- world overlays
+
+Degradation rule:
+
+- may degrade to explicit checkpoint stepping only when temporal ordering,
+  freshness visibility, and drill-down safety remain intact
+
+### `temporal_range`
+
+Purpose:
+
+- express a bounded time window for brushing, filtering, compare alignment, or
+  replay scope
+
+Required basis:
+
+- lower and upper temporal anchors
+- anchor kind
+- inclusivity semantics
+- granularity
+- open-endedness where relevant
+
+Allowed sources:
+
+- timelines
+- replay tracks
+- `EventFeedView`
+- range controls
+
+Required receivers where declared:
+
+- replay/detail views
+- sibling lists
+- compare-capable surfaces
+- world overlays
+
+Degradation rule:
+
+- may degrade from continuous range to explicit bounded buckets only when
+  canonical temporal anchors remain stable
 
 ## Shared Shell Interaction State
 
@@ -329,6 +506,24 @@ Required shared state slices:
   - resolvable shell-local targets that map references to supported detail hosts
 - `intent_draft_context`
   - unsent operator composition context for command and intervention flow
+- `command_target_state`
+  - normalized actionable target bundle for command surfaces
+- `viewport_state`
+  - current world viewport/camera target state
+- `camera_sync_state`
+  - brokered world/minimap camera alignment state
+- `replay_cursor_state`
+  - singular active temporal inspection point
+- `temporal_range_state`
+  - bounded active temporal window
+- `stream_lifecycle_state`
+  - per-surface `connecting` / `live` / `catching_up` / `degraded` /
+    `stalled` / `recovered` / `closed` state
+- `policy_overlay_state`
+  - current exclusion, masking, tombstone, `policy_epoch`, and `policy_reason`
+    overlays affecting linked interaction
+- `broker_epoch_map`
+  - current broker epoch by interaction type for failover-safe propagation
 
 ## Canonical Reference Discipline
 
@@ -376,6 +571,11 @@ Each interaction type must have one clear broker.
 | `CommandDeckPanel` | `source`, `sink`, optional `broker` | must consume target scope and pinned context, and originate mediated intents |
 | `ReplayPanel` | `source`, `sink` | must originate replay cursor or range and reflect externally selected checkpoints or ranges |
 | `ArtifactShelfPanel` | `source`, `sink`, `mirror` | must originate artifact selection and pinning while preserving lineage and representation identity |
+| `WorldViewportPanel` | `source`, `sink` | must originate world selection, focus, and viewport navigation and must consume brokered camera, temporal, and command-target context without silently arming commands |
+| `MinimapPanel` | `source`, `sink`, `mirror` | must reflect current viewport and may originate viewport navigation and explicit locate or follow focus without taking command authority |
+| `EventRailPanel` | `source`, `sink` | must originate and receive `replay_cursor`, `temporal_range`, and event-linked selection while preserving live-tail versus historical state |
+| `FleetRailPanel` | `source`, `sink` | must originate hierarchy-driven selection/focus and reflect current command-target and policy-invalidated state |
+| `BottomDeckPanel` | `sink`, selective `source` | must consume brokered selection, command-target, queue, and policy state, and may originate explicit command-surface actions through declared command views only |
 
 ## Shell Mode Minimums
 
@@ -383,9 +583,13 @@ Every shell mode that declares linked behavior must define a broker for:
 
 - `selection`
 - `focus`
-- `filtering`
-- `replay cursor`, where temporal reasoning matters
-- `command target`, where the shell mode is actionable
+
+Additionally, a shell mode must define a broker for:
+
+- `filtering`, only where the shell mode declares shared filter behavior
+- `replay_cursor` and `temporal_range`, where temporal reasoning matters
+- `command_target`, where the shell mode is actionable
+- `camera_sync` and `viewport_navigation`, where the shell mode is world-primary
 
 Every required panel in a shell mode must participate as at least a `source` or
 `sink`.
@@ -396,7 +600,7 @@ Minimal required loops:
 
 - every inspectable shell mode must link current selection into `InspectorPanel`
 - every actionable shell mode must link current selection and/or pinned context
-  into `CommandDeckPanel`
+  into its declared command surface
 - every artifact-bearing shell mode must support artifact selection, pinning, and
   drill-down propagation across participating panels
 - every temporally reasoning shell mode must support replay-style cursor or range
@@ -416,6 +620,16 @@ declares them:
 - level and plane where semantic cross-view filtering depends on them
 - stable timestamps or sequence IDs where temporal brushing or replay alignment
   is required
+- broker epoch or equivalent recovery sequence where linked recovery is
+  supported
+- freshness timestamp or last applied `sequence_id`
+- explicit stale reason and staleness budget where live streams or queue state
+  are shown
+- `policy_epoch` and `policy_reason` where policy overlays may invalidate
+  linked state
+- exclusion or tombstone markers where objects may disappear from direct access
+- spatial anchors and viewport target IDs where world/minimap linkage is
+  required
 - drill-down targets and provenance backlinks for escalated detail
 - lifecycle and supersession semantics where linked context may outlive the
   source surface
@@ -446,6 +660,10 @@ Labels, display order, screen position, and styling are never valid join keys.
 - any required participant cannot publish or consume the required linked state
 - required linkage would depend on guessed joins, lossy identity, missing
   provenance, or unsafe drill-downs
+- navigational gestures can implicitly arm or retarget commands
+- broker recovery can resume under the same epoch after failover
+- excluded references remain in selection, compare, focus, or drill-down paths
+  without tombstone or removal
 
 ## Acceptable Degradation
 
@@ -456,6 +674,9 @@ Examples of acceptable degradation:
 - an optional continuous range brush degrades to discrete bucket filtering
 - optional ranking, embedding, or world enrichments are absent while canonical
   linked filtering still works
+- explicit checkpoint stepping may replace continuous temporal scrubbing when
+  canonical temporal anchors, freshness visibility, and drill-down safety remain
+  intact
 
 Examples of unacceptable degradation:
 
@@ -463,6 +684,7 @@ Examples of unacceptable degradation:
 - required bidirectional linkage becomes one-way only
 - filters propagate visually but lose stable identity or provenance
 - temporal or lineage correlation is approximated from display order alone
+- world and minimap silently diverge when bidirectional sync is required
 
 ## Anti-Drift Rules
 
