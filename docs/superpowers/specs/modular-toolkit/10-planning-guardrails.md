@@ -106,9 +106,10 @@ proof milestones, not by one giant app-first feature list.
 
 ## Discovery Prerequisite Rule
 
-Do not write or execute crate-level implementation plans until the discovery-first
-spec tranche through `docs/superpowers/specs/modular-toolkit/31-custom-code-boundaries.md`
-is approved.
+Do not write or execute crate-level implementation plans until the reconciled
+discovery-first spec line through
+`docs/superpowers/specs/modular-toolkit/41-final-integration-tranche.md` is
+accepted.
 
 This block includes:
 
@@ -118,3 +119,17 @@ This block includes:
 - foundation/runtime/view implementation
 - proof-app implementation
 - `deer_gui` composition work
+
+Acceptance means:
+
+- the discovery-first tranche through
+  `docs/superpowers/specs/modular-toolkit/31-custom-code-boundaries.md` remains
+  approved in substance
+- the shell, linked-interaction, temporal, policy, and intent-boundary
+  reconciliation added through
+  `docs/superpowers/specs/modular-toolkit/37-shell-mode-support-matrix.md`,
+  `docs/superpowers/specs/modular-toolkit/38-generator-shell-mode-support-evaluation.md`,
+  `docs/superpowers/specs/modular-toolkit/39-linked-interaction-contract.md`,
+  `docs/superpowers/specs/modular-toolkit/40-shell-and-linked-interaction-stress-test.md`,
+  and `docs/superpowers/specs/modular-toolkit/41-final-integration-tranche.md`
+  is also accepted as planning-ready
