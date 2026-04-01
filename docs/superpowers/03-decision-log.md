@@ -13,3 +13,4 @@
 | 2026-03-31 | Modular-toolkit planning must follow explicit non-negotiables and milestone gates | active | `docs/superpowers/specs/modular-toolkit/09-non-negotiables.md`, `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md` |
 | 2026-03-31 | The old monolithic modular-toolkit spec is superseded by the split spec set | superseded | `docs/superpowers/specs/2026-03-31-modular-toolkit-architecture-design.md` |
 | 2026-03-31 | Product shape remains hybrid: RTS shell first, RPG puncture points second | active | `docs/superpowers/specs/2026-03-31-hybrid-data-game-design.md` |
+| 2026-04-01 | Shell support should be judged from shell modes downward while keeping view contracts as the atomic backend support unit | active | `docs/superpowers/specs/modular-toolkit/37-shell-mode-support-matrix.md`, `docs/superpowers/specs/modular-toolkit/36-view-contract-support-model.md` |

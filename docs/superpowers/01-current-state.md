@@ -29,6 +29,15 @@ The active architecture direction is toolkit-first.
   - chat and artifact pipeline support
   - chat-to-world bridging
   - anti-drift planning guardrails
+- shell-mode support from operating modes through panels, layouts, and views
+
+## Most Recent Decision Direction
+
+- Shell support is now being pinned in `shell mode` terms first.
+- The current support stack is:
+  - `backend -> canonical mappings -> view support -> panel support -> layout support -> shell mode support`
+- The current next-step candidate is backend stress-testing against the new shell
+  mode support matrix.
 
 ## Recommended Reading Order
 

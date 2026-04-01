@@ -57,6 +57,8 @@ Core position:
 | `33-chat-event-and-state-mapping.md` | generic chat event families and canonical mapping rules |
 | `34-chat-artifact-lifecycle.md` | generic upload/output/presentation/retrieval lifecycle for chat artifacts |
 | `35-carrier-core-and-typed-extensions-contract.md` | shared base, mandatory modules, and profile-driven module attachment rules |
+| `36-view-contract-support-model.md` | primary support model from view contracts to panels and layouts |
+| `37-shell-mode-support-matrix.md` | shell-mode support from operating modes through panels, layouts, and canonical dependencies |
 
 ## Stable Decisions
 
@@ -107,6 +109,8 @@ Read in this order:
 33. `33-chat-event-and-state-mapping.md`
 34. `34-chat-artifact-lifecycle.md`
 35. `35-carrier-core-and-typed-extensions-contract.md`
+36. `36-view-contract-support-model.md`
+37. `37-shell-mode-support-matrix.md`
 
 ## Superseded Document
 
