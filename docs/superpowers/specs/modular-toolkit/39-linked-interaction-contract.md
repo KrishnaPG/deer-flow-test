@@ -27,8 +27,9 @@ panels, and shell modes behave as one dashboard.
   invalidation
 - `filtering` is required only for shell modes that declare shared filter
   semantics
-- linked gestures may prefill command context, but may not silently advance
-  intent lifecycle
+- `prefill_seed` is broader than `action_intent_emission`; `command_target` and
+  explicitly allowed linked-gesture paths may seed or refresh shell-local
+  `prefill` without becoming editable or submittable intent state
 
 ## Linked Interaction Contract
 
@@ -317,8 +318,39 @@ Required receivers where declared:
 
 Degradation rule:
 
-- may degrade to a prefilled draft only when the mediated intent path remains
-  available
+- may degrade to shell-local `prefill` only when the mediated intent path
+  remains available
+
+### `prefill_seed`
+
+Purpose:
+
+- create or refresh shell-local `prefill` intent context without granting
+  editable ownership or submit authority
+
+Allowed sources:
+
+- any declared `action_intent_emission` source
+- any declared `command_target` source
+- any explicitly allowed linked-gesture seed source declared by the shell mode
+
+Allowed effect:
+
+- create `prefill`
+- refresh `prefill`
+- update suggested target, scope, parameter, or provenance context
+
+Forbidden effect:
+
+- create `draft` automatically
+- enter `validated`
+- enter `submitted`
+- append any canonical `IntentRecord`
+
+Boundary rule:
+
+- `prefill_seed` remains shell-local only; explicit operator promotion is
+  required for `prefill -> draft`
 
 ### `command_target`
 
@@ -354,8 +386,10 @@ Required receivers where declared:
 
 Degradation rule:
 
-- may degrade to prefilled draft context only when explicit operator promotion
-  into editable draft remains required
+- may degrade to shell-local `prefill` context only when explicit operator
+  promotion into editable `draft` remains required
+- declared `command_target` sources may seed or refresh shell-local `prefill`,
+  but may not advance beyond `prefill` without explicit operator promotion
 
 ### `viewport_navigation`
 
@@ -384,6 +418,9 @@ Degradation rule:
 
 - may degrade to local-only navigation only when the shell mode does not require
   linked world/minimap navigation
+- ordinary navigation-only camera movement remains intent-neutral by default
+  unless the shell mode explicitly declares a navigation gesture as
+  `prefill_seed`-capable
 
 ### `camera_sync`
 
