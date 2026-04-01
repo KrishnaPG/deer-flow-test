@@ -30,14 +30,21 @@ The active architecture direction is toolkit-first.
   - chat-to-world bridging
   - anti-drift planning guardrails
 - shell-mode support from operating modes through panels, layouts, and views
+- generator support against shell-mode requirements and linked dashboard behavior
+- linked interaction as a dedicated shell-level contract rather than an implicit
+  view behavior
 
 ## Most Recent Decision Direction
 
 - Shell support is now being pinned in `shell mode` terms first.
 - The current support stack is:
   - `backend -> canonical mappings -> view support -> panel support -> layout support -> shell mode support`
-- The current next-step candidate is backend stress-testing against the new shell
-  mode support matrix.
+- The current backend finding is that no studied generator yet proves any
+  canonical shell mode under the strict shell contract.
+- The linked-interaction contract is now being pinned as its own spec layer.
+- The current next-step candidate is to review whether discovery is now complete
+  enough to begin planning, or whether one more integration-spec slice is still
+  missing.
 
 ## Recommended Reading Order
 
