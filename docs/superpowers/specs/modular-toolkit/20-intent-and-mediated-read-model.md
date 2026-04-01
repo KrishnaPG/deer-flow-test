@@ -19,8 +19,10 @@
 - approval/denial intent
 - intervention intent
 
-These should become first-class `IntentRecord` statements in the canonical
-ontology, not just transient UI commands.
+These are external write families. They may exist as shell-local `prefill`,
+`draft`, or `validated` state, but become canonical only on explicit
+`submitted`. `approved`, `executed`, and `rejected` are later observed
+mediated outcomes, not locally asserted stages.
 
 ## Required Metadata
 
@@ -33,9 +35,16 @@ ontology, not just transient UI commands.
 
 Intent handling must follow this pattern:
 
-1. validate intent and policy scope
-2. append `IntentRecord` as storage-backed truth or append-only event
-3. emit `WriteOperationRecord` or related mediated progress
-4. surface later observed state as a result of the append-only flow
+1. accept or prefill candidate intent context from an allowed surface
+2. materialize shell-local intent state as `prefill`, then `draft` when the
+   operator takes ownership
+3. perform explicit target, parameter, and policy validation, producing
+   `validated`
+4. append `IntentRecord` only when the operator explicitly enters `submitted`
+5. emit `WriteOperationRecord` or related mediated progress after submission
+6. surface `approved`, `executed`, or `rejected` later as observed mediated
+   state
 
 Shortcut mutation models are forbidden.
+Local gestures may not jump directly from selection, replay, or world
+interaction into `submitted`, `approved`, or `executed`.

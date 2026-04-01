@@ -17,12 +17,17 @@ Before writing plans, those contracts must survive two harder tests:
 - the world-first sci-fi RTS HUD shell
 - the storage-native state-server stress scenarios
 
-This file records that stress-test pass and the resulting design corrections.
+This file records that stress-test pass, the gaps it exposed, and the
+reconciliation targets now integrated in `41-final-integration-tranche.md`.
 
 ## Overall Finding
 
-The current shell and linked-interaction model is directionally correct but not
-yet complete enough for planning.
+The shell and linked-interaction model was directionally correct but needed one
+final integration tranche before planning.
+
+Those required corrections are now captured in
+`41-final-integration-tranche.md`; this document should be read as the
+rationale for that tranche, not as a standing blocker once `41` is accepted.
 
 It is strongest on:
 
@@ -72,7 +77,7 @@ It is weakest on:
 - `viewport_navigation` primitive
 - `camera_sync` primitive
 - `rail_compaction` contract for collapsible persistent rails
-- `tiered_visibility` contract for persistent chrome, contextual lower deck, and
+- `tiered_shell_visibility` contract for persistent chrome, contextual lower deck, and
   opaque tier-3 overlays
 - compound bottom-deck contract for selection, command, and queue sections that
   share context but differ in behavior
@@ -104,6 +109,10 @@ transclusion modes.
 
 ### Missing Contracts
 
+These concern labels are now absorbed into the integrated shell-level rules in
+`41-final-integration-tranche.md`; they do not require separate follow-on
+documents if `41` is accepted.
+
 - `StreamContract`
 - `OperationalDegradationContract`
 - `PolicyOverlayContract`
@@ -113,8 +122,11 @@ transclusion modes.
 
 ### Design Consequence
 
-The shell and linked-interaction specs are not yet robust enough to claim stress
-survival across the storage-native architecture scenarios.
+These scenarios established the missing contracts that had to be added for
+storage-native readiness.
+
+Those contracts are now the acceptance checklist for
+`41-final-integration-tranche.md`, rather than a separate unresolved blocker.
 
 ## Adversarial Findings Against Linked Interaction
 
@@ -234,10 +246,10 @@ Required fix:
   - `approved` / `executed` / `rejected`
 - clarify which surfaces may enter each stage
 
-## Required Spec Adjustments Before Planning
+## Resolved Adjustment Checklist
 
-The next design slice should add or tighten the following before
-`writing-plans`:
+`41-final-integration-tranche.md` should be accepted only if it closes all of
+the following stress-test corrections:
 
 1. world-primary shell support
    - `battle_command` or equivalent world-primary shell mode
@@ -269,20 +281,16 @@ The next design slice should add or tighten the following before
    - intent rejection rules under policy constraints
 
 6. intent lifecycle separation
-   - prefill vs editable draft vs submitted intent boundaries
+   - shell-local `prefill`, `draft`, and `validated`
+   - canonical `IntentRecord` append only at explicit `submitted`
+   - `approved` / `executed` / `rejected` observed later as mediated outcomes
 
 ## Readiness Decision
 
-Do not start `writing-plans` yet.
+Do not use this file by itself as the planning gate.
 
-The discovery line is stronger than before, but this stress test shows one more
-design tranche is still required.
+The planning gate is whether `41-final-integration-tranche.md` is accepted as
+closing the six correction areas above.
 
-The next tranche should focus on integrating:
-
-- world-primary shell support
-- temporal and failover semantics
-- policy overlays
-- intent lifecycle boundaries
-
-Only after that tranche is pinned should planning begin.
+If `41` is accepted, `writing-plans` may begin. If `41` is rejected or
+reopened, planning remains blocked.
