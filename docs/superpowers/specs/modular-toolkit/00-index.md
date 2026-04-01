@@ -61,6 +61,8 @@ Core position:
 | `37-shell-mode-support-matrix.md` | shell-mode support from operating modes through panels, layouts, and canonical dependencies |
 | `38-generator-shell-mode-support-evaluation.md` | backend evaluation of DeerFlow, Hermes, PocketFlow, and Rowboat against shell-mode support |
 | `39-linked-interaction-contract.md` | canonical shell-level brushing, filtering, selection, focus, pinning, compare, and intent interaction rules |
+| `40-shell-and-linked-interaction-stress-test.md` | stress test of shell and linked-interaction contracts against RTS HUD and state-server edge cases |
+| `41-final-integration-tranche.md` | world-primary, temporal, failover, policy, and intent-boundary integration tranche before planning |
 
 ## Stable Decisions
 
@@ -115,6 +117,8 @@ Read in this order:
 37. `37-shell-mode-support-matrix.md`
 38. `38-generator-shell-mode-support-evaluation.md`
 39. `39-linked-interaction-contract.md`
+40. `40-shell-and-linked-interaction-stress-test.md`
+41. `41-final-integration-tranche.md`
 
 ## Superseded Document
 
