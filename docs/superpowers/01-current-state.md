@@ -33,6 +33,10 @@ The active architecture direction is toolkit-first.
 - generator support against shell-mode requirements and linked dashboard behavior
 - linked interaction as a dedicated shell-level contract rather than an implicit
   view behavior
+- shell and linked-interaction stress testing against RTS HUD and state-server
+  edge cases
+- final integration tranche for world-primary shells, temporal/failover
+  semantics, policy overlays, and intent boundaries
 
 ## Most Recent Decision Direction
 
@@ -42,9 +46,11 @@ The active architecture direction is toolkit-first.
 - The current backend finding is that no studied generator yet proves any
   canonical shell mode under the strict shell contract.
 - The linked-interaction contract is now being pinned as its own spec layer.
-- The current next-step candidate is to review whether discovery is now complete
-  enough to begin planning, or whether one more integration-spec slice is still
-  missing.
+- The current finding is that one more integration-spec tranche is still missing
+  before planning readiness.
+- That integration tranche is now being drafted.
+- The next decision after review is whether the spec line is finally ready for
+  `writing-plans`.
 
 ## Recommended Reading Order
 
