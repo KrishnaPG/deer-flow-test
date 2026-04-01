@@ -101,50 +101,117 @@ Modal fill:           rgba(5,   8,  16, 0.95)   solid for Tier 3 only
 
 | Component | Module | Description |
 |---|---|---|
-| `ResourceBar` | `ui::resource_bar` | Top strip. Renders 4 resource slots (icon + monospace count), center alert banner, right fleet summary. Subscribes to `ResourceCountChanged` events for data-pulse animation. |
-| `EventFeed` | `ui::event_feed` | Left panel. `VecDeque<LogEntry>` max 200. `ScrollArea::vertical` with `stick_to_bottom`. Entries colored by `LogSeverity`. Collapses to 32px icon rail with unread badge. |
-| `Minimap` | `ui::minimap` | Fixed `egui::Frame` 240×240 in right panel. Painter-driven: terrain rects, unit dots, fog overlay, white frustum rect. Octagonal clip mask. Click → move camera. |
-| `FleetTree` | `ui::fleet_tree` | Right panel below minimap. Collapsible tree: Fleet → Wing → Ship. Each row: icon + name + thin health bar + status dot. Click → select; double-click → focus camera. |
-| `SelectionPanel` | `ui::selection_panel` | Bottom-left. Shows on unit select. Large portrait `TextureHandle`, unit name/class, health ring (circular painter arc), 2×2 stat grid, 4–6 ability icons with cooldown overlays. |
-| `CommandConsole` | `ui::command_console` | Bottom-center. Tab bar (`[O]rders` / `[B]uild` / `[I]ntel`) drawn with painter. Orders tab: 5×3 button grid with hotkey labels. Build tab: queue + progress. Intel tab: full unit data. |
-| `BuildQueue` | `ui::build_queue` | Bottom-right. Two stacked sections: (1) active build items with countdown timers + cancel buttons, (2) active research with progress bar + queued research icon strip. |
+| `ResourceBar` | `ui::resource_bar` | Top strip. Renders 4 resource slots (icon + monospace count), center alert banner, right fleet summary from a read-only `ResourceBarProjection`. Data-pulse animation keys off newly applied live projection sequences rather than local mutation events. |
+| `EventFeed` | `ui::event_feed` | Left panel. `VecDeque<LogEntryProjection>` max 200. `ScrollArea::vertical` with `stick_to_bottom`. Entries are sequence-keyed, deduped by authoritative `sequence_id`, colored by `LogSeverity`, and collapse to a 32px icon rail with unread badge. |
+| `Minimap` | `ui::minimap` | Fixed `egui::Frame` 240×240 in right panel. Painter-driven from `MinimapProjection`: terrain rects, unit dots, fog overlay, white frustum rect. Octagonal clip mask. Click updates local camera framing only; gameplay-affecting orders use explicit intents. |
+| `FleetTree` | `ui::fleet_tree` | Right panel below minimap. Collapsible tree: Fleet → Wing → Ship from authoritative fleet projections. Each row: icon + name + thin health bar + status dot. Click updates local focus chrome; double-click focuses the local camera. |
+| `SelectionPanel` | `ui::selection_panel` | Bottom-left. Shows when the acknowledged selection/command-focus projection is non-empty. Large portrait `TextureHandle`, unit name/class, health ring (circular painter arc), 2×2 stat grid, 4–6 ability icons with cooldown overlays. Pending targeting/selection visuals render as overlays until confirmed or rejected. |
+| `CommandConsole` | `ui::command_console` | Bottom-center. Tab bar (`[O]rders` / `[B]uild` / `[I]ntel`) drawn with painter. Orders tab: 5×3 button grid with hotkey labels. Build tab: queue + progress. Intel tab: full unit data. Button presses emit `PlayerIntent` envelopes only; they never mutate local canonical mission state. |
+| `BuildQueue` | `ui::build_queue` | Bottom-right. Two stacked sections: (1) authoritative active build items with countdown timers + cancel intents, (2) active research with progress bar + queued research icon strip. Pending entries may appear as dashed/ghost overlays keyed by `intent_id` until the State Server confirms or rejects them. |
 
 ---
 
 ## 7. Animation Spec
 
-| Animation | Trigger | Duration | Easing | egui Implementation |
+| Animation | Trigger | Duration | Easing | Replay-safe rule / egui implementation |
 |---|---|---|---|---|
-| Scan-line sweep | Panel opens | 120ms | Linear | `painter.hline` at `y = panel_top + panel_height * progress`; `ScanLineAnim { progress: f32 }` component |
-| Data pulse | Numeric value changes | 80ms | Ease-out | `DataPulse { intensity: f32 }` decays per frame; `color = lerp(WHITE, normal_color, 1.0 - intensity)` |
-| Threat ping | Unit under attack event | 600ms | Ease-out | `ThreatPing { radius: f32, alpha: f32 }`; `painter.circle_stroke` expanding + fading on minimap |
-| Build complete | Build queue item finishes | 400ms | Ease-out | `BuildCompleteAnim { t: f32 }`; painter particle burst (8 lines from center) at portrait position |
-| Panel slide | Selection state changes | 150ms | Ease-out-cubic | Animate panel's `min_size` or use `egui::Area` with interpolated `Pos2` position |
-| Idle flicker | Always | 2s period | Sine | `border_alpha = 0.20 + 0.003 * sin(time * TAU / 2.0)`; applied to all panel border painter calls |
+| Scan-line sweep | Panel becomes visible from an acknowledged projection change or local chrome toggle | 120ms | Linear | Fire once per visibility epoch. Suppress while `ConnectionState::Rehydrating`. `painter.hline` at `y = panel_top + panel_height * progress`; `ScanLineAnim { panel_key, started_at_sequence, progress }`. |
+| Data pulse | Numeric field changes between live projection sequences | 80ms | Ease-out | Cache `(field_key, sequence_id)` and animate only when `sequence_id > last_visual_sequence`. `DataPulse { field_key, intensity }`; `color = lerp(WHITE, normal_color, 1.0 - intensity)`. |
+| Threat ping | New authoritative threat marker reaches the live tail | 600ms | Ease-out | Key by `(threat_id, sequence_id)` or `(unit_id, sequence_id)`. Duplicate or replayed sequences do nothing. `ThreatPing { radius, alpha }`; `painter.circle_stroke` expanding + fading on minimap. |
+| Build complete | Authoritative build item transitions into `Complete` on a new live sequence | 400ms | Ease-out | Burst only on first live observation of that terminal transition. Catch-up/replay updates the queue silently. `BuildCompleteAnim { build_id, sequence_id, t }`. |
+| Panel slide | Authoritative selection/build-presence toggles, or local-only chrome expands/collapses | 150ms | Ease-out-cubic | Gameplay-driven slides wait for confirmed projection change; local chrome may animate immediately. Animate panel `min_size` or `egui::Area` `Pos2` position. |
+| Idle flicker | Always | 2s period | Sine | Purely decorative and client-local. Safe during replay/rehydration because it is not keyed to external events. `border_alpha = 0.20 + 0.003 * sin(time * TAU / 2.0)`. |
 
-All animation state lives as Bevy `Component`s on UI entity. Updated in `Update` schedule via `Time<Real>`. Values passed into egui each frame — no animation state inside egui itself.
-
----
-
-## 8. Data Model — ECS Feed per Zone
-
-| Zone | Bevy Source |
-|---|---|
-| Resource Bar — resources | `Res<PlayerResources>` { minerals: u32, energy: u32, population: (u32,u32), credits: u32 } |
-| Resource Bar — alerts | `EventReader<AlertEvent>` { message: String, severity: AlertSeverity, timestamp: f32 } |
-| Resource Bar — fleet status | `Query<&Fleet, With<PlayerOwned>>` aggregated into `Res<FleetSummary>` |
-| Event Feed | `EventReader<LogEvent>` appended to `ResMut<EventLog>` (VecDeque) |
-| Minimap — terrain | `Res<TerrainMap>` { tiles: Vec<(IVec2, TileType)> } pre-rasterized to minimap coords |
-| Minimap — units | `Query<(&Transform, &UnitType, &Faction, &Health)>` |
-| Minimap — camera frustum | `Query<(&Camera, &GlobalTransform)>` projected to world bounds then minimap coords |
-| Fleet Tree | `Query<(&Fleet, &Wing, &ShipStats, &Health, &UnitId)>` hierarchically grouped |
-| Selection Panel | `Res<CurrentSelection>` { units: Vec<UnitId> }; `Query<(&ShipStats, &Health, &Abilities), With<Selected>>` |
-| Command Console | `Res<CommandGridState>` { buttons: [Option<CommandButton>; 15] } populated by selection system |
-| Build Queue | `Query<&ProductionQueue, With<PlayerOwned>>`; `Res<ActiveResearch>` |
+Sequence and replay rules:
+- Every snapshot and delta consumed by the HUD carries `mission_id`, `sequence_id`, and a stable domain key (`build_id`, `log_id`, `unit_id`, etc.).
+- The client tracks `ProjectionCursor { last_applied_sequence, last_visual_sequence, connection_state }`, where `connection_state` is `Connected`, `Disconnected`, or `Rehydrating`.
+- Messages at or below `last_applied_sequence` are duplicates and are discarded. Sequence gaps move the client into `Rehydrating` until a snapshot/delta stream closes the gap.
+- While `Rehydrating`, authoritative data still updates projections, but transient one-shot visuals (`ThreatPing`, `BuildCompleteAnim`, `DataPulse`, event-feed unread bursts) are suppressed.
+- Animation state lives as Bevy-side `Component`s/resources keyed by projection sequence or `intent_id`. egui remains a stateless renderer.
 
 ---
 
-## 9. egui Panel Approach
+## 8. Projection-Driven State Server Model
+
+The HUD is storage-native: object storage remains the only canonical truth, the State Server exposes an ABAC-filtered hot cache, and the Bevy app holds read-only projections for rendering. The client never treats local ECS resources as authoritative gameplay state.
+
+Core rules:
+- Startup and reconnect path: request a mission-scoped snapshot from the State Server, record its `sequence_id`, then subscribe to deltas strictly after that cursor.
+- The transport layer may be State Server WebSocket/SSE backed by NATS JetStream, but the UI contract is the same: ordered snapshot + delta projection messages carrying stable IDs and sequence numbers.
+- ECS resources in the HUD are projections only. They may be reduced, indexed, and cached locally for rendering, but they are never the source of truth and must be replaceable by replay.
+- Local-only UI state is allowed in separate chrome resources (`UiChromeState`, hover state, active tab, local camera framing, animation caches). Those resources must never masquerade as canonical mission state.
+
+| Zone | State Server projection feed | Local Bevy projection |
+|---|---|---|
+| Resource Bar — resources / alerts / fleet summary | `resource_bar.snapshot` + `resource_bar.delta` | `Res<ResourceBarProjection>` with `resources`, `active_alert`, `fleet_summary`, `last_sequence_id` |
+| Event Feed | `event_feed.snapshot` + `event_feed.delta` | `Res<EventFeedProjection>` storing sequence-keyed `VecDeque<LogEntryProjection>` and latest unread cursor |
+| Minimap — terrain / units / fog | `minimap.snapshot` + `minimap.delta` | `Res<MinimapProjection>` with preprojected terrain, unit dots, fog polygons, and stable `unit_id` keys |
+| Minimap — camera frustum overlay | authoritative world/camera markers from `minimap.delta`, plus local camera framing | `Res<MinimapProjection>` + `Res<UiChromeState>` for local viewport-only overlays |
+| Fleet Tree | `fleet_tree.snapshot` + `fleet_tree.delta` | `Res<FleetTreeProjection>` grouped Fleet → Wing → Ship by authoritative IDs |
+| Selection Panel | `selection.snapshot` + `selection.delta` | `Res<SelectionProjection>` for acknowledged command focus, plus `Res<PendingIntentLedger>` for temporary overlays |
+| Command Console | `command_console.snapshot` + `command_console.delta` | `Res<CommandConsoleProjection>` defining available tabs, button states, and hotkeys |
+| Build Queue | `build_queue.snapshot` + `build_queue.delta` | `Res<BuildQueueProjection>` for authoritative queue/research state, with pending rows sourced separately from `PendingIntentLedger` |
+
+Shared client resources:
+
+```rust
+pub struct ProjectionCursor {
+    pub mission_id: MissionId,
+    pub last_snapshot_sequence: u64,
+    pub last_applied_sequence: u64,
+    pub last_visual_sequence: u64,
+    pub connection_state: ConnectionState,
+}
+
+pub enum ConnectionState {
+    Connected,
+    Disconnected,
+    Rehydrating,
+}
+
+pub struct PendingIntentLedger {
+    pub entries: HashMap<IntentId, PendingIntentVisual>,
+}
+
+pub struct UiChromeState {
+    pub collapsed_panels: UiCollapsedPanels,
+    pub active_command_tab: CommandTab,
+    pub hovered_row: Option<RowId>,
+    pub local_camera_rect: Option<Rect>,
+}
+```
+
+Reducer rule: all projection reducers are idempotent and sequence-aware. Applying the same message twice must produce the same local state. Any domain list shown in the HUD (`EventFeed`, `BuildQueue`, `FleetTree`) must use stable IDs plus `sequence_id` so duplicate replay traffic cannot create duplicate rows.
+
+---
+
+## 9. Intent Boundary and Command Lifecycle
+
+All gameplay-affecting writes from the HUD cross a strict intent boundary. The UI may express intent immediately, but only the State Server may validate, sequence, and reflect the authoritative result back into projections.
+
+```rust
+pub struct PlayerIntent {
+    pub intent_id: IntentId,
+    pub mission_id: MissionId,
+    pub operator_id: OperatorId,
+    pub kind: IntentKind,
+    pub payload: IntentPayload,
+    pub expected_base_sequence: u64,
+    pub client_sent_at_ms: u64,
+}
+```
+
+| Lifecycle | HUD treatment | Exit condition |
+|---|---|---|
+| Pending | Render a dashed/ghost affordance keyed by `intent_id` (ghost waypoint, dashed build slot, subtle spinner, disabled repeat click). Do not mutate authoritative projections locally. | `CommandConfirmed`, a matching authoritative projection delta, or `CommandRejected` |
+| Confirmed | Remove pending overlay and let the authoritative projection fully own the display. If the authoritative result differs from the optimistic hint, snap/animate toward the server result. | Matching `intent_id` or stable domain key appears in the projection stream |
+| Rejected | Remove the pending overlay, restore the prior projection view, and emit an amber/red alert row describing the rejection reason or superseding conflict. | `CommandRejected { intent_id, reason }` |
+
+Conflict rule: if two operators submit conflicting intents, the HUD follows the deterministic sequence emitted by the State Server. Any locally pending affordance that loses the race rolls back cleanly and surfaces the rejection as UI feedback rather than trying to resolve the conflict on the client.
+
+---
+
+## 10. egui Panel Approach
 
 ```
 TopBottomPanel::top("resource_bar")
@@ -171,10 +238,11 @@ TopBottomPanel::bottom("bottom_bar")   [height: 20% of window]
 
 Egui panel order (determines overlap/clip): top → left → right → bottom → central.
 Right panel must be added before bottom panel so right panel extends full height.
+All panes render from projection resources plus `UiChromeState`; no pane mutates authoritative mission state directly.
 
 ---
 
-## 10. Open Questions — All Resolved
+## 11. Open Questions — All Resolved
 
 | Question | Resolution |
 |---|---|
@@ -182,7 +250,7 @@ Right panel must be added before bottom panel so right panel extends full height
 | Tooltip cascade depth? | Three layers: immediate name (hover) → full stats (600ms) → comparison (hold Alt). |
 | Rarity system? | 5 tiers: Common grey / Uncommon green / Rare blue / Epic purple / Legendary amber. Applied to ship class labels and tech tree nodes. |
 | Command grid size? | 5×3 (15 slots), consistent with SC2 muscle memory. Bottom-right slot reserved for Cancel at all times. |
-| Collapsible panels: default state? | Event feed: open. Fleet tree: open. Both collapse to 32px icon rail with unread badge. Preference persisted in `Res<UiPreferences>`. |
+| Collapsible panels: default state? | Event feed: open. Fleet tree: open. Both collapse to 32px icon rail with unread badge. Preference persisted in local `Res<UiPreferences>` / `UiChromeState`, not in authoritative mission state. |
 | Blur implementation in Bevy? | Render HUD panels to a separate `RenderTarget`; apply separable Gaussian blur (σ=4px, 12px visual) as a post-process pass before compositing. Initial version: skip blur, use lower alpha (0.65) as fallback. |
 | Font loading? | Load JetBrains Mono + IBM Plex Sans via `egui::FontDefinitions` in startup system. Embed as `include_bytes!` assets. |
 | Health ring implementation? | `ui.painter().arc` does not exist in egui — use `painter.add(PathShape::closed_line(...))` with manual arc point generation. Helper fn: `fn arc_points(center, radius, start_angle, end_angle, n: usize) -> Vec<Pos2>`. |
