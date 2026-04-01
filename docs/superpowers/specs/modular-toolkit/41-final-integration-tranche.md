@@ -325,6 +325,13 @@ Do not auto-retarget intents to fallback objects.
 
 ## Intent Lifecycle Boundaries And Broker Ownership
 
+External write families such as operator intents, clarification responses,
+approval or denial submissions, and intervention intents all follow the same
+boundary: shell-local before `submitted`, canonical only at explicit
+submission. Approval and denial controls may submit a decision against an
+existing intent, but they do not locally force that intent into `approved` or
+`rejected`.
+
 Intent state remains shell-local and non-canonical through:
 
 - `prefill`
@@ -340,10 +347,10 @@ Only `submitted` may append an `IntentRecord`.
 | Stage | May be entered by | Boundary |
 | --- | --- | --- |
 | `prefill` | any declared `action_intent_emission` source | non-submittable seed only |
-| `draft` | `CommandConsoleView`, `IntentComposerView` | first editable operator-owned state |
-| `validated` | `CommandConsoleView`, `IntentComposerView` | explicit validation against targets, parameters, and policy |
-| `submitted` | `CommandConsoleView`, `IntentComposerView` | explicit submit action only |
-| `approved` / `rejected` | approval surfaces or backend authority | adjudication of a submitted intent only |
+| `draft` | `ActionDeckView`, `CommandConsoleView`, `IntentComposerView` | first editable operator-owned state |
+| `validated` | `ActionDeckView`, `CommandConsoleView`, `IntentComposerView` | explicit validation against targets, parameters, and policy |
+| `submitted` | `ActionDeckView`, `CommandConsoleView`, `IntentComposerView` | explicit submit action only |
+| `approved` / `rejected` | backend authority or mediated adjudication stream | observed adjudication of a submitted intent only |
 | `executed` | mediated operation or result stream only | never entered directly by local gesture |
 
 ### Command-Target Brokerage
@@ -382,8 +389,8 @@ Unresolved conflicts block submission.
 
 ## Planning Readiness Gate
 
-If this tranche is accepted, the discovery line should be considered planning-
-ready.
+If this tranche and its surrounding base-spec reconciliation are accepted, the
+discovery line should be considered planning-ready.
 
 Planning should still remain blocked unless future review finds another missing
 integration seam.
