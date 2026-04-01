@@ -23,7 +23,8 @@ This file is the final integration tranche that closes the remaining gaps across
   flourishes
 - shell-local linked state must be deterministic under failover, exclusion, and
   replay conditions
-- linked gestures may prefill intent context, but may not silently execute work
+- linked gestures may create or refresh shell-local `prefill`, but may not
+  silently execute work
 
 ## World-Primary Shell Support
 
@@ -344,9 +345,13 @@ Only `submitted` may append an `IntentRecord`.
 
 ### Lifecycle Entry Rules
 
+`prefill_seed` is satisfied by any declared `action_intent_emission` source,
+any declared `command_target` source, and any explicitly allowed linked-gesture
+seed source declared by the shell mode.
+
 | Stage | May be entered by | Boundary |
 | --- | --- | --- |
-| `prefill` | any declared `action_intent_emission` source | non-submittable seed only |
+| `prefill` | any declared `prefill_seed` source | non-submittable seed only |
 | `draft` | `ActionDeckView`, `CommandConsoleView`, `IntentComposerView` | first editable operator-owned state |
 | `validated` | `ActionDeckView`, `CommandConsoleView`, `IntentComposerView` | explicit validation against targets, parameters, and policy |
 | `submitted` | `ActionDeckView`, `CommandConsoleView`, `IntentComposerView` | explicit submit action only |
@@ -378,12 +383,15 @@ Unresolved conflicts block submission.
 
 ### Guardrails Against Accidental Execution
 
-- linked gestures, brushing, replay scrubbing, world picks, camera moves, and
-  attention interrupts may create or refresh `prefill` only
+- declared `prefill_seed` paths, including linked gestures, brushing, replay
+  scrubbing, world picks, explicit camera-linked seed gestures, and attention
+  interrupts, may create or refresh shell-local `prefill` only
+- ordinary navigation-only camera movement remains intent-neutral by default
+  unless the shell mode explicitly declares it as seed-capable
 - no linked gesture may directly enter `validated`, `submitted`, `approved`, or
   `executed`
 - `prefill -> draft`, `draft -> validated`, and `validated -> submitted` each
-  require distinct explicit operator action
+  require distinct explicit operator promotion
 - target changes, exclusions, policy changes, or broker epoch changes after
   `validated` must demote the intent to `draft` or invalidate it visibly
 
