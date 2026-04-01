@@ -30,6 +30,14 @@ Read before implementation:
 | `05-library-and-build-order-freeze.md` | freeze OSS choices, custom-code boundaries, and corrected post-discovery build order | 03, 04 | lane C |
 | `06-post-discovery-build-order.md` | bridge from discovery into later runtime implementation sequence | 05 | final |
 
+## Post-Discovery Implementation Plans
+
+| File | Purpose | Depends On | Parallel Lane |
+| --- | --- | --- | --- |
+| `07-shell-state-linked-interaction-foundation.md` | build typed shell-local interaction state, broker systems, and HUD sync foundation | approved specs through `41-final-integration-tranche.md` | lane D |
+| `08-battle-command-shell.md` | implement the world-primary `battle_command` shell with viewport/minimap, tiers, rails, and bottom deck | 07 | lane E |
+| `09-runtime-semantics.md` | implement replay, stream, failover, policy, large-object, and intent lifecycle semantics | 07 | lane F |
+
 ## Practical Success Definition
 
 This tranche succeeds only when all of the following are true:
