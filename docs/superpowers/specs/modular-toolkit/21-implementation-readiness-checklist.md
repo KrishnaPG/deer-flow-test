@@ -51,6 +51,8 @@
 - `docs/superpowers/specs/modular-toolkit/29-world-projection-object-contract.md`
 - `docs/superpowers/specs/modular-toolkit/30-library-decision-matrix.md`
 - `docs/superpowers/specs/modular-toolkit/31-custom-code-boundaries.md`
+- `docs/superpowers/specs/modular-toolkit/35-carrier-core-and-typed-extensions-contract.md`
+- `docs/superpowers/specs/modular-toolkit/36-view-contract-support-model.md`
 
 ## No-Go Conditions
 
