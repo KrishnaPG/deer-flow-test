@@ -1,0 +1,19 @@
+[package]
+name = "deer-design"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+deer-pipeline-derivations = { path = "../../crates/pipeline/derivations" }
+deer-runtime-read-models = { path = "../../crates/runtime/read_models" }
+deer-ui-layout-runtime = { path = "../../crates/ui/layout_runtime" }
+deer-ui-panel-shells = { path = "../../crates/ui/panel_shells" }
+deer-view-chat-thread = { path = "../../crates/views/chat_thread" }
+deer-view-list-detail = { path = "../../crates/views/list_detail" }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+insta = { version = "1.43.2", features = ["yaml"] }
