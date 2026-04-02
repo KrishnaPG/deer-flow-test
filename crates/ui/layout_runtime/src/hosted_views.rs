@@ -4,7 +4,7 @@ pub struct HostedViewRegistration {
 }
 
 impl HostedViewRegistration {
-    pub const fn new(view_id: &'static str) -> Self {
+    const fn new(view_id: &'static str) -> Self {
         Self { view_id }
     }
 
@@ -17,3 +17,12 @@ pub const CHAT_THREAD: HostedViewRegistration = HostedViewRegistration::new("cha
 pub const ARTIFACT_SHELF: HostedViewRegistration =
     HostedViewRegistration::new("artifact_shelf_view");
 pub const INSPECTOR: HostedViewRegistration = HostedViewRegistration::new("inspector_view");
+
+pub fn hosted_view_registration(view_id: &str) -> Option<HostedViewRegistration> {
+    match view_id {
+        "chat_thread_view" => Some(CHAT_THREAD),
+        "artifact_shelf_view" => Some(ARTIFACT_SHELF),
+        "inspector_view" => Some(INSPECTOR),
+        _ => None,
+    }
+}

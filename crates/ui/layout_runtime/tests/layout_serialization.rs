@@ -1,6 +1,6 @@
 use deer_ui_layout_runtime::{
-    deserialize_layout, serialize_layout, DockNode, LayoutModal, LayoutSnapshot, SplitAxis,
-    CURRENT_LAYOUT_SNAPSHOT_VERSION,
+    deserialize_layout, serialize_layout, DockNode, LayoutModal, LayoutPersistenceError,
+    LayoutSnapshot, SplitAxis, CURRENT_LAYOUT_SNAPSHOT_VERSION,
 };
 use insta::assert_yaml_snapshot;
 
@@ -41,4 +41,21 @@ dock:
 modals:
   - panel_id: detail_modal
 "#);
+}
+
+#[test]
+fn layout_snapshot_rejects_unsupported_versions_during_deserialization() {
+    let encoded = r#"{
+        "version": 99,
+        "mode": "live_meeting",
+        "dock": { "kind": "tabs", "panels": ["chat_panel"] },
+        "modals": []
+    }"#;
+
+    let error = deserialize_layout(encoded).unwrap_err();
+
+    assert_eq!(
+        error,
+        LayoutPersistenceError::UnsupportedVersion { version: 99 }
+    );
 }

@@ -23,6 +23,8 @@ impl PanelRegistry {
 pub enum RegistryError {
     #[error("duplicate panel id")]
     DuplicatePanelId,
+    #[error("unknown panel id")]
+    UnknownPanelId,
 }
 
 pub fn register_panel(
@@ -39,4 +41,17 @@ pub fn register_panel(
 
     registry.panels.push(descriptor);
     Ok(())
+}
+
+pub fn remove_panel(
+    registry: &mut PanelRegistry,
+    panel_id: &str,
+) -> Result<PanelDescriptor, RegistryError> {
+    let index = registry
+        .panels
+        .iter()
+        .position(|descriptor| descriptor.panel_id() == panel_id)
+        .ok_or(RegistryError::UnknownPanelId)?;
+
+    Ok(registry.panels.remove(index))
 }
