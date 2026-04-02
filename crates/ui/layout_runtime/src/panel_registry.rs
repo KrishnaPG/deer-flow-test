@@ -7,6 +7,12 @@ pub struct PanelRegistry {
     pub panels: Vec<PanelDescriptor>,
 }
 
+impl PanelRegistry {
+    pub fn panels(&self) -> &[PanelDescriptor] {
+        &self.panels
+    }
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RegistryError {
     #[error("duplicate panel id")]
