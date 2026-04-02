@@ -4,6 +4,7 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct LayoutRuntimeReadModel {
+    pub layout_instance: u64,
     pub active_mode: Option<String>,
     pub broker_epochs: BTreeMap<String, u64>,
 }
@@ -24,7 +25,11 @@ pub fn reduce_layout_runtime_state(
     action: LayoutRuntimeAction,
 ) -> LayoutRuntimeReadModel {
     match action {
-        LayoutRuntimeAction::PresetLoaded { mode } => state.active_mode = Some(mode),
+        LayoutRuntimeAction::PresetLoaded { mode } => {
+            state.layout_instance = state.layout_instance.saturating_add(1);
+            state.active_mode = Some(mode);
+            state.broker_epochs.clear();
+        }
         LayoutRuntimeAction::BrokerEpochChanged {
             interaction_type,
             epoch,
