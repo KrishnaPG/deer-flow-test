@@ -98,7 +98,7 @@ pub fn normalize_batch(batch: &RawEnvelopeBatch) -> Result<NormalizedBatch, Norm
             crate::envelopes::RawEventEnvelope::Artifact {
                 artifact_id,
                 name,
-                status,
+                status: _,
                 as_is_hash,
             } => records.push(AnyRecord::Artifact(ArtifactRecord::new(
                 RecordId::from(artifact_id.as_str()),

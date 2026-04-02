@@ -1,0 +1,96 @@
+{
+  "entries": [
+    {
+      "envelope": {
+        "sequence": 1,
+        "event_id": "evt_1",
+        "record_ref": { "family": "Run", "record_id": "run_1" },
+        "write": { "kind": "AppendRecord", "record_id": "run_1" },
+        "parent_event_id": null,
+        "occurred_at": "2026-04-02T00:00:00Z"
+      },
+      "record": {
+        "Run": {
+          "header": {
+            "record_id": "run_1",
+            "family": "Run",
+            "level": "L2",
+            "plane": "AsIs",
+            "storage": "StorageNative",
+            "identity": {
+              "primary_id": "run_1",
+              "as_is_hash": null,
+              "chunk_hash": null,
+              "embedding_basis_hash": null
+            },
+            "correlations": {
+              "mission_id": null,
+              "run_id": null,
+              "artifact_id": null,
+              "trace_id": null,
+              "thread_id": null,
+              "task_id": null
+            },
+            "lineage": {
+              "derived_from": [],
+              "source_events": [],
+              "supersedes": null
+            },
+            "observed_at": "2026-04-02T00:00:00Z"
+          },
+          "body": {
+            "title": "mission alpha",
+            "status": "running"
+          }
+        }
+      }
+    },
+    {
+      "envelope": {
+        "sequence": 2,
+        "event_id": "evt_2",
+        "record_ref": { "family": "Artifact", "record_id": "artifact_1" },
+        "write": { "kind": "AppendRecord", "record_id": "artifact_1" },
+        "parent_event_id": "evt_1",
+        "occurred_at": "2026-04-02T00:01:00Z"
+      },
+      "record": {
+        "Artifact": {
+          "header": {
+            "record_id": "artifact_1",
+            "family": "Artifact",
+            "level": "L2",
+            "plane": "AsIs",
+            "storage": "StorageNative",
+            "identity": {
+              "primary_id": "artifact_1",
+              "as_is_hash": "sha256:artifact",
+              "chunk_hash": null,
+              "embedding_basis_hash": null
+            },
+            "correlations": {
+              "mission_id": null,
+              "run_id": null,
+              "artifact_id": null,
+              "trace_id": null,
+              "thread_id": null,
+              "task_id": null
+            },
+            "lineage": {
+              "derived_from": [
+                { "family": "Run", "record_id": "run_1" }
+              ],
+              "source_events": [],
+              "supersedes": null
+            },
+            "observed_at": "2026-04-02T00:01:00Z"
+          },
+          "body": {
+            "label": "sector report",
+            "media_type": "text/markdown"
+          }
+        }
+      }
+    }
+  ]
+}
