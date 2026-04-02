@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "apps/deer_chat_lab",
     "apps/deer_gui",
     "crates/foundation/contracts",
     "crates/foundation/domain",

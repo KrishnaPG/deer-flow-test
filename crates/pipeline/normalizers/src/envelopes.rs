@@ -47,11 +47,18 @@ pub enum RawEventEnvelope {
         title: String,
         state: String,
     },
+    ToolCall {
+        tool_call_id: String,
+        tool_name: String,
+        status: String,
+    },
     Artifact {
         artifact_id: String,
         name: String,
         status: String,
         as_is_hash: String,
+        parent_message_id: Option<String>,
+        parent_clarification_id: Option<String>,
     },
     RuntimeStatus {
         state: String,

@@ -5,6 +5,7 @@ pub mod governance;
 pub mod promotions;
 pub mod representation;
 
+pub use carrier::normalize_stream_batch;
 pub use carrier::{normalize_batch, NormalizedBatch};
 pub use envelopes::RawEnvelopeBatch;
 pub use error::NormalizationError;

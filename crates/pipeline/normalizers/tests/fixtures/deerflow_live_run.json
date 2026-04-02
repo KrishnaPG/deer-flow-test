@@ -23,6 +23,12 @@
       "state": "running"
     },
     {
+      "kind": "tool_call",
+      "tool_call_id": "tool_1",
+      "tool_name": "map_scan",
+      "status": "running"
+    },
+    {
       "kind": "artifact",
       "artifact_id": "artifact_1",
       "name": "terrain.md",
