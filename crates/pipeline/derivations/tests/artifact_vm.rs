@@ -1,24 +1,45 @@
-use deer_foundation_contracts::{AsIsHash, IdentityMeta, LineageMeta, RecordId};
+use deer_foundation_contracts::{
+    AsIsHash, IdentityMeta, LineageMeta, RecordFamily, RecordId, RecordRef,
+};
 use deer_foundation_domain::{AnyRecord, ArtifactBody, ArtifactRecord};
 use deer_pipeline_derivations::derive_artifact_shelf_vm;
 use insta::assert_yaml_snapshot;
 
 #[test]
-fn derives_artifact_shelf_vm_with_preview_and_retrieval_metadata() {
-    let records = vec![AnyRecord::Artifact(ArtifactRecord::new(
-        RecordId::from_static("artifact_1"),
-        IdentityMeta::hash_anchored(
+fn derives_artifact_shelf_vm_only_for_presented_artifacts() {
+    let records = vec![
+        AnyRecord::Artifact(ArtifactRecord::new(
+            RecordId::from_static("artifact_hidden"),
+            IdentityMeta::hash_anchored(
+                RecordId::from_static("artifact_hidden"),
+                Some(AsIsHash::from_static("sha256:hidden")),
+                None,
+                None,
+            ),
+            LineageMeta::root(),
+            ArtifactBody {
+                label: "hidden.tmp".into(),
+                media_type: "application/octet-stream".into(),
+            },
+        )),
+        AnyRecord::Artifact(ArtifactRecord::new(
             RecordId::from_static("artifact_1"),
-            Some(AsIsHash::from_static("sha256:terrain-md")),
-            None,
-            None,
-        ),
-        LineageMeta::root(),
-        ArtifactBody {
-            label: "terrain.md".into(),
-            media_type: "text/markdown".into(),
-        },
-    ))];
+            IdentityMeta::hash_anchored(
+                RecordId::from_static("artifact_1"),
+                Some(AsIsHash::from_static("sha256:terrain-md")),
+                None,
+                None,
+            ),
+            LineageMeta::derived_from(RecordRef::new(
+                RecordFamily::Message,
+                RecordId::from_static("msg_presented_1"),
+            )),
+            ArtifactBody {
+                label: "terrain.md".into(),
+                media_type: "text/markdown".into(),
+            },
+        )),
+    ];
 
     let shelf = derive_artifact_shelf_vm(&records);
 
@@ -29,5 +50,7 @@ entries:
     status: presented
     preview_supported: true
     retrieval_mode: mediated_pointer
+    provenance: "sha256:terrain-md"
+    presentation_state: presented
 "#);
 }

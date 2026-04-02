@@ -30,10 +30,8 @@ pub struct TranscriptVm {
 
 pub fn derive_transcript_vm(records: &[AnyRecord]) -> TranscriptVm {
     let mut entries = Vec::new();
-    let mut run_status = RunStatusVm {
-        run_id: String::new(),
-        state: String::new(),
-    };
+    let mut run_status: Option<RunStatusVm> = None;
+    let mut runtime_state: Option<String> = None;
     let mut tasks = Vec::new();
 
     for record in records {
@@ -43,11 +41,24 @@ pub fn derive_transcript_vm(records: &[AnyRecord]) -> TranscriptVm {
                 role: message.body.role.clone(),
                 text: message.body.text.clone(),
             }),
+            AnyRecord::ToolCall(tool_call) => entries.push(TranscriptEntryVm {
+                record_id: tool_call.record_id().to_string(),
+                role: "tool".into(),
+                text: tool_call.body.tool_name.clone(),
+            }),
+            AnyRecord::Clarification(clarification) => entries.push(TranscriptEntryVm {
+                record_id: clarification.record_id().to_string(),
+                role: "clarification".into(),
+                text: clarification.body.prompt.clone(),
+            }),
             AnyRecord::Run(run) => {
-                run_status = RunStatusVm {
+                run_status = Some(RunStatusVm {
                     run_id: run.record_id().to_string(),
                     state: run.body.status.clone(),
-                };
+                });
+            }
+            AnyRecord::RuntimeStatus(runtime_status) => {
+                runtime_state = Some(runtime_status.body.status.clone());
             }
             AnyRecord::Task(task) => tasks.push(TaskProgressVm {
                 task_id: task.record_id().to_string(),
@@ -55,6 +66,17 @@ pub fn derive_transcript_vm(records: &[AnyRecord]) -> TranscriptVm {
                 state: task.body.status.clone(),
             }),
             _ => {}
+        }
+    }
+
+    let mut run_status = run_status.unwrap_or(RunStatusVm {
+        run_id: String::new(),
+        state: String::new(),
+    });
+
+    if !run_status.run_id.is_empty() {
+        if let Some(state) = runtime_state {
+            run_status.state = state;
         }
     }
 

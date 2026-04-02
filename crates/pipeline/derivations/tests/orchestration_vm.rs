@@ -1,7 +1,8 @@
-use deer_foundation_contracts::{CanonicalRecord, IdentityMeta, LineageMeta, RecordId};
+use deer_foundation_contracts::{IdentityMeta, LineageMeta, RecordId};
 use deer_foundation_domain::{
-    AnyRecord, MessageBody, MessageRecord, RunBody, RunRecord, SessionBody, SessionRecord,
-    TaskBody, TaskRecord,
+    AnyRecord, ClarificationBody, ClarificationRecord, MessageBody, MessageRecord, RunBody,
+    RunRecord, RuntimeStatusBody, RuntimeStatusRecord, SessionBody, SessionRecord, TaskBody,
+    TaskRecord, ToolCallBody, ToolCallRecord,
 };
 use deer_pipeline_derivations::derive_transcript_vm;
 use insta::assert_yaml_snapshot;
@@ -44,6 +45,33 @@ fn derives_transcript_and_run_status_vms_from_canonical_records() {
                 status: "running".into(),
             },
         )),
+        AnyRecord::ToolCall(ToolCallRecord::new(
+            RecordId::from_static("tool_1"),
+            IdentityMeta::hash_anchored(RecordId::from_static("tool_1"), None, None, None),
+            LineageMeta::root(),
+            ToolCallBody {
+                tool_name: "map_scan".into(),
+                status: "running".into(),
+            },
+        )),
+        AnyRecord::Clarification(ClarificationRecord::new(
+            RecordId::from_static("clar_1"),
+            IdentityMeta::hash_anchored(RecordId::from_static("clar_1"), None, None, None),
+            LineageMeta::root(),
+            ClarificationBody {
+                prompt: "Confirm the survey radius.".into(),
+                resolved: false,
+            },
+        )),
+        AnyRecord::RuntimeStatus(RuntimeStatusRecord::new(
+            RecordId::from_static("runtime_1"),
+            IdentityMeta::hash_anchored(RecordId::from_static("runtime_1"), None, None, None),
+            LineageMeta::root(),
+            RuntimeStatusBody {
+                status: "live".into(),
+                detail: "stream connected".into(),
+            },
+        )),
     ];
 
     let transcript = derive_transcript_vm(&records);
@@ -53,17 +81,52 @@ entries:
   - record_id: msg_1
     role: operator
     text: Survey the ridge
+  - record_id: tool_1
+    role: tool
+    text: map_scan
+  - record_id: clar_1
+    role: clarification
+    text: Confirm the survey radius.
 run_status:
   run_id: run_1
-  state: running
+  state: live
 tasks:
   - task_id: task_1
     title: Gather terrain notes
     state: running
 "#);
+}
 
-    assert_eq!(
-        records[3].header().level as u8,
-        records[3].header().level as u8
-    );
+#[test]
+fn applies_runtime_status_even_when_it_arrives_before_run_record() {
+    let records = vec![
+        AnyRecord::RuntimeStatus(RuntimeStatusRecord::new(
+            RecordId::from_static("runtime_1"),
+            IdentityMeta::hash_anchored(RecordId::from_static("runtime_1"), None, None, None),
+            LineageMeta::root(),
+            RuntimeStatusBody {
+                status: "live".into(),
+                detail: "stream connected".into(),
+            },
+        )),
+        AnyRecord::Run(RunRecord::new(
+            RecordId::from_static("run_1"),
+            IdentityMeta::hash_anchored(RecordId::from_static("run_1"), None, None, None),
+            LineageMeta::root(),
+            RunBody {
+                title: "Survey the ridge".into(),
+                status: "running".into(),
+            },
+        )),
+    ];
+
+    let transcript = derive_transcript_vm(&records);
+
+    assert_yaml_snapshot!(transcript, @r#"
+entries: []
+run_status:
+  run_id: run_1
+  state: live
+tasks: []
+"#);
 }
