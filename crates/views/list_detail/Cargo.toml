@@ -1,0 +1,11 @@
+[package]
+name = "deer-view-list-detail"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deer-pipeline-derivations = { path = "../../pipeline/derivations" }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+insta = { version = "1.43.2", features = ["yaml"] }

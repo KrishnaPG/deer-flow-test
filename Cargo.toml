@@ -9,6 +9,8 @@ members = [
     "crates/pipeline/raw_sources",
     "crates/runtime/read_models",
     "crates/runtime/world_projection",
+    "crates/views/chat_thread",
+    "crates/views/list_detail",
     "crates/ui/layout_runtime",
     "crates/ui/panel_shells",
 ]
