@@ -5,6 +5,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum LinkedShellPanelRole {
     Source,
+    Broker,
     Sink,
     Mirror,
 }

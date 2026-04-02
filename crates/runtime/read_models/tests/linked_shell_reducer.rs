@@ -67,6 +67,34 @@ fn linked_shell_state_preserves_panel_roles_for_restored_panels() {
 }
 
 #[test]
+fn linked_shell_state_preserves_explicit_broker_roles_for_restored_panels() {
+    let state = LinkedShellState::default();
+
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::PanelParticipationDeclared {
+            panel_id: "chat_panel".into(),
+            roles: vec![LinkedShellPanelRole::Source, LinkedShellPanelRole::Broker],
+        },
+    );
+
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::LayoutPanelsRestored {
+            panel_ids: vec!["chat_panel".into()],
+        },
+    );
+
+    assert_eq!(
+        state.panel_roles.get("chat_panel"),
+        Some(&vec![
+            LinkedShellPanelRole::Source,
+            LinkedShellPanelRole::Broker,
+        ])
+    );
+}
+
+#[test]
 fn linked_shell_state_clears_stale_drill_target_when_panel_is_not_restored() {
     let state = LinkedShellState::default();
 
