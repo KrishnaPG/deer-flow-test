@@ -2,9 +2,9 @@ use crate::{panel_contract::PanelContract, panel_roles::PanelRole};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PanelParticipation {
-    pub required_hosted_views: Vec<String>,
-    pub roles: Vec<PanelRole>,
-    pub join_keys: Vec<String>,
+    required_hosted_views: Vec<String>,
+    roles: Vec<PanelRole>,
+    join_keys: Vec<String>,
 }
 
 impl PanelParticipation {
@@ -21,5 +21,17 @@ impl PanelParticipation {
             roles: contract.roles.clone(),
             join_keys: contract.join_keys.clone(),
         })
+    }
+
+    pub fn required_hosted_views(&self) -> Vec<String> {
+        self.required_hosted_views.clone()
+    }
+
+    pub fn roles(&self) -> Vec<PanelRole> {
+        self.roles.clone()
+    }
+
+    pub fn join_keys(&self) -> Vec<String> {
+        self.join_keys.clone()
     }
 }

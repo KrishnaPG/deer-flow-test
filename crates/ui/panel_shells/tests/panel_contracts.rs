@@ -1,6 +1,13 @@
 use deer_ui_panel_shells::{PanelContract, PanelParticipation, PanelRole};
 
 #[test]
+fn panel_participation_cannot_be_constructed_directly() {
+    let cases = trybuild::TestCases::new();
+
+    cases.compile_fail("tests/ui/panel_participation_private_fields.rs");
+}
+
+#[test]
 fn panel_contract_requires_hosted_views_roles_and_join_keys() {
     let contract = PanelContract {
         panel_id: "artifact_shelf".into(),
@@ -11,10 +18,14 @@ fn panel_contract_requires_hosted_views_roles_and_join_keys() {
 
     let participation = PanelParticipation::from_contract(&contract).unwrap();
 
-    assert!(participation.roles.contains(&PanelRole::Source));
+    assert!(participation.roles().contains(&PanelRole::Source));
     assert_eq!(
-        participation.join_keys,
+        participation.join_keys(),
         vec!["artifact_id".to_string(), "thread_id".to_string()]
+    );
+    assert_eq!(
+        participation.required_hosted_views(),
+        vec!["artifact_shelf_view".to_string()]
     );
 }
 

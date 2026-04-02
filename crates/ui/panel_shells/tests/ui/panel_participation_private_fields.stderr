@@ -1,0 +1,11 @@
+error[E0451]: fields `required_hosted_views`, `roles` and `join_keys` of struct `PanelParticipation` are private
+ --> tests/ui/panel_participation_private_fields.rs:5:9
+  |
+4 |     let _ = PanelParticipation {
+  |             ------------------ in this type
+5 |         required_hosted_views: vec!["artifact_shelf_view".to_string()],
+  |         ^^^^^^^^^^^^^^^^^^^^^ private field
+6 |         roles: vec![PanelRole::Source],
+  |         ^^^^^ private field
+7 |         join_keys: vec!["artifact_id".to_string()],
+  |         ^^^^^^^^^ private field
