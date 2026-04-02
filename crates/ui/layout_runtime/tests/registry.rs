@@ -123,8 +123,9 @@ fn registry_checks_contract_compatibility_through_roles_join_keys_and_views() {
     })
     .unwrap();
 
-    assert!(source.is_compatible_with(&compatible_sink));
-    assert!(!source.is_compatible_with(&incompatible_sink));
+    assert!(source.can_drive(&compatible_sink));
+    assert!(!compatible_sink.can_drive(&source));
+    assert!(!source.can_drive(&incompatible_sink));
 }
 
 #[test]
