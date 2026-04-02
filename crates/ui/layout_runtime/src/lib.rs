@@ -11,5 +11,5 @@ pub use layout_model::LayoutSnapshot;
 pub use layout_persistence::{deserialize_layout, serialize_layout};
 pub use linked_brokers::LinkedBrokerState;
 pub use panel_descriptor::PanelDescriptor;
-pub use panel_registry::{register_panel, PanelRegistry};
+pub use panel_registry::{register_panel, PanelRegistry, RegistryError};
 pub use runtime::LayoutRuntimeState;

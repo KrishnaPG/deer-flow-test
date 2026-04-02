@@ -10,6 +10,8 @@ fn layout_snapshot_round_trips_with_panel_ids_and_mode() {
     let encoded = serialize_layout(&snapshot).unwrap();
     let restored = deserialize_layout(&encoded).unwrap();
 
+    assert_eq!(restored, snapshot);
+
     assert_yaml_snapshot!(restored, @r#"
 mode: live_meeting
 panels:
