@@ -1,0 +1,14 @@
+[package]
+name = "deer-pipeline-derivations"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deer-foundation-contracts = { path = "../../foundation/contracts" }
+deer-foundation-domain = { path = "../../foundation/domain" }
+deer-foundation-replay = { path = "../../foundation/replay" }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+insta = { version = "1.43.2", features = ["yaml"] }
+similar-asserts = "1.7.0"
