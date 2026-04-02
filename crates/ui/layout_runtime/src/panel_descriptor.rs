@@ -50,7 +50,7 @@ impl PanelDescriptor {
             .any(|declared| declared == hosted_view_id)
     }
 
-    pub fn is_compatible_with(&self, other: &PanelDescriptor) -> bool {
+    pub fn can_drive(&self, other: &PanelDescriptor) -> bool {
         let self_roles = self.participation.roles();
         let other_roles = other.participation.roles();
         let self_join_keys = self.participation.join_keys();

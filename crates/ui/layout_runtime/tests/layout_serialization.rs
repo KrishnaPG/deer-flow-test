@@ -59,3 +59,21 @@ fn layout_snapshot_rejects_unsupported_versions_during_deserialization() {
         LayoutPersistenceError::UnsupportedVersion { version: 99 }
     );
 }
+
+#[test]
+fn layout_snapshot_migrates_legacy_flat_snapshot_shape() {
+    let encoded = r#"{
+        "mode": "live_meeting",
+        "panels": ["chat_panel", "inspector_panel"]
+    }"#;
+
+    let restored = deserialize_layout(encoded).unwrap();
+
+    assert_eq!(restored.version, CURRENT_LAYOUT_SNAPSHOT_VERSION);
+    assert_eq!(restored.mode, "live_meeting");
+    assert_eq!(restored.modals, Vec::<LayoutModal>::new());
+    assert_eq!(
+        restored.dock,
+        DockNode::tabs(vec!["chat_panel".into(), "inspector_panel".into()])
+    );
+}

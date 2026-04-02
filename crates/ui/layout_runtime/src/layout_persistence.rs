@@ -1,6 +1,7 @@
+use serde::Deserialize;
 use thiserror::Error;
 
-use crate::layout_model::{LayoutSnapshot, CURRENT_LAYOUT_SNAPSHOT_VERSION};
+use crate::layout_model::{DockNode, LayoutSnapshot, CURRENT_LAYOUT_SNAPSHOT_VERSION};
 
 #[derive(Debug, Error)]
 pub enum LayoutPersistenceError {
@@ -25,12 +26,34 @@ impl PartialEq for LayoutPersistenceError {
 
 impl Eq for LayoutPersistenceError {}
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum LayoutSnapshotEnvelope {
+    Current(LayoutSnapshot),
+    Legacy(LegacyLayoutSnapshot),
+}
+
+#[derive(Debug, Deserialize)]
+struct LegacyLayoutSnapshot {
+    mode: String,
+    panels: Vec<String>,
+}
+
+impl LegacyLayoutSnapshot {
+    fn into_current(self) -> LayoutSnapshot {
+        LayoutSnapshot::new(&self.mode, DockNode::tabs(self.panels), Vec::new())
+    }
+}
+
 pub fn serialize_layout(snapshot: &LayoutSnapshot) -> Result<String, serde_json::Error> {
     serde_json::to_string(snapshot)
 }
 
 pub fn deserialize_layout(encoded: &str) -> Result<LayoutSnapshot, LayoutPersistenceError> {
-    let snapshot: LayoutSnapshot = serde_json::from_str(encoded)?;
+    let snapshot = match serde_json::from_str::<LayoutSnapshotEnvelope>(encoded)? {
+        LayoutSnapshotEnvelope::Current(snapshot) => snapshot,
+        LayoutSnapshotEnvelope::Legacy(snapshot) => snapshot.into_current(),
+    };
 
     if snapshot.version != CURRENT_LAYOUT_SNAPSHOT_VERSION {
         return Err(LayoutPersistenceError::UnsupportedVersion {
