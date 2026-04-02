@@ -1,3 +1,4 @@
+use deer_foundation_contracts::RecordRef;
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -6,7 +7,7 @@ pub struct WorldObject {
     pub source_record_id: String,
     pub drill_down_target: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub supersedes_record_id: Option<String>,
+    pub supersedes: Option<RecordRef>,
     #[serde(skip_serializing)]
     pub level: &'static str,
     #[serde(skip_serializing)]
@@ -19,7 +20,7 @@ impl WorldObject {
             kind: "WorldTaskBeacon",
             source_record_id: source_record_id.to_owned(),
             drill_down_target,
-            supersedes_record_id: None,
+            supersedes: None,
             level: "L2",
             plane: "AsIs",
         }
@@ -30,14 +31,14 @@ impl WorldObject {
             kind: "WorldArtifactUnlock",
             source_record_id: source_record_id.to_owned(),
             drill_down_target,
-            supersedes_record_id: None,
+            supersedes: None,
             level: "L2",
             plane: "AsIs",
         }
     }
 
-    pub fn with_supersession(mut self, supersedes_record_id: Option<String>) -> Self {
-        self.supersedes_record_id = supersedes_record_id;
+    pub fn with_supersession(mut self, supersedes: Option<RecordRef>) -> Self {
+        self.supersedes = supersedes;
         self
     }
 }
