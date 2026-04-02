@@ -14,5 +14,8 @@ pub use intent::{reduce_intent_state, IntentAction, IntentDraftState, IntentLife
 pub use layout_runtime_state::{
     reduce_layout_runtime_state, LayoutRuntimeAction, LayoutRuntimeReadModel,
 };
-pub use linked_shell::{reduce_linked_shell_state, LinkedShellAction, LinkedShellState};
+pub use linked_shell::{
+    reduce_linked_shell_state, LinkedShellAction, LinkedShellPanelRole, LinkedShellState,
+};
+pub use policy::{reduce_policy_state, PolicyAction, PolicyOverlayState};
 pub use temporal::{reduce_temporal_state, TemporalAction, TemporalState};
