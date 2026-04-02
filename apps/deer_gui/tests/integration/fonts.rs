@@ -357,8 +357,6 @@ fn t_font_11_load_fonts_invalid_url_fails() {
 /// This simulates a server returning CSS without @font-face rules.
 #[test]
 fn t_font_12_load_fonts_no_rules_fails() {
-    use deer_gui::ui::fonts::load_fonts_from_css_url;
-
     // We'll test this by checking that parse_font_css returns empty for CSS without @font-face
     // The actual load_fonts_from_css_url would fail at the HTTP level for invalid URL,
     // but we can verify the NoCssRules error is properly defined

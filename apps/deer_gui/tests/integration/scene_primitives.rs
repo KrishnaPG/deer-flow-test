@@ -131,7 +131,6 @@ fn t_prim_04_entity_scale_in_range() {
 #[test]
 fn t_prim_05_tet_unchanged_after_refactor() {
     use deer_gui::scene::tet::config::TetSceneConfig;
-    use deer_gui::scene::SceneConfig;
     use deer_gui::scene::SceneManager;
     use deer_gui::scene::SceneRoot;
 

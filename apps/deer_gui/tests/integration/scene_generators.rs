@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use deer_gui::scene::descriptor::GeneratorParams;
 use deer_gui::scene::generators::registry::GeneratorRegistry;
-use deer_gui::scene::generators::{Barge, CloudParticle, DropPod, Traveller};
+use deer_gui::scene::generators::{Barge, CloudParticle};
 use deer_gui::scene::primitives::{spawn_root, Star};
 
 fn build_gen_app() -> App {
@@ -126,8 +126,6 @@ fn t_gen_05_unknown_generator_returns_none() {
 
 #[test]
 fn t_gen_06_all_entities_child_of_root() {
-    use deer_gui::scene::SceneRoot;
-
     let mut app = build_gen_app();
     let registry = GeneratorRegistry::with_builtins();
     let gen = registry.get("starfield").unwrap();
