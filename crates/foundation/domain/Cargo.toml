@@ -1,0 +1,8 @@
+[package]
+name = "deer-foundation-domain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deer-foundation-contracts = { path = "../contracts" }
+serde = { version = "1.0.228", features = ["derive"] }

@@ -1,0 +1,10 @@
+[package]
+name = "deer-foundation-replay"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deer-foundation-contracts = { path = "../contracts" }
+deer-foundation-domain = { path = "../domain" }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.17"

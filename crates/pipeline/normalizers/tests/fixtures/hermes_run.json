@@ -1,0 +1,20 @@
+{
+  "generator": "hermes",
+  "session": {
+    "session_id": "session_1",
+    "title": "Survey the ridge"
+  },
+  "run": {
+    "run_id": "run_1",
+    "status": "running"
+  },
+  "events": [
+    {
+      "kind": "message",
+      "message_id": "msg_2",
+      "role": "assistant",
+      "text": "Terrain is clear.",
+      "level": "L2"
+    }
+  ]
+}

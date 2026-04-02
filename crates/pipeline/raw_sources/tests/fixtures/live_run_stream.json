@@ -1,0 +1,8 @@
+[
+  { "kind": "message_delta", "message_id": "msg_2", "text": "Scanning sector" },
+  { "kind": "tool_call", "tool_call_id": "tool_1", "tool_name": "map_scan" },
+  { "kind": "task_progress", "task_id": "task_1", "state": "running", "label": "Gather terrain notes" },
+  { "kind": "clarification", "clarification_id": "clar_1", "prompt": "Confirm the survey radius." },
+  { "kind": "artifact_presented", "artifact_id": "artifact_2", "name": "scan.png" },
+  { "kind": "runtime_status", "state": "live" }
+]
