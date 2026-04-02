@@ -24,6 +24,14 @@ Use the existing tracker files as the canonical progress state for resumed work.
 - when work starts, finishes, or is re-scoped, update the relevant tracker/checklist files instead of relying only on session-local todo state
 - do not create or depend on a separate root status-board doc when those tracker files already cover the current state
 
+- Recently written/planned implementation docs (present in `docs/superpowers/plans/`):
+  - `2026-04-01-foundation-spine-contracts-domain-replay.md`
+  - `2026-04-01-normalization-derivation-read-model-spine.md`
+  - `2026-04-01-live-chat-toolkit-proof.md`
+  - `2026-04-01-layout-runtime-toolkit-proof.md`
+  - `2026-04-01-spatial-projection-toolkit-proof.md`
+  - `2026-04-01-first-playable-deer-gui-composition.md`
+
 ## What Lives Here
 
 - `docs/superpowers/specs/` - design decisions and intended architecture
