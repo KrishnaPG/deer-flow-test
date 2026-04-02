@@ -1,0 +1,19 @@
+[package]
+name = "deer-chat-lab"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+deer-pipeline-derivations = { path = "../../crates/pipeline/derivations" }
+deer-pipeline-normalizers = { path = "../../crates/pipeline/normalizers" }
+deer-pipeline-raw-sources = { path = "../../crates/pipeline/raw_sources" }
+deer-runtime-read-models = { path = "../../crates/runtime/read_models" }
+deer-view-chat-thread = { path = "../../crates/views/chat_thread" }
+deer-view-list-detail = { path = "../../crates/views/list_detail" }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+insta = { version = "1.43.2", features = ["yaml"] }

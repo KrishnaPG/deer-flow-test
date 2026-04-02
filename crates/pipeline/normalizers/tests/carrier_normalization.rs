@@ -27,6 +27,10 @@ fn normalizes_deerflow_events_into_canonical_records() {
     assert!(normalized
         .records
         .iter()
+        .any(|record| matches!(record, AnyRecord::ToolCall(_))));
+    assert!(normalized
+        .records
+        .iter()
         .any(|record| matches!(record, AnyRecord::Artifact(_))));
     assert!(normalized
         .records
