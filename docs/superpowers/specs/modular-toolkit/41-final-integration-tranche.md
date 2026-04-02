@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Final Integration Tranche
 
 **Date:** 2026-04-01
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 
 - [Introduction](./41-final-integration-tranche/01-introduction.md)

@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Planning Guardrails
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Why This File Exists
 
@@ -133,3 +133,13 @@ Acceptance means:
   `docs/superpowers/specs/modular-toolkit/40-shell-and-linked-interaction-stress-test.md`,
   and `docs/superpowers/specs/modular-toolkit/41-final-integration-tranche.md`
   is also accepted as planning-ready
+
+## Acceptance Record
+
+Accepted on 2026-04-02: the discovery-first tranche through
+`docs/superpowers/specs/modular-toolkit/31-custom-code-boundaries.md` and the
+reconciled shell, linked-interaction, temporal, policy, and intent-boundary
+tranche through
+`docs/superpowers/specs/modular-toolkit/41-final-integration-tranche.md` are
+accepted as planning-ready, and the readiness gate is cleared for writing plan
+docs.

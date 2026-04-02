@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Workspace And Layering
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Target Workspace Shape
 

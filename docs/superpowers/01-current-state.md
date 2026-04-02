@@ -20,15 +20,15 @@ The active architecture direction is toolkit-first.
 
 | Workstream           | Decision Status          | Implementation Status   | Canonical Docs                                                                                                                                                                           | Notes                                                                         |
 | -------------------- | ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `modular-toolkit`    | draft revision, active   | review pending          | `docs/superpowers/specs/modular-toolkit/00-index.md`, `docs/superpowers/specs/modular-toolkit/09-non-negotiables.md`, `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md`, `docs/superpowers/specs/modular-toolkit/41-final-integration-tranche.md` | final integration tranche and surrounding base specs have been reconciled; acceptance is the remaining planning gate |
+| `modular-toolkit`    | accepted for planning    | plan writing next       | `docs/superpowers/specs/modular-toolkit/00-index.md`, `docs/superpowers/specs/modular-toolkit/09-non-negotiables.md`, `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md`, `docs/superpowers/specs/modular-toolkit/41-final-integration-tranche.md` | planning-ready acceptance covers the discovery tranche through `31-custom-code-boundaries.md` plus reconciliation `37`-`41`; write indexed plan docs next |
 | `hybrid-data-game`   | draft input, active      | not started             | `docs/superpowers/specs/2026-03-31-hybrid-data-game-design.md`                                                                                                                           | product and game framing input for toolkit composition                        |
 | `scifi-rts-hud`      | active visual reference  | not started             | `docs/superpowers/specs/scifi-rts-hud/2026-03-30-scifi-rts-hud-design.md`                                                                                                                | HUD look-and-feel reference                                                   |
 | `multi-scene-themes` | approved, narrower scope | implementation-specific | `docs/superpowers/specs/multi-scene-themes/00-index.md`                                                                                                                                  | valid `deer_gui` scene/theme design, but not the newer top-level architecture |
 
 ## In Progress
 
-- The modular-toolkit spec line has been reconciled and is awaiting acceptance.
-- `writing-plans` has not started yet.
+- The modular-toolkit planning-ready line is the discovery tranche through `31-custom-code-boundaries.md` plus reconciliation `37`-`41`, per `10-planning-guardrails.md`.
+- `writing-plans` is now the next active step.
 - The modular-toolkit spec set has been stress-tested for:
   - toolkit-first milestones
   - chat and artifact pipeline support
@@ -54,10 +54,9 @@ The active architecture direction is toolkit-first.
 - The final integration tranche and surrounding base specs now reconcile the
   previously identified world-primary, temporal/failover, policy, and intent-
   boundary gaps.
-- The remaining decision is whether to accept the reconciled spec line as
-  planning-ready.
-- If accepted, the next step is to start `writing-plans` from the reconciled
-  modular-toolkit spec set.
+- The planning-ready accepted line is the discovery tranche through `31-custom-code-boundaries.md` plus reconciliation `37`-`41`.
+- The next step is to start `writing-plans` from the reconciled modular-
+  toolkit spec set.
 
 ## Recommended Reading Order
 

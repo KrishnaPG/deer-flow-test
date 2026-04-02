@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Index
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 **Scope:** `apps/deer_gui` and supporting toolkit/apps
 
 ## Overview
@@ -73,9 +73,12 @@ Core position:
 - Reusable modules must stay app-agnostic.
 - Tool apps must consume the same reusable modules as runtime apps.
 - `deer_gui` is one composition target, not the monolithic center.
-- planning stays blocked until the reconciled spec line through
-  `41-final-integration-tranche.md` is accepted under
-  `10-planning-guardrails.md`
+- planning acceptance recorded in
+  `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md`
+  covers the discovery tranche through `31-custom-code-boundaries.md`
+  plus reconciliation `37`-`41`
+- the next valid action is to write the indexed plan docs before any
+  implementation work begins
 
 ## Reading Order
 

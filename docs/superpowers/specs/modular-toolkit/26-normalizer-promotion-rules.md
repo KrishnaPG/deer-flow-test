@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Normalizer Promotion Rules
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Promotion Path
 

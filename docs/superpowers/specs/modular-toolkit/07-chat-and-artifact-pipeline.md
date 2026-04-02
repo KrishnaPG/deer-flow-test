@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Chat And Artifact Pipeline
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Why This File Exists
 

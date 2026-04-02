@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Architecture Position
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Product Position
 

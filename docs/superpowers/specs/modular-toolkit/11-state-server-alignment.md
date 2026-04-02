@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - State Server Alignment
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Why This File Exists
 
@@ -23,6 +23,10 @@ It consumes and presents truth that is governed by these state-server rules:
 - state-server is the mediated read gateway for external clients
 - external writes are intents, not direct storage mutations
 - lineage is append-only and never rewritten
+- storage-native truth records never use model-level `UPDATE` or `DELETE` to
+  rewrite prior truth; correction, redaction, and suppression append new records
+  that reference prior truth without mutating or removing its storage-native
+  lineage anchor
 
 ## Architectural Mapping
 

@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Shell And Linked Interaction Stress Test
 
 **Date:** 2026-04-01
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Why This File Exists
 
@@ -228,7 +228,7 @@ Required fix:
 
 ### Intent Prefill Vs Submission Is Too Blurry
 
-Current problem:
+Original gap:
 
 - `action_intent_emission` currently mixes prefill and submission too loosely
 
@@ -236,15 +236,18 @@ Failure risk:
 
 - accidental escalation from selection to executable action
 
-Required fix:
+Integrated resolution in `41-final-integration-tranche.md`:
 
-- define a strict lifecycle:
-  - `prefill`
-  - `draft`
-  - `validated`
-  - `submitted`
-  - `approved` / `executed` / `rejected`
-- clarify which surfaces may enter each stage
+- widen the entry model so linked or shell carry-in lands first as
+  `prefill_seed`
+- require promotion through `prefill`, `draft`, `validated`, and explicit
+  `submitted`
+- keep `approved` / `executed` / `rejected` as later mediated outcomes
+- limit linked-interaction surfaces to seeding entry, not direct submission
+
+This stress-test gap is therefore resolved if `41` is accepted and propagated
+back into `20`, `37`, and `39`; it is not a separate open blocker after that
+integration.
 
 ## Resolved Adjustment Checklist
 
@@ -281,7 +284,7 @@ the following stress-test corrections:
    - intent rejection rules under policy constraints
 
 6. intent lifecycle separation
-   - shell-local `prefill`, `draft`, and `validated`
+   - shell-local `prefill_seed`, `prefill`, `draft`, and `validated`
    - canonical `IntentRecord` append only at explicit `submitted`
    - `approved` / `executed` / `rejected` observed later as mediated outcomes
 

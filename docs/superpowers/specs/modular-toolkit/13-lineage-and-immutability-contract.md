@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Lineage And Immutability Contract
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Why This File Exists
 
@@ -92,6 +92,17 @@ That means:
 - forward links are reconstructed by query when possible
 
 Mutable status must not be smuggled into old records under the name of metadata.
+
+Storage-native truth records must not expose model-level `UPDATE` or `DELETE`
+semantics that rewrite, replace, or physically remove previously written truth
+records.
+
+If truth needs correction, redaction, suppression, or supersession, the model
+must append a new governance or lineage-bearing record that points at the prior
+truth record and states the corrective effect.
+
+The prior storage-native truth record remains immutable and queryable as the
+lineage anchor, even when mediated reads later hide or qualify it.
 
 ## View Requirement
 

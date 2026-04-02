@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Intent And Mediated Read Model
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## External Read Families
 
@@ -19,10 +19,10 @@
 - approval/denial intent
 - intervention intent
 
-These are external write families. They may exist as shell-local `prefill`,
-`draft`, or `validated` state, but become canonical only on explicit
-`submitted`. `approved`, `executed`, and `rejected` are later observed
-mediated outcomes, not locally asserted stages.
+These are external write families. They may exist as shell-local
+`prefill_seed`, `prefill`, `draft`, or `validated` state, but become canonical
+only on explicit `submitted`. `approved`, `executed`, and `rejected` are later
+observed mediated outcomes, not locally asserted stages.
 
 ## Required Metadata
 
@@ -36,15 +36,17 @@ mediated outcomes, not locally asserted stages.
 Intent handling must follow this pattern:
 
 1. accept or prefill candidate intent context from an allowed surface
-2. materialize shell-local intent state as `prefill`, then `draft` when the
-   operator takes ownership
-3. perform explicit target, parameter, and policy validation, producing
+2. materialize shell-local candidate state as `prefill_seed`
+3. promote to `prefill` only when the shell instantiates an editable intent
+   entry from that seed
+4. promote to `draft` when the operator takes ownership of the editable entry
+5. perform explicit target, parameter, and policy validation, producing
    `validated`
-4. append `IntentRecord` only when the operator explicitly enters `submitted`
-5. emit `WriteOperationRecord` or related mediated progress after submission
-6. surface `approved`, `executed`, or `rejected` later as observed mediated
+6. append `IntentRecord` only when the operator explicitly enters `submitted`
+7. emit `WriteOperationRecord` or related mediated progress after submission
+8. surface `approved`, `executed`, or `rejected` later as observed mediated
    state
 
 Shortcut mutation models are forbidden.
 Local gestures may not jump directly from selection, replay, or world
-interaction into `submitted`, `approved`, or `executed`.
+interaction into `prefill`, `draft`, `submitted`, `approved`, or `executed`.

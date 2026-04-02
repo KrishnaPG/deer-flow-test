@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Levels And Planes Contract
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Why This File Exists
 
@@ -158,7 +158,7 @@ Examples:
 
 Identity:
 
-- anchored by an immutable content hash
+- must be anchored by an immutable content hash (`as_is_hash`)
 
 ### Chunks Plane
 
@@ -175,7 +175,8 @@ Examples:
 
 Identity:
 
-- anchored by source object hash + chunking strategy + chunk index
+- must be hash-anchored end to end by parent `as_is_hash`, chunking strategy,
+  stable chunk bounds, and a `chunk_hash` for the exact chunk payload
 
 ### Embeddings Plane
 
@@ -187,6 +188,12 @@ Rule:
 
 - embeddings reference chunk identity and do not duplicate payload text as source
   truth
+
+Identity:
+
+- must be hash-anchored end to end by parent `as_is_hash`, parent `chunk_hash`,
+  embedding model/version or provider/version, and `embedding_basis_hash` over
+  the exact chunk payload basis used to produce the vector
 
 ## Contract Rule
 

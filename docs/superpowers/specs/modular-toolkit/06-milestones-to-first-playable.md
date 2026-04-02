@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Milestones To First Playable
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Core Sequence
 

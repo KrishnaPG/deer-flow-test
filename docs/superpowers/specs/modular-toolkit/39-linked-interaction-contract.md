@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Linked Interaction Contract
 
 **Date:** 2026-04-01
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 
 - [Contracts and Primitives](./39-linked-interaction-contract/01-contracts-and-primitives.md)
@@ -14,3 +14,12 @@
 - [Shell Mode Minimums](./39-linked-interaction-contract/08-shell-mode-minimums.md)
 - [Joinability Metadata](./39-linked-interaction-contract/09-joinability-metadata.md)
 - [Support Judgment](./39-linked-interaction-contract/10-support-judgment.md)
+
+## Reconciled Linked-Interaction Boundary
+
+Linked interactions may widen selection, replay, world, or comparison context
+into command entry only as shell-local `prefill_seed`.
+
+They do not directly assert editable `prefill`, operator-owned `draft`,
+`validated`, or canonical `submitted`; those promotions occur only within the
+receiving shell lifecycle defined in `20-intent-and-mediated-read-model.md`.
