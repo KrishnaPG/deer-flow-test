@@ -49,4 +49,34 @@ impl PanelDescriptor {
             .iter()
             .any(|declared| declared == hosted_view_id)
     }
+
+    pub fn is_compatible_with(&self, other: &PanelDescriptor) -> bool {
+        let self_roles = self.participation.roles();
+        let other_roles = other.participation.roles();
+        let self_join_keys = self.participation.join_keys();
+        let other_join_keys = other.participation.join_keys();
+
+        let roles_are_compatible = self_roles.iter().any(|role| {
+            matches!(
+                role,
+                deer_ui_panel_shells::PanelRole::Source | deer_ui_panel_shells::PanelRole::Broker
+            )
+        }) && other_roles.iter().any(|role| {
+            matches!(
+                role,
+                deer_ui_panel_shells::PanelRole::Sink
+                    | deer_ui_panel_shells::PanelRole::Mirror
+                    | deer_ui_panel_shells::PanelRole::Broker
+            )
+        });
+
+        roles_are_compatible
+            && self_join_keys.iter().any(|join_key| {
+                other_join_keys
+                    .iter()
+                    .any(|other_key| other_key == join_key)
+            })
+            && !self.contract.required_hosted_views.is_empty()
+            && !other.contract.required_hosted_views.is_empty()
+    }
 }

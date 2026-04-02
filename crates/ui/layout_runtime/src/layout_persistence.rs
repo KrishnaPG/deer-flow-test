@@ -1,9 +1,42 @@
-use crate::layout_model::LayoutSnapshot;
+use thiserror::Error;
+
+use crate::layout_model::{LayoutSnapshot, CURRENT_LAYOUT_SNAPSHOT_VERSION};
+
+#[derive(Debug, Error)]
+pub enum LayoutPersistenceError {
+    #[error("unsupported layout snapshot version {version}")]
+    UnsupportedVersion { version: u32 },
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+}
+
+impl PartialEq for LayoutPersistenceError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::UnsupportedVersion { version: left },
+                Self::UnsupportedVersion { version: right },
+            ) => left == right,
+            (Self::Json(left), Self::Json(right)) => left.to_string() == right.to_string(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for LayoutPersistenceError {}
 
 pub fn serialize_layout(snapshot: &LayoutSnapshot) -> Result<String, serde_json::Error> {
     serde_json::to_string(snapshot)
 }
 
-pub fn deserialize_layout(encoded: &str) -> Result<LayoutSnapshot, serde_json::Error> {
-    serde_json::from_str(encoded)
+pub fn deserialize_layout(encoded: &str) -> Result<LayoutSnapshot, LayoutPersistenceError> {
+    let snapshot: LayoutSnapshot = serde_json::from_str(encoded)?;
+
+    if snapshot.version != CURRENT_LAYOUT_SNAPSHOT_VERSION {
+        return Err(LayoutPersistenceError::UnsupportedVersion {
+            version: snapshot.version,
+        });
+    }
+
+    Ok(snapshot)
 }

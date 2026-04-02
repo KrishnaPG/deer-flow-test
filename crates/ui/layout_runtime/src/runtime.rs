@@ -2,7 +2,9 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::linked_brokers::LinkedBrokerState;
+use crate::linked_brokers::{
+    LinkedBrokerState, LinkedInteractionPropagation, LinkedInteractionUpdate,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRuntimeState {
@@ -13,6 +15,8 @@ pub struct LayoutRuntimeState {
 pub enum LayoutRuntimeError {
     #[error("duplicate broker interaction type '{interaction_type}'")]
     DuplicateInteractionType { interaction_type: String },
+    #[error("unknown interaction type '{interaction_type}'")]
+    UnknownInteractionType { interaction_type: String },
 }
 
 impl LayoutRuntimeState {
@@ -38,5 +42,21 @@ impl LayoutRuntimeState {
         self.brokers
             .iter()
             .find(|broker| broker.interaction_type == interaction_type)
+    }
+
+    pub fn propagate(
+        &self,
+        update: LinkedInteractionUpdate,
+    ) -> Result<LinkedInteractionPropagation, LayoutRuntimeError> {
+        let broker = self.broker_for(&update.interaction_type).ok_or(
+            LayoutRuntimeError::UnknownInteractionType {
+                interaction_type: update.interaction_type.clone(),
+            },
+        )?;
+
+        Ok(LinkedInteractionPropagation::from_update(
+            update,
+            &broker.broker_panel_id,
+        ))
     }
 }

@@ -1,6 +1,6 @@
 use deer_ui_layout_runtime::{
-    register_panel, HostedViewHost, PanelDescriptor, PanelDescriptorError, PanelRegistry,
-    RegistryError, ViewHostError, ARTIFACT_SHELF, CHAT_THREAD,
+    hosted_view_registration, register_panel, remove_panel, HostedViewHost, PanelDescriptor,
+    PanelDescriptorError, PanelRegistry, RegistryError, ViewHostError, ARTIFACT_SHELF, CHAT_THREAD,
 };
 use deer_ui_panel_shells::{PanelContract, PanelRole};
 
@@ -76,4 +76,62 @@ fn panel_descriptor_rejects_invalid_panel_participation() {
             reason: "panel participation requires hosted views, declared roles, and join keys",
         }
     );
+}
+
+#[test]
+fn registry_removes_panels_and_reports_missing_removals() {
+    let mut registry = PanelRegistry::default();
+    let descriptor = PanelDescriptor::new(PanelContract {
+        panel_id: "chat_panel".into(),
+        required_hosted_views: vec!["chat_thread_view".into()],
+        roles: vec![PanelRole::Source],
+        join_keys: vec!["thread_id".into()],
+    })
+    .unwrap();
+
+    register_panel(&mut registry, descriptor).unwrap();
+
+    let removed = remove_panel(&mut registry, "chat_panel").unwrap();
+    let missing = remove_panel(&mut registry, "chat_panel");
+
+    assert_eq!(removed.panel_id(), "chat_panel");
+    assert!(registry.panels().is_empty());
+    assert_eq!(missing, Err(RegistryError::UnknownPanelId));
+}
+
+#[test]
+fn registry_checks_contract_compatibility_through_roles_join_keys_and_views() {
+    let source = PanelDescriptor::new(PanelContract {
+        panel_id: "chat_panel".into(),
+        required_hosted_views: vec!["chat_thread_view".into()],
+        roles: vec![PanelRole::Source],
+        join_keys: vec!["thread_id".into()],
+    })
+    .unwrap();
+    let compatible_sink = PanelDescriptor::new(PanelContract {
+        panel_id: "inspector_panel".into(),
+        required_hosted_views: vec!["inspector_view".into()],
+        roles: vec![PanelRole::Sink],
+        join_keys: vec!["thread_id".into()],
+    })
+    .unwrap();
+    let incompatible_sink = PanelDescriptor::new(PanelContract {
+        panel_id: "artifact_panel".into(),
+        required_hosted_views: vec!["artifact_shelf_view".into()],
+        roles: vec![PanelRole::Sink],
+        join_keys: vec!["artifact_id".into()],
+    })
+    .unwrap();
+
+    assert!(source.is_compatible_with(&compatible_sink));
+    assert!(!source.is_compatible_with(&incompatible_sink));
+}
+
+#[test]
+fn hosted_view_bridge_uses_canonical_registration_helpers() {
+    let chat = hosted_view_registration("chat_thread_view");
+    let missing = hosted_view_registration("custom_view");
+
+    assert_eq!(chat.unwrap().view_id(), "chat_thread_view");
+    assert_eq!(missing, None);
 }
