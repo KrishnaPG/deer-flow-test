@@ -17,5 +17,8 @@ pub use layout_runtime_state::{
 pub use linked_shell::{
     reduce_linked_shell_state, LinkedShellAction, LinkedShellPanelRole, LinkedShellState,
 };
-pub use policy::{reduce_policy_state, PolicyAction, PolicyOverlayState};
+pub use policy::{
+    apply_policy_invalidation_to_linked_shell, reduce_policy_state, PolicyAction,
+    PolicyOverlayState,
+};
 pub use temporal::{reduce_temporal_state, TemporalAction, TemporalState};
