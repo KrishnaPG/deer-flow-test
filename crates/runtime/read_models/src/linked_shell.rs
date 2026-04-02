@@ -62,6 +62,13 @@ pub fn reduce_linked_shell_state(
             state
                 .panel_roles
                 .retain(|panel_id, _| panel_ids.iter().any(|id| id == panel_id));
+            if state
+                .drill_down_target
+                .as_ref()
+                .is_some_and(|panel_id| !panel_ids.iter().any(|id| id == panel_id))
+            {
+                state.drill_down_target = None;
+            }
         }
         LinkedShellAction::Exclude { source_record_id } => {
             if state.selected.as_deref() == Some(source_record_id.as_str()) {

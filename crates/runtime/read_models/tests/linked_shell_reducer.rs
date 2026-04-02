@@ -65,3 +65,31 @@ fn linked_shell_state_preserves_panel_roles_for_restored_panels() {
     );
     assert_eq!(state.panel_roles.get("minimap"), None);
 }
+
+#[test]
+fn linked_shell_state_clears_stale_drill_target_when_panel_is_not_restored() {
+    let state = LinkedShellState::default();
+
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::PanelParticipationDeclared {
+            panel_id: "artifact_detail".into(),
+            roles: vec![LinkedShellPanelRole::Sink],
+        },
+    );
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::OpenDrillDown {
+            panel_target: "artifact_detail",
+        },
+    );
+
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::LayoutPanelsRestored {
+            panel_ids: vec!["event_rail".into()],
+        },
+    );
+
+    assert_eq!(state.drill_down_target, None);
+}
