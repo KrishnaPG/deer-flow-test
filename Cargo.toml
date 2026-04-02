@@ -4,6 +4,7 @@ members = [
     "crates/foundation/contracts",
     "crates/foundation/domain",
     "crates/foundation/replay",
+    "crates/pipeline/derivations",
     "crates/pipeline/normalizers",
     "crates/pipeline/raw_sources",
     "crates/runtime/world_projection",
