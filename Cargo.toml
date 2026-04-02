@@ -2,6 +2,7 @@
 members = [
     "apps/deer_gui",
     "crates/foundation/contracts",
+    "crates/foundation/domain",
     "crates/pipeline/normalizers",
     "crates/pipeline/raw_sources",
     "crates/runtime/world_projection",

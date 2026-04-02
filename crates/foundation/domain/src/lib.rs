@@ -1,227 +1,94 @@
-use deer_foundation_contracts::{
-    AsIsHash, CanonicalLevel, CanonicalPlane, CorrelationMeta, IdentityMeta, LineageMeta,
-    RecordFamily, RecordHeader, RecordId, StorageDisposition,
-};
+pub mod carrier;
+pub mod common;
+pub mod governance;
+pub mod representation;
+pub mod semantic;
+pub mod structural;
+
+pub use carrier::*;
+pub use governance::*;
+pub use representation::*;
+pub use semantic::*;
+pub use structural::*;
+
+use deer_foundation_contracts::{CanonicalRecord, RecordHeader};
 use serde::{Deserialize, Serialize};
-
-fn header(
-    record_id: RecordId,
-    family: RecordFamily,
-    level: CanonicalLevel,
-    plane: CanonicalPlane,
-    as_is_hash: Option<AsIsHash>,
-) -> RecordHeader {
-    let identity = IdentityMeta::hash_anchored(record_id.clone(), as_is_hash, None, None);
-
-    RecordHeader::new(
-        record_id,
-        family,
-        level,
-        plane,
-        StorageDisposition::ClientTransient,
-        identity,
-        CorrelationMeta::default(),
-        LineageMeta::root(),
-    )
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SessionRecord {
-    header: RecordHeader,
-    title: String,
-}
-
-impl SessionRecord {
-    pub fn new(record_id: RecordId, title: String) -> Self {
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::Session,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                None,
-            ),
-            title,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RunRecord {
-    header: RecordHeader,
-    status: String,
-}
-
-impl RunRecord {
-    pub fn new(record_id: RecordId, status: String) -> Self {
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::Run,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                None,
-            ),
-            status,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MessageRecord {
-    header: RecordHeader,
-    role: String,
-    text: String,
-}
-
-impl MessageRecord {
-    pub fn new(
-        record_id: RecordId,
-        role: String,
-        text: String,
-        level: CanonicalLevel,
-        plane: CanonicalPlane,
-    ) -> Self {
-        Self {
-            header: header(record_id, RecordFamily::Message, level, plane, None),
-            role,
-            text,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TaskRecord {
-    header: RecordHeader,
-    title: String,
-    state: String,
-}
-
-impl TaskRecord {
-    pub fn new(record_id: RecordId, title: String, state: String) -> Self {
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::Task,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                None,
-            ),
-            title,
-            state,
-        }
-    }
-
-    pub fn record_id(&self) -> &RecordId {
-        &self.header.record_id
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ArtifactRecord {
-    header: RecordHeader,
-    name: String,
-    status: String,
-}
-
-impl ArtifactRecord {
-    pub fn new(
-        record_id: RecordId,
-        name: String,
-        status: String,
-        as_is_hash: Option<AsIsHash>,
-    ) -> Self {
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::Artifact,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                as_is_hash,
-            ),
-            name,
-            status,
-        }
-    }
-
-    pub fn record_id(&self) -> &RecordId {
-        &self.header.record_id
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ClarificationRecord {
-    header: RecordHeader,
-    prompt: String,
-}
-
-impl ClarificationRecord {
-    pub fn new(record_id: RecordId, prompt: String) -> Self {
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::Clarification,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                None,
-            ),
-            prompt,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RuntimeStatusRecord {
-    header: RecordHeader,
-    state: String,
-}
-
-impl RuntimeStatusRecord {
-    pub fn new(state: String) -> Self {
-        let record_id = RecordId::from(format!("runtime_status:{state}"));
-
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::RuntimeStatus,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                None,
-            ),
-            state,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IntentRecord {
-    header: RecordHeader,
-    stage: String,
-}
-
-impl IntentRecord {
-    pub fn new(record_id: RecordId, stage: String) -> Self {
-        Self {
-            header: header(
-                record_id,
-                RecordFamily::Intent,
-                CanonicalLevel::L2,
-                CanonicalPlane::AsIs,
-                None,
-            ),
-            stage,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AnyRecord {
-    Session(SessionRecord),
     Run(RunRecord),
-    Message(MessageRecord),
+    Session(SessionRecord),
     Task(TaskRecord),
+    Message(MessageRecord),
+    ToolCall(ToolCallRecord),
     Artifact(ArtifactRecord),
     Clarification(ClarificationRecord),
     RuntimeStatus(RuntimeStatusRecord),
+    Delivery(DeliveryRecord),
+    L0Source(L0SourceRecord),
+    L1Sanitized(L1SanitizedRecord),
+    L2View(L2ViewRecord),
+    L3Insight(L3InsightRecord),
+    L4Prediction(L4PredictionRecord),
+    L5Prescription(L5PrescriptionRecord),
+    L6Outcome(L6OutcomeRecord),
+    AsIsRepresentation(AsIsRepresentationRecord),
+    Chunk(ChunkRecord),
+    Embedding(EmbeddingRecord),
     Intent(IntentRecord),
+    Transform(TransformRecord),
+    Exclusion(ExclusionRecord),
+    Conflict(ConflictRecord),
+    Resolution(ResolutionRecord),
+    ReplayCheckpoint(ReplayCheckpointRecord),
+    Dedup(DedupRecord),
+    Batch(BatchRecord),
+    Branch(BranchRecord),
+    Version(VersionRecord),
+    WriteOperation(WriteOperationRecord),
+    GraphNode(GraphNodeRecord),
+    GraphEdge(GraphEdgeRecord),
+    KnowledgeEntity(KnowledgeEntityRecord),
+    KnowledgeRelation(KnowledgeRelationRecord),
+}
+
+impl CanonicalRecord for AnyRecord {
+    fn header(&self) -> &RecordHeader {
+        match self {
+            AnyRecord::Run(record) => &record.header,
+            AnyRecord::Session(record) => &record.header,
+            AnyRecord::Task(record) => &record.header,
+            AnyRecord::Message(record) => &record.header,
+            AnyRecord::ToolCall(record) => &record.header,
+            AnyRecord::Artifact(record) => &record.header,
+            AnyRecord::Clarification(record) => &record.header,
+            AnyRecord::RuntimeStatus(record) => &record.header,
+            AnyRecord::Delivery(record) => &record.header,
+            AnyRecord::L0Source(record) => &record.header,
+            AnyRecord::L1Sanitized(record) => &record.header,
+            AnyRecord::L2View(record) => &record.header,
+            AnyRecord::L3Insight(record) => &record.header,
+            AnyRecord::L4Prediction(record) => &record.header,
+            AnyRecord::L5Prescription(record) => &record.header,
+            AnyRecord::L6Outcome(record) => &record.header,
+            AnyRecord::AsIsRepresentation(record) => &record.header,
+            AnyRecord::Chunk(record) => &record.header,
+            AnyRecord::Embedding(record) => &record.header,
+            AnyRecord::Intent(record) => &record.header,
+            AnyRecord::Transform(record) => &record.header,
+            AnyRecord::Exclusion(record) => &record.header,
+            AnyRecord::Conflict(record) => &record.header,
+            AnyRecord::Resolution(record) => &record.header,
+            AnyRecord::ReplayCheckpoint(record) => &record.header,
+            AnyRecord::Dedup(record) => &record.header,
+            AnyRecord::Batch(record) => &record.header,
+            AnyRecord::Branch(record) => &record.header,
+            AnyRecord::Version(record) => &record.header,
+            AnyRecord::WriteOperation(record) => &record.header,
+            AnyRecord::GraphNode(record) => &record.header,
+            AnyRecord::GraphEdge(record) => &record.header,
+            AnyRecord::KnowledgeEntity(record) => &record.header,
+            AnyRecord::KnowledgeRelation(record) => &record.header,
+        }
+    }
 }
