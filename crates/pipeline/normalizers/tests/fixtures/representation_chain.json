@@ -1,0 +1,9 @@
+{
+  "as_is_record_id": "artifact_repr_1",
+  "as_is_hash": "sha256:artifact-raw",
+  "chunk_hash": "sha256:artifact-chunk-1",
+  "embedding_basis_hash": "sha256:embedding-basis-1",
+  "from_level": "L2",
+  "to_level": "L4",
+  "intent_stage": "prefill_seed"
+}
