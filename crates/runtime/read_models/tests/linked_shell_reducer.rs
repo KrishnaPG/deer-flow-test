@@ -93,3 +93,38 @@ fn linked_shell_state_clears_stale_drill_target_when_panel_is_not_restored() {
 
     assert_eq!(state.drill_down_target, None);
 }
+
+#[test]
+fn linked_shell_state_clears_stale_selection_and_pins_when_panel_is_not_restored() {
+    let state = LinkedShellState::default();
+
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::PanelParticipationDeclared {
+            panel_id: "artifact_detail".into(),
+            roles: vec![LinkedShellPanelRole::Sink],
+        },
+    );
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::Select {
+            source_record_id: "artifact_1".into(),
+        },
+    );
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::Pin {
+            source_record_id: "artifact_1".into(),
+        },
+    );
+
+    let state = reduce_linked_shell_state(
+        state,
+        LinkedShellAction::LayoutPanelsRestored {
+            panel_ids: vec!["event_rail".into()],
+        },
+    );
+
+    assert_eq!(state.selected, None);
+    assert!(state.pinned.is_empty());
+}

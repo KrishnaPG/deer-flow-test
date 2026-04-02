@@ -62,6 +62,8 @@ pub fn reduce_linked_shell_state(
             state
                 .panel_roles
                 .retain(|panel_id, _| panel_ids.iter().any(|id| id == panel_id));
+            state.selected = None;
+            state.pinned.clear();
             if state
                 .drill_down_target
                 .as_ref()
