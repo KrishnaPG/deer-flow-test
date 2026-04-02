@@ -15,3 +15,17 @@ saved_layout: restored
 selection_broker: chat_panel
 "#);
 }
+
+#[test]
+fn preserves_explicit_broker_role_and_explicit_hosted_panel_bindings() {
+    let proof = run_layout_runtime_proof();
+
+    assert_eq!(proof.selection_broker, "chat_panel");
+    assert_eq!(proof.hosted_panels.chat, "chat_panel");
+    assert_eq!(proof.hosted_panels.artifact, "artifact_panel");
+    assert_eq!(proof.hosted_panels.inspector, "inspector_panel");
+    assert_eq!(
+        proof.linked_panel_roles.get("chat_panel").cloned(),
+        Some(vec!["source".to_string(), "broker".to_string()])
+    );
+}
