@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+deer-foundation-contracts = { path = "../../foundation/contracts" }
 deer-foundation-domain = { path = "../../foundation/domain" }
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
 
 [dev-dependencies]
-deer-foundation-contracts = { path = "../../foundation/contracts" }
 insta = { version = "1.43.2", features = ["yaml"] }
 similar-asserts = "1.7.0"

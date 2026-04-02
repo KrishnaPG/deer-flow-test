@@ -38,7 +38,10 @@ fn projected_objects_preserve_canonical_supersession_backlinks() {
 
     assert_eq!(projected.objects.len(), 1);
     assert_eq!(
-        projected.objects[0].supersedes_record_id.as_deref(),
-        Some("artifact_0")
+        projected.objects[0].supersedes.as_ref(),
+        Some(&RecordRef::new(
+            RecordFamily::Artifact,
+            RecordId::from_static("artifact_0"),
+        ))
     );
 }
