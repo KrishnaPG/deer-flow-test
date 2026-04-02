@@ -7,6 +7,7 @@ members = [
     "crates/pipeline/derivations",
     "crates/pipeline/normalizers",
     "crates/pipeline/raw_sources",
+    "crates/runtime/read_models",
     "crates/runtime/world_projection",
     "crates/ui/layout_runtime",
     "crates/ui/panel_shells",
