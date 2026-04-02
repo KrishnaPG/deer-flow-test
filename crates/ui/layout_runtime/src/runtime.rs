@@ -1,28 +1,37 @@
+use std::collections::BTreeSet;
+
+use thiserror::Error;
+
 use crate::linked_brokers::LinkedBrokerState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRuntimeState {
-    pub brokers: Vec<LinkedBrokerState>,
+    brokers: Vec<LinkedBrokerState>,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum LayoutRuntimeError {
+    #[error("duplicate broker interaction type '{interaction_type}'")]
+    DuplicateInteractionType { interaction_type: String },
 }
 
 impl LayoutRuntimeState {
-    pub fn with_brokers(brokers: Vec<LinkedBrokerState>) -> Self {
-        let mut unique_brokers: Vec<LinkedBrokerState> = Vec::with_capacity(brokers.len());
+    pub fn with_brokers(brokers: Vec<LinkedBrokerState>) -> Result<Self, LayoutRuntimeError> {
+        let mut interaction_types = BTreeSet::new();
 
-        for broker in brokers {
-            if let Some(existing) = unique_brokers
-                .iter_mut()
-                .find(|existing| existing.interaction_type == broker.interaction_type)
-            {
-                *existing = broker;
-            } else {
-                unique_brokers.push(broker);
+        for broker in &brokers {
+            if !interaction_types.insert(broker.interaction_type.clone()) {
+                return Err(LayoutRuntimeError::DuplicateInteractionType {
+                    interaction_type: broker.interaction_type.clone(),
+                });
             }
         }
 
-        Self {
-            brokers: unique_brokers,
-        }
+        Ok(Self { brokers })
+    }
+
+    pub fn brokers(&self) -> &[LinkedBrokerState] {
+        &self.brokers
     }
 
     pub fn broker_for(&self, interaction_type: &str) -> Option<&LinkedBrokerState> {

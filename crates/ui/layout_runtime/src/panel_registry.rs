@@ -4,12 +4,18 @@ use crate::panel_descriptor::PanelDescriptor;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct PanelRegistry {
-    pub panels: Vec<PanelDescriptor>,
+    panels: Vec<PanelDescriptor>,
 }
 
 impl PanelRegistry {
     pub fn panels(&self) -> &[PanelDescriptor] {
         &self.panels
+    }
+
+    pub fn panel(&self, panel_id: &str) -> Option<&PanelDescriptor> {
+        self.panels
+            .iter()
+            .find(|panel| panel.panel_id() == panel_id)
     }
 }
 
@@ -26,7 +32,7 @@ pub fn register_panel(
     if registry
         .panels
         .iter()
-        .any(|existing| existing.panel_id == descriptor.panel_id)
+        .any(|existing| existing.panel_id() == descriptor.panel_id())
     {
         return Err(RegistryError::DuplicatePanelId);
     }
