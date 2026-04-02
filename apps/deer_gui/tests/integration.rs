@@ -11,6 +11,7 @@ mod integration {
     pub mod bridge_adapter;
     pub mod camera;
     pub mod constants_diagnostics;
+    pub mod first_playable_closed_loop;
     pub mod first_playable_composition;
     pub mod fonts;
     pub mod hud;
