@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::linked_shell::LinkedShellState;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct PolicyOverlayState {
     pub excluded_record_ids: Vec<String>,
@@ -51,6 +53,24 @@ pub fn reduce_policy_state(
                     .tombstoned_record_ids
                     .retain(|id| id != &source_record_id);
             }
+        }
+    }
+
+    state
+}
+
+pub fn apply_policy_invalidation_to_linked_shell(
+    mut state: LinkedShellState,
+    action: &PolicyAction,
+) -> LinkedShellState {
+    match action {
+        PolicyAction::RecordInvalidated {
+            source_record_id, ..
+        } => {
+            if state.selected.as_deref() == Some(source_record_id.as_str()) {
+                state.selected = None;
+            }
+            state.pinned.retain(|id| id != source_record_id);
         }
     }
 

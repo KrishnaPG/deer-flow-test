@@ -1,6 +1,7 @@
 use deer_runtime_read_models::{
-    reduce_linked_shell_state, reduce_policy_state, reduce_temporal_state, LinkedShellAction,
-    LinkedShellState, PolicyAction, PolicyOverlayState, TemporalAction, TemporalState,
+    apply_policy_invalidation_to_linked_shell, reduce_linked_shell_state, reduce_policy_state,
+    reduce_temporal_state, LinkedShellAction, LinkedShellState, PolicyAction, PolicyOverlayState,
+    TemporalAction, TemporalState,
 };
 
 #[test]
@@ -97,4 +98,26 @@ fn policy_overlay_tracks_explicit_exclusion_and_tombstone_invalidation() {
     assert_eq!(next.policy_reason.as_deref(), Some("access_revoked"));
     assert_eq!(next.excluded_record_ids, vec!["artifact_1".to_string()]);
     assert_eq!(next.tombstoned_record_ids, vec!["artifact_1".to_string()]);
+}
+
+#[test]
+fn policy_invalidation_clears_linked_shell_state_through_policy_api() {
+    let linked = LinkedShellState {
+        selected: Some("artifact_1".into()),
+        pinned: vec!["artifact_1".into(), "artifact_2".into()],
+        ..Default::default()
+    };
+
+    let invalidated = apply_policy_invalidation_to_linked_shell(
+        linked,
+        &PolicyAction::RecordInvalidated {
+            source_record_id: "artifact_1".into(),
+            policy_epoch: 4,
+            policy_reason: "access_revoked".into(),
+            tombstone_visible: true,
+        },
+    );
+
+    assert_eq!(invalidated.selected, None);
+    assert_eq!(invalidated.pinned, vec!["artifact_2".to_string()]);
 }
