@@ -1,9 +1,9 @@
 # Design: Modular Toolkit - Implementation Readiness Checklist
 
 **Date:** 2026-04-01
-**Status:** Draft revision
+**Status:** Planning-ready gate cleared
 
-Current read after the modular-toolkit reconciliation and prefill-seed-source follow-up: the contract-definition tranche is substantially filled in, but implementation remains blocked because the required source docs still sit at `Status: Draft revision` and the discovery line has not yet been accepted for planning.
+Current read after the modular-toolkit reconciliation and prefill-seed-source follow-up: the planning-ready accepted line now covers the discovery tranche through `31-custom-code-boundaries.md` plus reconciliation `37`-`41`, so the readiness gate is cleared for writing plans. Implementation remains blocked until the indexed plan docs are written and approved under the planning guardrails.
 
 ## Must Be True Before Any Implementation
 
@@ -24,16 +24,16 @@ Current read after the modular-toolkit reconciliation and prefill-seed-source fo
 - [x] mutable status is modeled append-only, not as in-place updates
 - [x] proof-app-first sequencing remains in force
 - [x] no reusable feature is allowed to debut in `apps/deer_gui`
-- [ ] storage-native invariants are fully documented end to end:
+- [x] storage-native invariants are fully documented end to end:
   - [x] storage is sole immutable truth
   - [x] DB/index/cache layers are derived only
-  - [ ] `UPDATE`/`DELETE` rewriting is forbidden by model
-  - [ ] `as_is` / `chunks` / `embeddings` identities are hash anchored
+  - [x] `UPDATE`/`DELETE` rewriting is forbidden by model
+  - [x] `as_is` / `chunks` / `embeddings` identities are hash anchored
   - [x] embeddings do not duplicate payload text as source truth
 
 ## Required Source Docs
 
-All listed source docs exist. The remaining readiness blocker in this section is status, not file absence: the required docs are still marked `Status: Draft revision`, so this checklist remains blocked.
+All listed source docs exist, and the prior draft-status blocker for this section has been cleared. This checklist does not imply every modular-toolkit doc is accepted; the next valid action is to write the indexed plan docs, not to start implementation directly.
 
 - `docs/superpowers/specs/modular-toolkit/11-state-server-alignment.md`
 - `docs/superpowers/specs/modular-toolkit/12-levels-and-planes-contract.md`
@@ -63,10 +63,9 @@ All listed source docs exist. The remaining readiness blocker in this section is
 Implementation is blocked if any of the following are true:
 
 - any required source doc is missing (currently false)
-- any required source doc is still `Status: Draft revision` (currently true)
-- crate-level implementation plans are written before discovery approval
+- implementation starts before the indexed plan docs are written and accepted
 - crate folders, Cargo changes, module skeletons, fixtures, tests, or proof-app code are started early
-- a team tries to justify "just foundation work" before discovery approval
+- a team tries to justify "just foundation work" before the indexed plans exist
 - a reusable feature is proposed to debut in `apps/deer_gui`
 
 ## Failure Rule

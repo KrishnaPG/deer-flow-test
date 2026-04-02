@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Generator Shell Mode Support Evaluation
 
 **Date:** 2026-04-01
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Why This File Exists
 

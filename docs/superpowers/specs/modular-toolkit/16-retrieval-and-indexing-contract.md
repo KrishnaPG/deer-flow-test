@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Retrieval And Indexing Contract
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Why This File Exists
 
@@ -64,6 +64,10 @@ Rule:
 
 - embeddings point back to chunks, and chunks point back to As-Is truth
 - embeddings are representation/index records only, never source truth
+- `AsIsRepresentationRecord`, `ChunkRecord`, and `EmbeddingRecord` identities
+  must preserve their hash-anchor chain end to end
+- embedding identity must include the exact embedding basis hash for the chunk
+  payload used to generate the vector, not only a parent pointer or ordinal
 
 ## Canonical Contract Needs
 
@@ -73,6 +77,7 @@ Records used by retrieval-aware views should preserve:
 - linked `AsIsRepresentationRecord` references
 - linked `ChunkRecord` references where chunking is justified
 - linked `EmbeddingRecord` references where embedding/indexing is justified
+- `as_is_hash`, `chunk_hash`, and `embedding_basis_hash` where applicable
 - chunking strategy
 - retrieval/index provider metadata
 - readiness state

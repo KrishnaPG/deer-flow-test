@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Reusable Modules
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Reusable Lego Bricks
 

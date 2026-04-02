@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Raw Envelope Family Catalog
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Raw Families
 

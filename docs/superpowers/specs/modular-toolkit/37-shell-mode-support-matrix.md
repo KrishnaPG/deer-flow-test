@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Shell Mode Support Matrix
 
 **Date:** 2026-04-01
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 
 - [Contracts and Traits](./37-shell-mode-support-matrix/01-contracts-and-traits.md)
@@ -14,3 +14,12 @@
 - [Mode: Replay](./37-shell-mode-support-matrix/08-mode-replay.md)
 - [Mode: Forensics](./37-shell-mode-support-matrix/09-mode-forensics.md)
 - [Support Judgment Rules](./37-shell-mode-support-matrix/10-support-judgment-rules.md)
+
+## Reconciled Shell Entry Rule
+
+Shell modes that accept linked or shell-local command carry-in must treat that
+carry-in as shell-local `prefill_seed` only.
+
+Promotion into editable `prefill`, operator-owned `draft`, validated intent, and
+explicit `submitted` remains governed by the lifecycle in
+`20-intent-and-mediated-read-model.md`.

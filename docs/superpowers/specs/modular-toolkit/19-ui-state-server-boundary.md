@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - UI State Server Boundary
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Allowed External Read Paths
 

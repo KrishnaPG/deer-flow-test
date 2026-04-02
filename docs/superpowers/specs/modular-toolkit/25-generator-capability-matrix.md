@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Generator Capability Matrix
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Capability Matrix
 

@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Authoring Tools As Proving Grounds
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Accepted for planning
 
 ## Why Tool Apps Exist
 

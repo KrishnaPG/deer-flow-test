@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Canonical Record Families
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 ## Mandatory Carrier/Orchestration Module Families
 

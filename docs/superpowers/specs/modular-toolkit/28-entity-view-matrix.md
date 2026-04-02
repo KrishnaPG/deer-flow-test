@@ -1,7 +1,7 @@
 # Design: Modular Toolkit - Entity View Matrix
 
 **Date:** 2026-03-31
-**Status:** Draft revision
+**Status:** Approved
 
 | Entity | Ontology Family | Thumbnail Fields | Tooltip Fields | Panel Fields | World Fields |
 | --- | --- | --- | --- | --- | --- |
