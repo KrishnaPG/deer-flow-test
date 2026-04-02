@@ -77,8 +77,10 @@ Core position:
   `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md`
   covers the discovery tranche through `31-custom-code-boundaries.md`
   plus reconciliation `37`-`41`
-- the next valid action is to write the indexed plan docs before any
-  implementation work begins
+- the indexed plan docs were written before implementation work began, and the
+  current implementation-progress state now lives in
+  `docs/superpowers/specs/modular-toolkit/21-implementation-readiness-checklist.md`
+  and `docs/superpowers/plans/2026-04-01-functional-game-gap-plan-index.md`
 
 ## Reading Order
 

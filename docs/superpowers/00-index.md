@@ -22,6 +22,7 @@ Use the existing tracker files as the canonical progress state for resumed work.
 - `docs/superpowers/plans/2026-04-01-functional-game-gap-plan-index.md` is the ordered next-steps tracker for the functional-game path
 - future agents should read both before resuming work
 - when work starts, finishes, or is re-scoped, update the relevant tracker/checklist files instead of relying only on session-local todo state
+- the current tracker state already reflects active main-tree implementation for the foundation/pipeline/runtime spine; use those files for exact commit references
 - do not create or depend on a separate root status-board doc when those tracker files already cover the current state
 
 - Recently written/planned implementation docs (present in `docs/superpowers/plans/`):

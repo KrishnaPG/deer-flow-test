@@ -1,10 +1,10 @@
 # Design: Modular Toolkit - Implementation Readiness Checklist
 
 **Date:** 2026-04-01
-**Status:** Planning-ready gate cleared
+**Status:** Readiness gate satisfied; implementation active in the main tree
 
 Current read after the modular-toolkit reconciliation and prefill-seed-source follow-up: the planning-ready accepted line now covers the discovery tranche through `31-custom-code-boundaries.md` plus reconciliation `37`-`41`.
-The readiness gate was cleared for writing plans and the indexed plan docs in `docs/superpowers/plans/` have been written; implementation remains blocked until those plan docs are approved under the planning guardrails.
+The readiness gate was cleared for writing plans, the indexed plan docs in `docs/superpowers/plans/` were written, and implementation is now active in the main tree for the completed spine slices listed below.
 
 ## Must Be True Before Any Implementation
 
@@ -68,9 +68,17 @@ All listed source docs exist, and the prior draft-status blocker for this sectio
 - `docs/superpowers/plans/2026-04-01-spatial-projection-toolkit-proof.md`
 - `docs/superpowers/plans/2026-04-01-first-playable-deer-gui-composition.md`
 
+## Main-Tree Implementation Progress
+
+- `foundation/domain` canonical spine landed in `cdb8b79`
+- `foundation/replay` landed in `28ce6c6`
+- `pipeline/normalizers` Task 2 landed in `8cb343d`
+- `pipeline/derivations` landed in `1cb49ee`
+- `runtime/read_models` landed in `e3b0906`
+
 ## No-Go Conditions
 
-Implementation is blocked if any of the following are true:
+Further implementation is out of bounds if any of the following are true:
 
 - any required source doc is missing (currently false)
 - implementation starts before the indexed plan docs are written and accepted
