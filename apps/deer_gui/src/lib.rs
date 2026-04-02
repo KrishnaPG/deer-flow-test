@@ -3,6 +3,7 @@
 pub mod audio;
 pub mod bridge;
 pub mod camera;
+pub mod composition;
 pub mod constants;
 pub mod diagnostics;
 pub mod hud;

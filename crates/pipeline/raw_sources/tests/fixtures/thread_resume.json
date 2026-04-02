@@ -1,0 +1,18 @@
+{
+  "thread_id": "thread_1",
+  "title": "Survey the ridge",
+  "messages": [
+    {
+      "message_id": "msg_1",
+      "role": "assistant",
+      "text": "Previous terrain notes are attached."
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "artifact_1",
+      "name": "terrain.md",
+      "presented": true
+    }
+  ]
+}

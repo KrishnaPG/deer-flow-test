@@ -1,3 +1,10 @@
 [workspace]
-members = ["apps/deer_gui"]
+members = [
+    "apps/deer_gui",
+    "crates/foundation/contracts",
+    "crates/pipeline/normalizers",
+    "crates/pipeline/raw_sources",
+    "crates/runtime/world_projection",
+    "crates/ui/panel_shells",
+]
 resolver = "2"

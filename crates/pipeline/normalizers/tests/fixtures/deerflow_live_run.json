@@ -1,0 +1,42 @@
+{
+  "generator": "deerflow",
+  "session": {
+    "session_id": "session_1",
+    "title": "Survey the ridge"
+  },
+  "run": {
+    "run_id": "run_1",
+    "status": "running"
+  },
+  "events": [
+    {
+      "kind": "message",
+      "message_id": "msg_1",
+      "role": "operator",
+      "text": "Survey the ridge and summarize the terrain.",
+      "level": "L2"
+    },
+    {
+      "kind": "task",
+      "task_id": "task_1",
+      "title": "Gather terrain notes",
+      "state": "running"
+    },
+    {
+      "kind": "artifact",
+      "artifact_id": "artifact_1",
+      "name": "terrain.md",
+      "status": "presented",
+      "as_is_hash": "sha256:terrain-md"
+    },
+    {
+      "kind": "runtime_status",
+      "state": "streaming"
+    },
+    {
+      "kind": "clarification",
+      "clarification_id": "clar_1",
+      "prompt": "Confirm the survey radius."
+    }
+  ]
+}
