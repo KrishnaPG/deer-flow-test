@@ -13,6 +13,11 @@ pub struct RuntimeScenario {
     pub temporal: TemporalState,
 }
 
+pub const LAYOUT_RUNTIME_PROOF_SCENARIO: &str =
+    "chat + artifact + inspector runtime with save/restore";
+pub const SPATIAL_PROJECTION_PROOF_SCENARIO: &str =
+    "project canonical task and artifact state into world selection and drill-down";
+
 pub fn live_meeting_runtime_scenario() -> RuntimeScenario {
     let temporal = TemporalState {
         mode: "live_tail",
