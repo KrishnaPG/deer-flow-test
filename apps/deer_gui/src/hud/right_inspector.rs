@@ -8,6 +8,7 @@ use bevy::log::trace;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
+use super::battle_command::{BattleCommandHudState, ShellVisibilityTier};
 use super::styles::{draw_progress_bar, side_panel_frame};
 use super::{EntityInspectorData, HudState, InspectorDetails};
 
@@ -16,7 +17,18 @@ use super::{EntityInspectorData, HudState, InspectorDetails};
 // ---------------------------------------------------------------------------
 
 /// Renders the right inspector panel with selected entity details.
-pub fn right_inspector_system(mut contexts: EguiContexts, hud: Res<HudState>) {
+pub fn right_inspector_system(
+    mut contexts: EguiContexts,
+    hud: Res<HudState>,
+    bc_hud: Option<Res<BattleCommandHudState>>,
+) {
+    if let Some(bc) = &bc_hud {
+        if bc.visibility_tier != ShellVisibilityTier::Tier1 {
+            trace!("right_inspector_system — battle mode active, skipping");
+            return;
+        }
+    }
+
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };

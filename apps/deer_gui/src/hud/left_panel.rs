@@ -7,6 +7,7 @@ use bevy::log::trace;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
+use super::battle_command::{BattleCommandHudState, ShellVisibilityTier};
 use super::styles::{draw_progress_bar, mission_status_color, side_panel_frame};
 use super::{HudState, MissionStatus, MissionSummary};
 
@@ -15,7 +16,18 @@ use super::{HudState, MissionStatus, MissionSummary};
 // ---------------------------------------------------------------------------
 
 /// Renders the left panel with the mission list.
-pub fn left_panel_system(mut contexts: EguiContexts, hud: Res<HudState>) {
+pub fn left_panel_system(
+    mut contexts: EguiContexts,
+    hud: Res<HudState>,
+    bc_hud: Option<Res<BattleCommandHudState>>,
+) {
+    if let Some(bc) = &bc_hud {
+        if bc.visibility_tier != ShellVisibilityTier::Tier1 {
+            trace!("left_panel_system — battle mode active, skipping");
+            return;
+        }
+    }
+
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };

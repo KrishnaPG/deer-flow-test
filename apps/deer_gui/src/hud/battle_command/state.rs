@@ -34,6 +34,12 @@ pub struct BattleCommandHudState {
     pub fleet_rail: RailCollapseState,
     /// Active bottom deck section.
     pub active_bottom_section: BottomDeckSection,
+    /// Number of event badges to display.
+    pub event_badge_count: u32,
+    /// Number of fleet badges to display.
+    pub fleet_badge_count: u32,
+    /// Whether the overlay blocks world navigation.
+    pub overlay_blocks_world_navigation: bool,
 }
 
 impl Default for BattleCommandHudState {
@@ -43,6 +49,9 @@ impl Default for BattleCommandHudState {
             event_rail: RailCollapseState::Expanded,
             fleet_rail: RailCollapseState::Expanded,
             active_bottom_section: BottomDeckSection::SelectionSummary,
+            event_badge_count: 0,
+            fleet_badge_count: 0,
+            overlay_blocks_world_navigation: false,
         }
     }
 }
