@@ -83,3 +83,23 @@ pub struct PulsingBeacon {
     /// Pulse frequency in Hz.
     pub frequency: f32,
 }
+
+use crate::shell::{CanonicalEntityRef, CanonicalRecordFamily};
+
+impl WorldEntity {
+    pub fn to_canonical_ref(&self) -> CanonicalEntityRef {
+        let family = match self.entity_type {
+            WorldEntityType::Agent(_) => CanonicalRecordFamily::Agent,
+            WorldEntityType::Mission { .. } => CanonicalRecordFamily::Mission,
+            WorldEntityType::Artifact { .. } => CanonicalRecordFamily::Artifact,
+            WorldEntityType::Swarm { .. } => CanonicalRecordFamily::Mission,
+        };
+
+        CanonicalEntityRef {
+            family,
+            canonical_id: self.entity_id.clone(),
+            correlation_id: None,
+            lineage_id: None,
+        }
+    }
+}

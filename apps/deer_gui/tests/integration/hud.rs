@@ -157,3 +157,67 @@ fn t_hud_06_inspector_data() {
         _ => panic!("expected Agent variant"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// T-HUD-07  HUD mirrors shell selection into inspector
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_hud_07_hud_mirrors_shell_selection_into_inspector() {
+    use bevy::prelude::*;
+    use deer_gui::hud::shell_sync::shell_selection_to_hud_system;
+    use deer_gui::shell::{CanonicalEntityRef, CanonicalRecordFamily, ShellPlugin, ShellState};
+
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(ShellPlugin);
+    app.init_resource::<HudState>();
+    app.add_systems(Update, shell_selection_to_hud_system);
+    app.update();
+
+    {
+        let mut shell = app.world_mut().resource_mut::<ShellState>();
+        shell.selection.primary = Some(CanonicalEntityRef {
+            family: CanonicalRecordFamily::Agent,
+            canonical_id: "agent-99".to_string(),
+            correlation_id: None,
+            lineage_id: None,
+        });
+    }
+
+    app.update();
+    let hud = app.world().resource::<HudState>();
+    assert_eq!(hud.selected_entity.as_ref().unwrap().entity_id, "agent-99");
+}
+
+// ---------------------------------------------------------------------------
+// T-HUD-08  Command deck reads intent prefill context
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_hud_08_command_deck_reads_intent_prefill_context() {
+    use bevy::prelude::*;
+    use deer_gui::hud::shell_sync::shell_prefill_to_hud_system;
+    use deer_gui::shell::{CanonicalEntityRef, CanonicalRecordFamily, ShellPlugin, ShellState};
+
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(ShellPlugin);
+    app.init_resource::<HudState>();
+    app.add_systems(Update, shell_prefill_to_hud_system);
+    app.update();
+
+    app.world_mut()
+        .resource_mut::<ShellState>()
+        .intent_prefill
+        .target = Some(CanonicalEntityRef {
+        family: CanonicalRecordFamily::Mission,
+        canonical_id: "mission-42".to_string(),
+        correlation_id: None,
+        lineage_id: None,
+    });
+
+    app.update();
+    let hud = app.world().resource::<HudState>();
+    assert!(hud.command_input.contains("mission-42"));
+}

@@ -168,3 +168,22 @@ fn t_world_07_spatial_clear() {
     assert_eq!(idx.entity_count(), 0);
     assert_eq!(idx.cell_count(), 0);
 }
+
+// ---------------------------------------------------------------------------
+// T-WORLD-08  WorldEntity maps to canonical ref
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_world_08_world_entity_maps_to_canonical_ref() {
+    use deer_gui::shell::{CanonicalEntityRef, CanonicalRecordFamily};
+    use deer_gui::world::components::{ArtifactKind, WorldEntity, WorldEntityType};
+
+    let world_entity = WorldEntity {
+        entity_id: "mission-77".to_string(),
+        entity_type: WorldEntityType::Mission { progress: 0.8 },
+    };
+
+    let canonical: CanonicalEntityRef = world_entity.to_canonical_ref();
+    assert_eq!(canonical.family, CanonicalRecordFamily::Mission);
+    assert_eq!(canonical.canonical_id, "mission-77");
+}

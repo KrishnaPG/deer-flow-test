@@ -17,6 +17,7 @@ use deer_gui::diagnostics::DiagnosticsPlugin;
 use deer_gui::hud::HudPlugin;
 use deer_gui::picking::PickingPlugin as DeerPickingPlugin;
 use deer_gui::scene::ScenePlugin;
+use deer_gui::shell::ShellPlugin;
 use deer_gui::theme::ThemePlugin;
 use deer_gui::world::WorldPlugin;
 
@@ -60,6 +61,7 @@ fn main() {
         .add_plugins(ScenePlugin)
         .add_plugins(BridgePlugin)
         .add_plugins(WorldPlugin)
+        .add_plugins(ShellPlugin)
         .add_plugins(HudPlugin)
         .add_plugins(DeerPickingPlugin)
         .add_plugins(DeerAudioPlugin)

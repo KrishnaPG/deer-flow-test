@@ -10,6 +10,7 @@ pub mod hud;
 pub mod models;
 pub mod picking;
 pub mod scene;
+pub mod shell;
 pub mod theme;
 pub mod ui;
 pub mod world;
