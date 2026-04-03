@@ -7,9 +7,10 @@ use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::input::ButtonInput;
 use bevy::log::{debug, trace};
 use bevy::math::Vec3;
-use bevy::prelude::{MouseButton, Query, Res, Time, Transform};
+use bevy::prelude::{MessageReader, MouseButton, Query, Res, Time, Transform};
 
 use super::components::CinematicCamera;
+use super::navigation::ViewportNavigationRequest;
 use crate::constants::camera::{
     INTERPOLATION_SPEED, MAX_PITCH, MAX_ZOOM, MIN_PITCH, MIN_ZOOM, ORBIT_RADIUS, PITCH_SENSITIVITY,
     SHAKE_DECAY, YAW_SENSITIVITY, ZOOM_SENSITIVITY,
@@ -144,6 +145,34 @@ pub fn camera_shake_system(
             "camera_shake: amp={:.4} offset=({:.4},{:.4},{:.4})",
             cam.shake, ox, oy, oz,
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Viewport Navigation
+// ---------------------------------------------------------------------------
+
+/// Reads viewport navigation requests and sets the camera focus target.
+///
+/// Runs before the focus system, which consumes the focus target.
+pub fn viewport_navigation_system(
+    requests: Option<MessageReader<ViewportNavigationRequest>>,
+    mut query: Query<&mut CinematicCamera>,
+) {
+    let Some(mut requests) = requests else { return };
+    for request in requests.read() {
+        for mut cam in &mut query {
+            cam.focus_target = Some(Vec3::new(
+                request.target_center.x,
+                0.0,
+                request.target_center.y,
+            ));
+            trace!(
+                "viewport_navigation: target_center={:?} → focus_target={:?}",
+                request.target_center,
+                cam.focus_target,
+            );
+        }
     }
 }
 

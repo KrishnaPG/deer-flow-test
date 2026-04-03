@@ -12,6 +12,7 @@ mod plugin;
 pub mod spatial;
 pub mod state;
 pub mod systems;
+pub mod viewport;
 
 pub use plugin::WorldPlugin;
 pub use state::WorldState;

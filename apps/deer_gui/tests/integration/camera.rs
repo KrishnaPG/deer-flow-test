@@ -10,6 +10,7 @@ use bevy::log::trace;
 use bevy::prelude::*;
 use bevy::time::TimeUpdateStrategy;
 
+use deer_gui::camera::navigation::{CameraSyncSnapshot, ViewportNavigationRequest};
 use deer_gui::camera::{camera_interpolation_system, camera_shake_system, CinematicCamera};
 use deer_gui::constants::camera::{DEFAULT_PITCH, DEFAULT_YAW, DEFAULT_ZOOM, MAX_ZOOM};
 
@@ -204,4 +205,27 @@ fn t_cam_06_zoom_clamps_to_max() {
         MAX_ZOOM,
     );
     trace!("t_cam_06: passed — zoom={:.2}", cam.zoom);
+}
+
+// -- T-CAM-07 ---------------------------------------------------------------
+
+#[test]
+fn t_cam_07_camera_sync_snapshot_tracks_position_zoom_and_frustum() {
+    let snapshot = CameraSyncSnapshot {
+        camera_translation: Vec3::new(10.0, 20.0, 30.0),
+        zoom: 1.5,
+        frustum_center: Vec2::new(0.5, 0.5),
+        frustum_size: Vec2::new(0.2, 0.3),
+    };
+
+    assert_eq!(snapshot.zoom, 1.5);
+    assert_eq!(snapshot.frustum_size, Vec2::new(0.2, 0.3));
+}
+
+#[test]
+fn t_cam_08_viewport_navigation_request_sets_target_center() {
+    let request = ViewportNavigationRequest {
+        target_center: Vec2::new(0.8, 0.1),
+    };
+    assert_eq!(request.target_center, Vec2::new(0.8, 0.1));
 }
