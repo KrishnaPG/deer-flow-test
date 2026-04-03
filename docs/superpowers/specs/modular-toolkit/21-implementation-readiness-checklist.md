@@ -75,6 +75,11 @@ All listed source docs exist, and the prior draft-status blocker for this sectio
 - `pipeline/normalizers` Task 2 landed in `8cb343d`
 - `pipeline/derivations` landed in `1cb49ee`
 - `runtime/read_models` landed in `e3b0906`
+- `pipeline/raw_sources` and reusable `views` landed
+- `ui/panel_shells` and `ui/layout_runtime` landed
+- `runtime/world_projection` landed
+- `apps/deer_chat_lab` and `apps/deer_design` proofs landed
+- `apps/deer_gui` thin M6 composition landed
 
 ## No-Go Conditions
 
