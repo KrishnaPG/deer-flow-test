@@ -7,6 +7,7 @@
 
 mod integration {
     pub mod audio;
+    pub mod battle_command;
     pub mod bridge;
     pub mod bridge_adapter;
     pub mod camera;

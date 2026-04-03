@@ -5,6 +5,7 @@
 //! center canvas, and modal overlays.
 
 pub mod adapters;
+pub mod battle_command;
 mod bottom_console;
 mod center_canvas;
 mod event_ticker;
