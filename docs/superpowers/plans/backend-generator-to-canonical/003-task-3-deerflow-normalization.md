@@ -3,13 +3,14 @@
 **Files:**
 - Modify: `crates/pipeline/normalizers/src/lib.rs`
 - Modify: `crates/pipeline/normalizers/src/carrier.rs`
+- Modify: `crates/pipeline/normalizers/src/promotion_policy.rs`
 - Modify: `crates/pipeline/normalizers/src/representation.rs`
 - Modify: `crates/pipeline/normalizers/src/governance.rs`
 - Test: `crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs`
 
 **Milestone unlock:** DeerFlow batches produce storage-aware canonical records with explicit level/plane occupancy, lineage, correlations, ordered intents, exclusion overlays, replay checkpoints, and backpressure signals that later generators can follow
 
-**Forbidden shortcuts:** do not skip L0/L1 evidence; do not emit L2 records with empty lineage/correlations when raw envelopes carry thread/run/task/agent ids; do not treat mediated DTOs as final canonical models; do not skip `as_is` hash computation — it is the identity anchor that later `ChunkRecord` and `EmbeddingRecord` work must reference when those planes are added
+**Forbidden shortcuts:** do not skip L0/L1 evidence; do not emit L2 records with empty lineage/correlations when raw envelopes carry thread/run/task/agent ids; do not treat mediated DTOs as final canonical models; do not skip `as_is` hash computation — it is the identity anchor that later `ChunkRecord` and `EmbeddingRecord` work must reference when those planes are added; do not choose target record families without consulting `promotion_rule_for(batch.generator_profile, batch.source_kind)`
 
 - [ ] **Step 1: Write the failing DeerFlow normalization test**
 
@@ -111,6 +112,7 @@ use deer_foundation_domain::{
     SessionBody, SessionRecord, TaskBody, TaskRecord,
 };
 use deer_pipeline_raw_sources::{LiveActivityStream, RawEnvelopeBatch, RawEnvelopeFamily};
+use crate::promotion_policy::promotion_rule_for;
 
 pub fn normalize_deerflow_live_activity(
     activity: &LiveActivityStream,
@@ -118,6 +120,8 @@ pub fn normalize_deerflow_live_activity(
     let mut records = Vec::new();
 
     for batch in &activity.batches {
+        let promotion = promotion_rule_for(batch.generator_profile, batch.source_kind)
+            .expect("generator profile plus source kind must have promotion policy");
         let raw_record_id = RecordId::from(format!("raw:{}", batch.source_object_id));
         records.push(AnyRecord::L0Source(L0SourceRecord::new_with_meta(
             raw_record_id.clone(),
@@ -147,6 +151,9 @@ pub fn normalize_deerflow_live_activity(
                 summary: format!("sanitized:{:?}:{}", batch.family, batch.source_object_id),
             },
         )));
+
+        assert!(promotion.requires_l0_capture);
+        assert!(promotion.requires_l1_sanitization);
 
         match batch.family {
             RawEnvelopeFamily::StreamDelta => emit_l2_from_stream_delta(batch, &mut records),
@@ -357,6 +364,6 @@ Expected: PASS with L0/L1/L2 occupancy, source-level/source-plane metadata, and 
 - [ ] **Step 5: Commit the DeerFlow normalization path**
 
 ```bash
-git add crates/pipeline/normalizers/src/lib.rs crates/pipeline/normalizers/src/carrier.rs crates/pipeline/normalizers/src/representation.rs crates/pipeline/normalizers/src/governance.rs crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs
+git add crates/pipeline/normalizers/src/lib.rs crates/pipeline/normalizers/src/promotion_policy.rs crates/pipeline/normalizers/src/carrier.rs crates/pipeline/normalizers/src/representation.rs crates/pipeline/normalizers/src/governance.rs crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs
 git commit -m "feat: normalize deerflow activity into canonical records"
 ```

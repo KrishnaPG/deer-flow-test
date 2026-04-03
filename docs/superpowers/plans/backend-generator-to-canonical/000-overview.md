@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend the existing reusable pipeline so DeerFlow can flow from generator capture through storage-aware raw envelopes, state-server-mediated reads, lineage-safe canonical records, and L2 game-facing projections that later generators can follow.
+**Goal:** Extend the existing reusable pipeline so backend generators can flow from generator capture through storage-aware raw envelopes, state-server-mediated reads, lineage-safe canonical records, and L2 game-facing projections, with DeerFlow as the first onboarding slice and later generators following the same contract.
 
-**Architecture:** Reuse the current foundation, raw-source, normalizer, derivation, and world-projection crates instead of inventing app-local glue. Start by hardening foundation metadata for source level/plane and correlation needs, then add a DeerFlow-specific raw/mediated adapter, normalize that into L0/L1/L2 canonical records, and finish with reusable game-facing derivations plus world objects backed by lineage and backlinks.
+**Architecture:** Reuse the current foundation, raw-source, normalizer, derivation, and world-projection crates instead of inventing app-local glue. Lock the shared generator contract first: define the generator-agnostic source object kinds that can land in storage, how each one maps into levels/planes, and what hashes/lineage anchors every promotion step. Then bind DeerFlow fixtures to that shared contract, normalize them via explicit promotion rules keyed by generator profile plus source kind, and finish with reusable game-facing derivations plus world objects backed by lineage and backlinks.
 
 **Tech Stack:** Rust workspace crates, `serde`, `serde_json`, `chrono`, `thiserror`, `insta`, existing DeerFlow fixture/bridge shapes as reference only
 
@@ -29,6 +29,15 @@
 
 ## File Structure
 
+### Storage contract and derivation rules
+
+- Create: `crates/pipeline/raw_sources/src/source_catalog.rs` - authoritative shared generator source-object catalog describing immutable storage object kinds, generator profiles, hash anchors, and source level/plane semantics.
+- Modify: `crates/pipeline/raw_sources/src/lib.rs` - export the source catalog so adapters and tests share one classification contract.
+- Create: `crates/pipeline/raw_sources/tests/generator_source_catalog.rs` - prove the shared catalog classifies generic source kinds and that DeerFlow binds cleanly to them.
+- Create: `crates/pipeline/normalizers/src/promotion_policy.rs` - authoritative shared promotion matrix mapping generator profile plus source kind into canonical families, levels, planes, and storage dispositions.
+- Modify: `crates/pipeline/normalizers/src/lib.rs` - export the promotion policy for normalizers and tests.
+- Create: `crates/pipeline/normalizers/tests/generator_promotion_policy.rs` - prove the shared policy covers the generic source kinds and DeerFlow's first binding without leaving implicit holes.
+
 ### Foundation metadata hardening
 
 - Modify: `crates/foundation/contracts/src/meta.rs` - extend correlation metadata with `agent_id` and source object anchors needed by generator onboarding.
@@ -41,6 +50,7 @@
 ### DeerFlow raw source and mediated-read layer
 
 - Create: `crates/pipeline/raw_sources/src/envelopes.rs` - raw envelope families aligned to the spec catalog.
+- Modify: `crates/pipeline/raw_sources/src/source_catalog.rs` - bind DeerFlow's fixture shapes to the shared generator source kinds instead of inventing DeerFlow-only kinds.
 - Create: `crates/pipeline/raw_sources/src/deerflow.rs` - DeerFlow-specific fixture/parser adapter that emits raw envelope batches.
 - Create: `crates/pipeline/raw_sources/src/mediated_reads.rs` - state-server-aligned live stream, snapshot, replay window, and artifact preview DTOs.
 - Modify: `crates/pipeline/raw_sources/src/lib.rs` - export the new envelope, DeerFlow, and mediated-read APIs.
@@ -59,6 +69,7 @@
 
 - Modify: `crates/pipeline/normalizers/src/lib.rs` - export the new DeerFlow normalization entrypoint.
 - Modify: `crates/pipeline/normalizers/src/carrier.rs` - normalize DeerFlow raw envelopes into L0/L1/L2 carrier records with correlations and lineage.
+- Modify: `crates/pipeline/normalizers/src/promotion_policy.rs` - drive normalization through explicit generator-profile-plus-source-kind rules rather than ad hoc matches.
 - Modify: `crates/pipeline/normalizers/src/representation.rs` - emit representation records for DeerFlow `as_is` and selective `chunks` payloads.
 - Modify: `crates/pipeline/normalizers/src/governance.rs` - emit transform records for DeerFlow promotion steps.
 - Create: `crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs` - verify L0/L1/L2 occupancy, lineage backlinks, correlation preservation, exclusions, ordered intents, replay checkpoints, and backpressure records.
