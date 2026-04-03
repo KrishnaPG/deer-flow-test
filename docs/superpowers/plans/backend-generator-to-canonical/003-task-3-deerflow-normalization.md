@@ -7,9 +7,9 @@
 - Modify: `crates/pipeline/normalizers/src/governance.rs`
 - Test: `crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs`
 
-**Milestone unlock:** DeerFlow batches produce storage-aware canonical records with explicit level/plane occupancy, lineage, and correlations that later generators can follow
+**Milestone unlock:** DeerFlow batches produce storage-aware canonical records with explicit level/plane occupancy, lineage, correlations, ordered intents, exclusion overlays, replay checkpoints, and backpressure signals that later generators can follow
 
-**Forbidden shortcuts:** do not skip L0/L1 evidence; do not emit L2 records with empty lineage/correlations when raw envelopes carry thread/run/task/agent ids; do not treat mediated DTOs as final canonical models; do not skip `as_is` hash computation — it is the identity anchor for all downstream chunk and embedding planes (spec 12: `ChunkRecord` and `EmbeddingRecord` are deferred but must reference `as_is_hash` when introduced)
+**Forbidden shortcuts:** do not skip L0/L1 evidence; do not emit L2 records with empty lineage/correlations when raw envelopes carry thread/run/task/agent ids; do not treat mediated DTOs as final canonical models; do not skip `as_is` hash computation — it is the identity anchor that later `ChunkRecord` and `EmbeddingRecord` work must reference when those planes are added
 
 - [ ] **Step 1: Write the failing DeerFlow normalization test**
 
@@ -30,6 +30,9 @@ fn normalizes_deerflow_raw_batches_into_l0_l1_l2_records_with_lineage() {
     assert!(normalized.records.iter().any(|record| matches!(record, AnyRecord::L1Sanitized(_))));
     assert!(normalized.records.iter().any(|record| matches!(record, AnyRecord::Task(_))));
     assert!(normalized.records.iter().any(|record| matches!(record, AnyRecord::Artifact(_))));
+    assert!(normalized.records.iter().any(|record| matches!(record, AnyRecord::Exclusion(_))));
+    assert!(normalized.records.iter().any(|record| matches!(record, AnyRecord::ReplayCheckpoint(_))));
+    assert!(normalized.records.iter().any(|record| matches!(record, AnyRecord::Conflict(_))));
 
     let artifact = normalized.records.iter().find_map(|record| match record {
         AnyRecord::Artifact(record) => Some(record),
@@ -65,6 +68,21 @@ fn normalizes_deerflow_raw_batches_into_l0_l1_l2_records_with_lineage() {
         let hash = repr.header.identity.as_is_hash.as_ref().unwrap();
         assert!(hash.starts_with("sha256:"));
     }
+
+    let exclusion = normalized.records.iter().find_map(|record| match record {
+        AnyRecord::Exclusion(record) => Some(record),
+        _ => None,
+    }).unwrap();
+    assert_eq!(
+        exclusion.header.identity.as_is_hash.as_deref(),
+        Some("sha256:abc123")
+    );
+
+    let checkpoint = normalized.records.iter().find_map(|record| match record {
+        AnyRecord::ReplayCheckpoint(record) => Some(record),
+        _ => None,
+    }).unwrap();
+    assert_eq!(checkpoint.body.last_sequence_id, 4242);
 }
 ```
 
@@ -134,11 +152,17 @@ pub fn normalize_deerflow_live_activity(
             RawEnvelopeFamily::StreamDelta => emit_l2_from_stream_delta(batch, &mut records),
             RawEnvelopeFamily::RuntimeStatus => emit_runtime_status(batch, &mut records),
             RawEnvelopeFamily::SourceObject => emit_message_source(batch, &mut records),
+            RawEnvelopeFamily::Progress => emit_backpressure_record(batch, &mut records),
+            RawEnvelopeFamily::Snapshot if is_replay_checkpoint(batch) => {
+                emit_replay_checkpoint(batch, &mut records)
+            }
             RawEnvelopeFamily::Intent if is_exclusion_intent(batch) => emit_exclusion_intent(batch, &mut records),
             RawEnvelopeFamily::Intent => emit_intent_record(batch, &mut records),
             _ => {}
         }
     }
+
+    emit_conflict_records(&mut records);
 
     Ok(NormalizedBatch { records })
 }
@@ -152,6 +176,144 @@ fn correlations_for_batch(batch: &RawEnvelopeBatch) -> CorrelationMeta {
         agent_id: batch.agent_id.as_deref().map(AgentId::from),
         ..Default::default()
     }
+}
+
+fn is_exclusion_intent(batch: &RawEnvelopeBatch) -> bool {
+    batch.payload.get("action").and_then(|v| v.as_str()) == Some("request_exclusion")
+}
+
+fn is_replay_checkpoint(batch: &RawEnvelopeBatch) -> bool {
+    batch.payload.get("checkpoint_id").is_some() || batch.source_object_id.starts_with("checkpoint:")
+}
+
+fn emit_exclusion_intent(batch: &RawEnvelopeBatch, records: &mut Vec<AnyRecord>) {
+    use deer_foundation_domain::{ExclusionBody, ExclusionRecord};
+
+    let record_id = RecordId::from(format!("exclusion:{}", batch.source_object_id));
+    let target_hash = batch
+        .payload
+        .get("target_hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_owned();
+    let reason = batch
+        .payload
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    records.push(AnyRecord::Exclusion(ExclusionRecord::new_with_meta(
+        record_id.clone(),
+        IdentityMeta::hash_anchored(record_id, Some(target_hash.clone()), None, None),
+        correlations_for_batch(batch),
+        LineageMeta {
+            derived_from: Vec::new(),
+            source_events: batch.event_id.clone().into_iter().map(EventId::from).collect(),
+            supersedes: None,
+        },
+        CanonicalLevel::L2,
+        CanonicalPlane::AsIs,
+        ExclusionBody {
+            target_hash,
+            reason,
+        },
+    )));
+}
+
+fn emit_backpressure_record(batch: &RawEnvelopeBatch, records: &mut Vec<AnyRecord>) {
+    use deer_foundation_domain::{RuntimeStatusBody, RuntimeStatusRecord};
+
+    let record_id = RecordId::from(format!("backpressure:{}", batch.source_object_id));
+    let queue_depth = batch.payload.get("queue_depth").and_then(|v| v.as_u64()).unwrap_or(0);
+    let throttle_state = batch
+        .payload
+        .get("throttle_state")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    records.push(AnyRecord::RuntimeStatus(RuntimeStatusRecord::new_with_meta(
+        record_id.clone(),
+        IdentityMeta::hash_anchored(record_id, None, None, None),
+        correlations_for_batch(batch),
+        LineageMeta {
+            derived_from: Vec::new(),
+            source_events: batch.event_id.clone().into_iter().map(EventId::from).collect(),
+            supersedes: None,
+        },
+        CanonicalLevel::L0,
+        CanonicalPlane::AsIs,
+        RuntimeStatusBody {
+            status: format!("{}:queue_depth={}", throttle_state, queue_depth),
+        },
+    )));
+}
+
+fn emit_replay_checkpoint(batch: &RawEnvelopeBatch, records: &mut Vec<AnyRecord>) {
+    use deer_foundation_domain::{ReplayCheckpointBody, ReplayCheckpointRecord};
+
+    let record_id = RecordId::from(format!("checkpoint:{}", batch.source_object_id));
+    let checkpoint_id = batch
+        .payload
+        .get("checkpoint_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or(batch.source_object_id.as_str())
+        .to_owned();
+    let last_sequence_id = batch
+        .payload
+        .get("last_sequence_id")
+        .and_then(|v| v.as_u64())
+        .unwrap_or_default();
+
+    records.push(AnyRecord::ReplayCheckpoint(ReplayCheckpointRecord::new_with_meta(
+        record_id.clone(),
+        IdentityMeta::hash_anchored(record_id, None, None, None),
+        correlations_for_batch(batch),
+        LineageMeta {
+            derived_from: Vec::new(),
+            source_events: batch.event_id.clone().into_iter().map(EventId::from).collect(),
+            supersedes: None,
+        },
+        CanonicalLevel::L2,
+        CanonicalPlane::AsIs,
+        ReplayCheckpointBody {
+            checkpoint_id,
+            last_sequence_id,
+        },
+    )));
+}
+
+fn emit_conflict_records(records: &mut Vec<AnyRecord>) {
+    use deer_foundation_domain::{ConflictBody, ConflictRecord};
+
+    let conflicting_sequences: Vec<u64> = records
+        .iter()
+        .filter_map(|record| match record {
+            AnyRecord::Intent(intent) => intent
+                .body
+                .payload
+                .get("sequence_id")
+                .and_then(|v| v.as_u64()),
+            _ => None,
+        })
+        .collect();
+
+    if conflicting_sequences.len() < 2 {
+        return;
+    }
+
+    let record_id = RecordId::from("conflict:intents".to_string());
+    records.push(AnyRecord::Conflict(ConflictRecord::new_with_meta(
+        record_id.clone(),
+        IdentityMeta::hash_anchored(record_id, None, None, None),
+        CorrelationMeta::default(),
+        LineageMeta::root(),
+        CanonicalLevel::L2,
+        CanonicalPlane::AsIs,
+        ConflictBody {
+            summary: format!("ordered intent conflict across sequences {:?}", conflicting_sequences),
+        },
+    )));
 }
 ```
 
