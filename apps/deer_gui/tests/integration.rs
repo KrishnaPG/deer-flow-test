@@ -13,6 +13,7 @@ mod integration {
     pub mod constants_diagnostics;
     pub mod first_playable_closed_loop;
     pub mod first_playable_composition;
+    pub mod first_playable_policy_and_streaming;
     pub mod fonts;
     pub mod hud;
     pub mod hud_transclusion;

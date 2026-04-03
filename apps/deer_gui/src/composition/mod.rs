@@ -8,5 +8,8 @@ pub mod shell_mode;
 pub mod view_hosts;
 pub mod world_projection_binding;
 
-pub use closed_loop::{run_first_playable_closed_loop, FirstPlayableLoopResult};
+pub use closed_loop::{
+    run_degraded_first_playable_closed_loop, run_first_playable_closed_loop,
+    FirstPlayableLoopResult,
+};
 pub use plugin::{build_first_playable_shell, FirstPlayableShell};
