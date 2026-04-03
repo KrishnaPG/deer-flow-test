@@ -28,6 +28,7 @@ mod integration {
     pub mod scene_primitives;
     pub mod scene_tet;
     pub mod scene_weather;
+    pub mod shell_state;
     pub mod theme;
     pub mod theme_world_colors;
     pub mod world;

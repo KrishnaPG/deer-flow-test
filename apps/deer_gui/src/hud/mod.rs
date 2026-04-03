@@ -12,6 +12,7 @@ mod left_panel;
 mod modal;
 mod plugin;
 mod right_inspector;
+pub mod shell_sync;
 pub mod state_systems;
 mod styles;
 mod top_bar;

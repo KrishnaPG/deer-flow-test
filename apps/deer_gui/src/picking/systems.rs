@@ -10,6 +10,7 @@ use bevy::prelude::*;
 
 use crate::constants::visual::PICKING_COARSE_RADIUS_PX;
 use crate::hud::HudState;
+use crate::shell::{PanelId, ShellSelectionRequest};
 use crate::world::components::{Selectable, Selected, WorldEntity};
 use crate::world::spatial::SpatialIndex;
 
@@ -317,5 +318,17 @@ pub fn selection_sync_system(
                 hud.selected_entity = None;
             }
         }
+    }
+}
+
+pub fn selection_sync_to_shell_system(
+    mut shell_requests: MessageWriter<ShellSelectionRequest>,
+    selected_query: Query<&WorldEntity, With<Selected>>,
+) {
+    if let Some(world_entity) = selected_query.iter().next() {
+        shell_requests.write(ShellSelectionRequest {
+            next: world_entity.to_canonical_ref(),
+            source: PanelId::MissionRailPanel,
+        });
     }
 }

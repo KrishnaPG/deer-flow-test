@@ -380,3 +380,61 @@ fn t_pick_10_deselection_clears_selected() {
         "candidates should be cleared"
     );
 }
+
+// ---------------------------------------------------------------------------
+// T-PICK-11  Selection updates shell selection state
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t_pick_11_selection_updates_shell_selection_state() {
+    use bevy::prelude::*;
+    use deer_gui::picking::systems::{
+        selection_sync_to_shell_system, selection_update_system, EntityClicked,
+    };
+    use deer_gui::picking::SelectionChanged;
+    use deer_gui::shell::{selection_broker_system, ShellSelectionRequest, ShellState};
+    use deer_gui::world::components::{
+        AgentState, Selectable, Selected, WorldEntity, WorldEntityType,
+    };
+
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<SpatialIndex>();
+    app.init_resource::<HudState>();
+    app.init_resource::<PickingCandidates>();
+    app.init_resource::<ShellState>();
+    app.add_message::<EntityClicked>();
+    app.add_message::<SelectionChanged>();
+    app.add_message::<ShellSelectionRequest>();
+    app.add_systems(
+        Update,
+        (
+            selection_update_system,
+            selection_sync_to_shell_system,
+            selection_broker_system,
+        )
+            .chain(),
+    );
+    app.update();
+
+    let entity = app
+        .world_mut()
+        .spawn((
+            Selectable,
+            Selected,
+            WorldEntity {
+                entity_id: "agent-7".to_string(),
+                entity_type: WorldEntityType::Agent(AgentState::Working),
+            },
+        ))
+        .id();
+
+    app.world_mut().write_message(EntityClicked(entity));
+    app.update();
+
+    let shell = app.world().resource::<ShellState>();
+    assert_eq!(
+        shell.selection.primary.as_ref().unwrap().canonical_id,
+        "agent-7"
+    );
+}

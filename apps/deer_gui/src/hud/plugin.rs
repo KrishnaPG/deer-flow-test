@@ -14,6 +14,7 @@ use super::event_ticker::event_ticker_system;
 use super::left_panel::left_panel_system;
 use super::modal::modal_system;
 use super::right_inspector::right_inspector_system;
+use super::shell_sync::{shell_prefill_to_hud_system, shell_selection_to_hud_system};
 use super::state_systems::{command_dispatch_system, event_ticker_maintenance_system};
 use super::top_bar::top_bar_system;
 use super::HudState;
@@ -50,7 +51,12 @@ impl Plugin for HudPlugin {
             // State-maintenance systems run in Update, before EguiPrimaryContextPass.
             .add_systems(
                 Update,
-                (event_ticker_maintenance_system, command_dispatch_system),
+                (
+                    event_ticker_maintenance_system,
+                    command_dispatch_system,
+                    shell_selection_to_hud_system,
+                    shell_prefill_to_hud_system,
+                ),
             )
             // Render systems run in EguiPrimaryContextPass, reading HudState.
             .add_systems(

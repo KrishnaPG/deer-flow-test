@@ -10,7 +10,7 @@
 //! 2. **Precise phase**: Selects the closest candidate from the list
 
 mod plugin;
-mod systems;
+pub mod systems;
 
 pub use plugin::PickingPlugin;
 pub use systems::{selection_change_logger_system, PickingCandidates, SelectionChanged};

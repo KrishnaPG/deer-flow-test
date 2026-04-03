@@ -19,8 +19,9 @@ use crate::world::spatial::SpatialIndex;
 
 use super::systems::{
     coarse_picking_system, deselection_system, on_entity_clicked, precise_picking_system,
-    selection_change_logger_system, selection_sync_system, selection_update_system,
-    spatial_index_rebuild_system, EntityClicked, PickingCandidates, SelectionChanged,
+    selection_change_logger_system, selection_sync_system, selection_sync_to_shell_system,
+    selection_update_system, spatial_index_rebuild_system, EntityClicked, PickingCandidates,
+    SelectionChanged,
 };
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ impl Plugin for PickingPlugin {
                     deselection_system,
                     selection_change_logger_system,
                     selection_sync_system,
+                    selection_sync_to_shell_system,
                 )
                     .chain(),
             );
