@@ -1,5 +1,22 @@
 use serde::Serialize;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WorldOverlayFreshness {
+    pub status: &'static str,
+    pub stale_reason: Option<&'static str>,
+    pub source_event_id: Option<String>,
+}
+
+impl Default for WorldOverlayFreshness {
+    fn default() -> Self {
+        Self {
+            status: "fresh",
+            stale_reason: None,
+            source_event_id: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct TemporalState {
     pub layout_instance: u64,
@@ -8,6 +25,7 @@ pub struct TemporalState {
     pub is_stale: bool,
     pub stream_state: Option<String>,
     pub degraded: bool,
+    pub world_overlay_freshness: WorldOverlayFreshness,
 }
 
 impl TemporalState {
@@ -19,6 +37,7 @@ impl TemporalState {
             is_stale: false,
             stream_state: None,
             degraded: false,
+            world_overlay_freshness: WorldOverlayFreshness::default(),
         }
     }
 }
@@ -32,15 +51,25 @@ pub enum TemporalAction {
 
 pub fn reduce_temporal_state(mut state: TemporalState, action: TemporalAction) -> TemporalState {
     match action {
-        TemporalAction::LateEventInserted { .. } if state.mode == "historical" => {
+        TemporalAction::LateEventInserted { event_id } if state.mode == "historical" => {
             state.is_stale = true;
             state.stream_state = Some("degraded".into());
             state.degraded = true;
+            state.world_overlay_freshness = WorldOverlayFreshness {
+                status: "stale",
+                stale_reason: Some("late_event_inserted"),
+                source_event_id: Some(event_id),
+            };
         }
-        TemporalAction::LateEventInserted { .. } => {
+        TemporalAction::LateEventInserted { event_id } => {
             state.mode = "live_tail";
             state.stream_state = Some("degraded".into());
             state.degraded = true;
+            state.world_overlay_freshness = WorldOverlayFreshness {
+                status: "stale",
+                stale_reason: Some("late_event_inserted"),
+                source_event_id: Some(event_id),
+            };
         }
         TemporalAction::LayoutRestored { layout_instance } => {
             state.layout_instance = layout_instance;
@@ -51,6 +80,7 @@ pub fn reduce_temporal_state(mut state: TemporalState, action: TemporalAction) -
             state.is_stale = false;
             state.stream_state = Some("live".into());
             state.degraded = false;
+            state.world_overlay_freshness = WorldOverlayFreshness::default();
         }
     }
 

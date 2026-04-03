@@ -13,14 +13,19 @@ pub enum LinkedShellPanelRole {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct LinkedShellState {
     pub selected: Option<String>,
+    pub focused: Option<String>,
     pub pinned: Vec<String>,
     pub drill_down_target: Option<String>,
     pub panel_roles: BTreeMap<String, Vec<LinkedShellPanelRole>>,
+    pub brokered_interactions: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkedShellAction {
     Select {
+        source_record_id: String,
+    },
+    Focus {
         source_record_id: String,
     },
     Pin {
@@ -32,6 +37,10 @@ pub enum LinkedShellAction {
     PanelParticipationDeclared {
         panel_id: String,
         roles: Vec<LinkedShellPanelRole>,
+    },
+    BrokerParticipationDeclared {
+        panel_id: String,
+        interaction_types: Vec<String>,
     },
     LayoutPanelsRestored {
         panel_ids: Vec<String>,
@@ -47,6 +56,7 @@ pub fn reduce_linked_shell_state(
 ) -> LinkedShellState {
     match action {
         LinkedShellAction::Select { source_record_id } => state.selected = Some(source_record_id),
+        LinkedShellAction::Focus { source_record_id } => state.focused = Some(source_record_id),
         LinkedShellAction::Pin { source_record_id } => state.pinned.push(source_record_id),
         LinkedShellAction::OpenDrillDown { panel_target } => {
             state.drill_down_target = Some(panel_target.into())
@@ -59,12 +69,23 @@ pub fn reduce_linked_shell_state(
             roles.dedup();
             state.panel_roles.insert(panel_id, roles);
         }
+        LinkedShellAction::BrokerParticipationDeclared {
+            panel_id,
+            mut interaction_types,
+        } => {
+            interaction_types.sort();
+            interaction_types.dedup();
+            state
+                .brokered_interactions
+                .insert(panel_id, interaction_types);
+        }
         LinkedShellAction::LayoutPanelsRestored { panel_ids } => {
             state
                 .panel_roles
                 .retain(|panel_id, _| panel_ids.iter().any(|id| id == panel_id));
-            state.selected = None;
-            state.pinned.clear();
+            state
+                .brokered_interactions
+                .retain(|panel_id, _| panel_ids.iter().any(|id| id == panel_id));
             if state
                 .drill_down_target
                 .as_ref()
@@ -76,6 +97,9 @@ pub fn reduce_linked_shell_state(
         LinkedShellAction::Exclude { source_record_id } => {
             if state.selected.as_deref() == Some(source_record_id.as_str()) {
                 state.selected = None;
+            }
+            if state.focused.as_deref() == Some(source_record_id.as_str()) {
+                state.focused = None;
             }
             state.pinned.retain(|id| id != &source_record_id);
         }

@@ -80,3 +80,55 @@ fn linked_runtime_rejects_updates_for_unknown_interaction_types() {
         }
     );
 }
+
+#[test]
+fn linked_runtime_exposes_explicit_viewport_and_camera_broker_declarations() {
+    let runtime = LayoutRuntimeState::with_brokers(vec![
+        deer_ui_layout_runtime::linked_brokers::viewport_broker("world_viewport"),
+        deer_ui_layout_runtime::linked_brokers::camera_broker("minimap_panel"),
+    ])
+    .unwrap();
+
+    assert_eq!(
+        runtime.broker_for("viewport"),
+        Some(&LinkedBrokerState::new("viewport", "world_viewport"))
+    );
+    assert_eq!(
+        runtime.broker_for("camera"),
+        Some(&LinkedBrokerState::new("camera", "minimap_panel"))
+    );
+}
+
+#[test]
+fn linked_runtime_routes_viewport_and_camera_updates_only_through_declared_brokers() {
+    let runtime = LayoutRuntimeState::with_brokers(vec![
+        deer_ui_layout_runtime::linked_brokers::viewport_broker("world_viewport"),
+        deer_ui_layout_runtime::linked_brokers::camera_broker("minimap_panel"),
+    ])
+    .unwrap();
+
+    let viewport = runtime
+        .propagate(LinkedInteractionUpdate::new(
+            "viewport",
+            "world",
+            "minimap_panel",
+        ))
+        .unwrap();
+    let camera = runtime
+        .propagate(LinkedInteractionUpdate::new(
+            "camera",
+            "minimap",
+            "world_viewport",
+        ))
+        .unwrap();
+
+    assert_eq!(viewport.interaction_type, "viewport");
+    assert_eq!(viewport.payload, "world");
+    assert_eq!(viewport.broker_panel_id, "world_viewport");
+    assert_eq!(viewport.origin_panel_id, "minimap_panel");
+
+    assert_eq!(camera.interaction_type, "camera");
+    assert_eq!(camera.payload, "minimap");
+    assert_eq!(camera.broker_panel_id, "minimap_panel");
+    assert_eq!(camera.origin_panel_id, "world_viewport");
+}

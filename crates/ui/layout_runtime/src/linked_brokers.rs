@@ -28,6 +28,14 @@ impl LinkedBrokerState {
     }
 }
 
+pub fn viewport_broker(broker_panel_id: &str) -> LinkedBrokerState {
+    LinkedBrokerState::new("viewport", broker_panel_id)
+}
+
+pub fn camera_broker(broker_panel_id: &str) -> LinkedBrokerState {
+    LinkedBrokerState::new("camera", broker_panel_id)
+}
+
 impl LinkedInteractionUpdate {
     pub fn new(interaction_type: &str, payload: &str, origin_panel_id: &str) -> Self {
         Self {

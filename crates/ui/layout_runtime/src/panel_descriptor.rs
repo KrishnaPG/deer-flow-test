@@ -1,6 +1,13 @@
 use deer_ui_panel_shells::{PanelContract, PanelParticipation};
 use thiserror::Error;
 
+const WORLD_PANEL_ID: &str = "world_viewport";
+const MINIMAP_PANEL_ID: &str = "minimap_panel";
+const WORLD_SCENE_VIEW_ID: &str = "world_scene_view";
+const MINIMAP_VIEW_ID: &str = "minimap_view";
+const VIEWPORT_JOIN_KEY: &str = "viewport_id";
+const CAMERA_JOIN_KEY: &str = "camera_id";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PanelDescriptor {
     contract: PanelContract,
@@ -79,4 +86,29 @@ impl PanelDescriptor {
             && !self.contract.required_hosted_views.is_empty()
             && !other.contract.required_hosted_views.is_empty()
     }
+}
+
+pub fn world_panel_descriptor() -> Result<PanelDescriptor, PanelDescriptorError> {
+    PanelDescriptor::new(PanelContract {
+        panel_id: WORLD_PANEL_ID.into(),
+        required_hosted_views: vec![WORLD_SCENE_VIEW_ID.into()],
+        roles: vec![
+            deer_ui_panel_shells::PanelRole::Source,
+            deer_ui_panel_shells::PanelRole::Broker,
+        ],
+        join_keys: vec![VIEWPORT_JOIN_KEY.into(), CAMERA_JOIN_KEY.into()],
+    })
+}
+
+pub fn minimap_panel_descriptor() -> Result<PanelDescriptor, PanelDescriptorError> {
+    PanelDescriptor::new(PanelContract {
+        panel_id: MINIMAP_PANEL_ID.into(),
+        required_hosted_views: vec![MINIMAP_VIEW_ID.into()],
+        roles: vec![
+            deer_ui_panel_shells::PanelRole::Sink,
+            deer_ui_panel_shells::PanelRole::Mirror,
+            deer_ui_panel_shells::PanelRole::Broker,
+        ],
+        join_keys: vec![VIEWPORT_JOIN_KEY.into(), CAMERA_JOIN_KEY.into()],
+    })
 }

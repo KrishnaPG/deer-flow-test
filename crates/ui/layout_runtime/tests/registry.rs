@@ -136,3 +136,56 @@ fn hosted_view_bridge_uses_canonical_registration_helpers() {
     assert_eq!(chat.unwrap().view_id(), "chat_thread_view");
     assert_eq!(missing, None);
 }
+
+#[test]
+fn hosted_view_bridge_registers_spatial_view_ids() {
+    let world = hosted_view_registration("world_scene_view");
+    let minimap = hosted_view_registration("minimap_view");
+
+    assert_eq!(world.unwrap().view_id(), "world_scene_view");
+    assert_eq!(minimap.unwrap().view_id(), "minimap_view");
+}
+
+#[test]
+fn spatial_panel_descriptors_declare_explicit_world_and_minimap_linkage() {
+    let world = deer_ui_layout_runtime::panel_descriptor::world_panel_descriptor().unwrap();
+    let minimap = deer_ui_layout_runtime::panel_descriptor::minimap_panel_descriptor().unwrap();
+    let mut host = HostedViewHost::default();
+
+    let world_slot = host
+        .attach_panel(&world, deer_ui_layout_runtime::hosted_views::WORLD_SCENE)
+        .unwrap();
+    let minimap_slot = host
+        .attach_panel(&minimap, deer_ui_layout_runtime::hosted_views::MINIMAP)
+        .unwrap();
+
+    assert_eq!(world.panel_id(), "world_viewport");
+    assert_eq!(
+        world.contract().required_hosted_views,
+        vec!["world_scene_view".to_string()]
+    );
+    assert_eq!(
+        world.participation().roles(),
+        vec![PanelRole::Source, PanelRole::Broker]
+    );
+    assert_eq!(
+        world.participation().join_keys(),
+        vec!["viewport_id".to_string(), "camera_id".to_string()]
+    );
+    assert_eq!(minimap.panel_id(), "minimap_panel");
+    assert_eq!(
+        minimap.contract().required_hosted_views,
+        vec!["minimap_view".to_string()]
+    );
+    assert_eq!(
+        minimap.participation().roles(),
+        vec![PanelRole::Sink, PanelRole::Mirror, PanelRole::Broker]
+    );
+    assert_eq!(
+        minimap.participation().join_keys(),
+        vec!["viewport_id".to_string(), "camera_id".to_string()]
+    );
+    assert!(world.can_drive(&minimap));
+    assert_eq!(world_slot.hosted_view().view_id(), "world_scene_view");
+    assert_eq!(minimap_slot.hosted_view().view_id(), "minimap_view");
+}
