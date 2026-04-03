@@ -9,7 +9,7 @@
 
 **Milestone unlock:** DeerFlow batches produce storage-aware canonical records with explicit level/plane occupancy, lineage, and correlations that later generators can follow
 
-**Forbidden shortcuts:** do not skip L0/L1 evidence; do not emit L2 records with empty lineage/correlations when raw envelopes carry thread/run/task/agent ids; do not treat mediated DTOs as final canonical models
+**Forbidden shortcuts:** do not skip L0/L1 evidence; do not emit L2 records with empty lineage/correlations when raw envelopes carry thread/run/task/agent ids; do not treat mediated DTOs as final canonical models; do not skip `as_is` hash computation — it is the identity anchor for all downstream chunk and embedding planes (spec 12: `ChunkRecord` and `EmbeddingRecord` are deferred but must reference `as_is_hash` when introduced)
 
 - [ ] **Step 1: Write the failing DeerFlow normalization test**
 
@@ -45,6 +45,26 @@ fn normalizes_deerflow_raw_batches_into_l0_l1_l2_records_with_lineage() {
     assert_eq!(artifact.header.correlations.task_id.as_ref().map(|id| id.as_str()), Some("task_scout"));
     assert_eq!(artifact.header.correlations.agent_id.as_ref().map(|id| id.as_str()), Some("agent_scout"));
     assert!(!artifact.header.lineage.source_events.is_empty());
+
+    // Anti-drift: every record in the normalized batch must be able to state its level and plane
+    for record in &normalized.records {
+        let header = record.header();
+        let _ = header.level;
+        let _ = header.plane;
+        let _ = header.source_level;
+        let _ = header.source_plane;
+    }
+
+    // Hash anchoring: as-is representation records must carry a concrete content hash
+    let repr = normalized.records.iter().find_map(|record| match record {
+        AnyRecord::AsIsRepresentation(record) => Some(record),
+        _ => None,
+    });
+    if let Some(repr) = repr {
+        assert!(repr.header.identity.as_is_hash.is_some());
+        let hash = repr.header.identity.as_is_hash.as_ref().unwrap();
+        assert!(hash.starts_with("sha256:"));
+    }
 }
 ```
 
@@ -114,6 +134,7 @@ pub fn normalize_deerflow_live_activity(
             RawEnvelopeFamily::StreamDelta => emit_l2_from_stream_delta(batch, &mut records),
             RawEnvelopeFamily::RuntimeStatus => emit_runtime_status(batch, &mut records),
             RawEnvelopeFamily::SourceObject => emit_message_source(batch, &mut records),
+            RawEnvelopeFamily::Intent => emit_intent_record(batch, &mut records),
             _ => {}
         }
     }
@@ -140,9 +161,12 @@ use deer_foundation_domain::{AnyRecord, AsIsRepresentationBody, AsIsRepresentati
 use deer_pipeline_raw_sources::RawEnvelopeBatch;
 
 pub fn normalize_deerflow_as_is(batch: &RawEnvelopeBatch) -> AnyRecord {
+    let record_id = RecordId::from(format!("repr:{}", batch.source_object_id));
+    let payload_hash = compute_as_is_hash(&batch.payload);
+
     AnyRecord::AsIsRepresentation(AsIsRepresentationRecord::new_with_meta(
-        RecordId::from(format!("repr:{}", batch.source_object_id)),
-        IdentityMeta::hash_anchored(RecordId::from(format!("repr:{}", batch.source_object_id)), None, None, None),
+        record_id.clone(),
+        IdentityMeta::hash_anchored(record_id, Some(payload_hash), None, None),
         crate::carrier::correlations_for_batch(batch),
         deer_foundation_contracts::LineageMeta::root(),
         CanonicalLevel::L0,
@@ -151,6 +175,13 @@ pub fn normalize_deerflow_as_is(batch: &RawEnvelopeBatch) -> AnyRecord {
             media_type: "application/json".into(),
         },
     ))
+}
+
+fn compute_as_is_hash(payload: &serde_json::Value) -> String {
+    use sha2::{Digest, Sha256};
+    let bytes = serde_json::to_vec(payload).unwrap_or_default();
+    let hash = Sha256::digest(&bytes);
+    format!("sha256:{:x}", hash)
 }
 ```
 

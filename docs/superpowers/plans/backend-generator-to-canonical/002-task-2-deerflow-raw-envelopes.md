@@ -10,6 +10,7 @@
 - Test fixture: `crates/pipeline/raw_sources/tests/fixtures/deerflow_thread_snapshot.json`
 - Test fixture: `crates/pipeline/raw_sources/tests/fixtures/deerflow_live_activity.json`
 - Test fixture: `crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_window.json`
+- Test fixture: `crates/pipeline/raw_sources/tests/fixtures/deerflow_intent.json`
 
 **Milestone unlock:** DeerFlow can be represented as spec-aligned raw envelopes and state-server-like mediated payloads without leaking backend-specific internals above the raw-source layer
 
@@ -86,6 +87,19 @@
   "window_start_event_id": "evt_task_running",
   "window_end_event_id": "evt_artifact_presented",
   "events": ["evt_task_running", "evt_artifact_presented"]
+}
+```
+
+```json
+// crates/pipeline/raw_sources/tests/fixtures/deerflow_intent.json
+{
+  "intent_id": "intent_1",
+  "thread_id": "thread_1",
+  "run_id": "run_1",
+  "agent_id": "agent_lead",
+  "action": "dispatch_scouts",
+  "payload": { "target": "east_ridge", "priority": "high" },
+  "requested_at": "2026-04-03T10:00:00Z"
 }
 ```
 
@@ -250,6 +264,16 @@ struct RuntimeEnvelopeFixture {
     run_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct DeerFlowIntentFixture {
+    intent_id: String,
+    thread_id: String,
+    run_id: String,
+    agent_id: String,
+    action: String,
+    payload: serde_json::Value,
+}
+
 pub fn load_deerflow_thread_snapshot(fixture_json: &str) -> Result<ThreadStateSnapshot, RawSourceError> {
     serde_json::from_str(fixture_json).map_err(|_| RawSourceError::InvalidFixture)
 }
@@ -279,6 +303,28 @@ pub fn load_deerflow_live_activity(fixture_json: &str) -> Result<LiveActivityStr
     }));
 
     Ok(LiveActivityStream { batches })
+}
+
+pub fn load_deerflow_intent(fixture_json: &str) -> Result<RawEnvelopeBatch, RawSourceError> {
+    let fixture: DeerFlowIntentFixture =
+        serde_json::from_str(fixture_json).map_err(|_| RawSourceError::InvalidFixture)?;
+
+    Ok(RawEnvelopeBatch {
+        family: RawEnvelopeFamily::Intent,
+        level: CanonicalLevelRef::L0,
+        plane: CanonicalPlaneRef::AsIs,
+        source_object_id: format!("intent:{}", fixture.intent_id),
+        event_id: Some(fixture.intent_id),
+        thread_id: Some(fixture.thread_id),
+        run_id: Some(fixture.run_id),
+        task_id: None,
+        agent_id: Some(fixture.agent_id),
+        artifact_id: None,
+        payload: serde_json::json!({
+            "action": fixture.action,
+            "payload": fixture.payload,
+        }),
+    })
 }
 ```
 
