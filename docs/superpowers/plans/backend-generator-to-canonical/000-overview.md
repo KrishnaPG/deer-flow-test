@@ -19,12 +19,13 @@
 - It does **not** implement a production state server. It introduces state-server-aligned mediated read DTOs and fixture-backed DeerFlow adapters that preserve the boundary.
 - It does **not** allow direct backend payloads, direct artifact paths, or app-local mutable truth to bypass storage/lineage semantics.
 - It does **not** implement production ABAC policy; it introduces intent envelope shapes aligned to the spec 11 intent boundary so that later adapters can route through policy validation.
+- It **does** capture the contract surfaces this slice needs for exclusions, authorized artifact previews, ordered intents, replay checkpoints, and storage backpressure so later infrastructure work has a canonical target instead of app-local glue.
 
 ## Spec Alignment Notes
 
 - **Spec 11 (State Server Alignment):** Pipeline follows `generator → storage truth → mediated source → normalizer → canonical → derivation → world projection`. Lineage is append-only (`source_events`, `derived_from`, `supersedes`). Intent shapes are introduced as raw envelope families so that human/UI-originated actions can be modeled as commands that pass through policy/ABAC before becoming append-only records.
-- **Spec 12 (Levels & Planes):** `RecordHeader` carries `level`, `plane`, `source_level`, `source_plane`, `is_persisted_truth`, `is_index_projection`, `is_client_transient`. Planes `AsIs`, `Chunks`, `Embeddings` are defined in envelope refs. This slice exercises `AsIs` end-to-end; `Chunks` and `Embeddings` normalization are deferred (spec 12: representation policy is selective, not uniform).
-- **Spec 24 (Level/Plane/Lineage Matrix):** This plan exercises the following matrix cells: `L0_SourceRecord(L0/AsIs)`, `L1_SanitizedRecord(L1/AsIs)`, `TaskRecord(L2)`, `ArtifactRecord(L2/AsIs)`, `RuntimeStatusRecord(L0..L2)`, `IntentRecord(L2)`, `AsIsRepresentationRecord(L0/AsIs)`, `TransformRecord(L2)`. All other matrix cells (L3–L6 families, `ChunkRecord`, `EmbeddingRecord`, governance families like `DedupRecord`, `BranchRecord`, `VersionRecord`, etc.) are intentionally deferred to follow-on onboarding slices.
+- **Spec 12 (Levels & Planes):** `RecordHeader` carries `level`, `plane`, `source_level`, `source_plane`, `is_persisted_truth`, `is_index_projection`, `is_client_transient`. Planes `AsIs`, `Chunks`, `Embeddings` are defined in envelope refs. This slice implements `AsIs` end to end and explicitly preserves the hash anchors and metadata that future `Chunks` and `Embeddings` work must build on.
+- **Spec 24 (Level/Plane/Lineage Matrix):** This plan exercises the matrix cells needed for DeerFlow onboarding now: `L0_SourceRecord(L0/AsIs)`, `L1_SanitizedRecord(L1/AsIs)`, `TaskRecord(L2)`, `ArtifactRecord(L2/AsIs)`, `RuntimeStatusRecord(L0..L2)`, `IntentRecord(L2)`, `ExclusionRecord(L2)`, `ConflictRecord(L2)`, `ReplayCheckpointRecord(L2)`, `AsIsRepresentationRecord(L0/AsIs)`, and `TransformRecord(L2)`. The remaining matrix families stay out of scope for this slice rather than being redefined incompletely.
 
 ## File Structure
 
@@ -48,6 +49,11 @@
 - Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_thread_snapshot.json` - DeerFlow thread/run snapshot fixture.
 - Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_live_activity.json` - DeerFlow multi-agent live activity fixture.
 - Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_window.json` - DeerFlow replay/history fixture.
+- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_artifact_preview.json` - ABAC-authorized artifact preview fixture with signed access metadata.
+- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_exclusion_intent.json` - compliance exclusion intent fixture.
+- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_conflicting_intents.json` - concurrent intent fixture with deterministic sequence ids.
+- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_storage_backpressure.json` - storage backpressure fixture for rate-limit stress coverage.
+- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_checkpoint.json` - replay checkpoint fixture for cache rehydration alignment.
 
 ### Canonical normalization
 
@@ -55,11 +61,11 @@
 - Modify: `crates/pipeline/normalizers/src/carrier.rs` - normalize DeerFlow raw envelopes into L0/L1/L2 carrier records with correlations and lineage.
 - Modify: `crates/pipeline/normalizers/src/representation.rs` - emit representation records for DeerFlow `as_is` and selective `chunks` payloads.
 - Modify: `crates/pipeline/normalizers/src/governance.rs` - emit transform records for DeerFlow promotion steps.
-- Create: `crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs` - verify L0/L1/L2 occupancy, lineage backlinks, and correlation preservation.
+- Create: `crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs` - verify L0/L1/L2 occupancy, lineage backlinks, correlation preservation, exclusions, ordered intents, replay checkpoints, and backpressure records.
 
 ### L2 game-facing derivations
 
-- Create: `crates/pipeline/derivations/src/game_face.rs` - derive agent units, task-force links, queue rows, history rows, and telemetry summaries from canonical records.
+- Create: `crates/pipeline/derivations/src/game_face.rs` - derive agent units, task-force links, queue rows, history rows, knowledge nodes, intervention surfaces, session state, artifact families, and telemetry summaries from canonical records.
 - Modify: `crates/pipeline/derivations/src/lib.rs` - export the new game-facing VM entrypoints.
 - Create: `crates/pipeline/derivations/tests/deerflow_game_face.rs` - verify DeerFlow canonical records derive into stable L2 game-facing views with backlinks.
 
@@ -71,26 +77,26 @@
 
 ## Stress-Test Alignment (docs/architecture/stess-tests.md)
 
-| Scenario | Coverage in this plan | Deferred |
-| --- | --- | --- |
-| 1: 10,000 parallel agents | Raw envelope batches support arbitrary cardinality; `agent_id` correlation tracks per-agent records; queue pressure telemetry detects load | Bloom-filter dedup, Parquet micro-batching, NATS JetStream backpressure |
-| 2: HOTL media pipelines | Mediated reads include live activity streams; `RuntimeStatus` envelopes carry pipeline state; operator intent shapes exist | Pre-signed URL gateway, large blob proxy avoidance |
-| 3: Right to be forgotten | `IntentRecord` with exclusion payload shapes the compliance path; `ExclusionRecord` is in the spec 24 matrix | Full exclusion ledger, anti-join DB view construction |
-| 4: Massive video proxying | `ArtifactRecord` carries `as_is_hash` identity anchor | Pre-signed URL generation, lakeFS/S3 version commit routing |
-| 5: HITL low-latency chat | `LiveActivityStream` DTOs and `StreamDelta` envelopes support sub-second token delivery | WebRTC offload, LiveKit egress integration |
-| 6: S3 rate limiting | Intent and envelope queues are append-only and NATS-aligned | NATS JetStream ingress queue, exponential backoff workflows |
-| 7: State Server replica crash | Lineage `source_events` and `derived_from` enable cache rehydration from NATS tail | Redis leadership, NATS JetStream replay from sequence |
-| 8: Concurrent conflicting intents | Both intents append as `IntentRecord` with deterministic `event_id`; lineage preserves both | NATS JetStream sequence ID, `argMax` materialized views |
+| Scenario | Concrete plan capture |
+| --- | --- |
+| 1: 10,000 parallel agents | Raw envelope batches remain cardinality-safe, intent/event ordering is explicit via `sequence_id`, and game-facing queue pressure surfaces expose load before collapse. |
+| 2: HOTL media pipelines | Mediated reads include runtime/checkpoint surfaces, authorized artifact preview DTOs, and intervention records so supervisory review appears as observed state rather than app-local mutation. |
+| 3: Right to be forgotten | Exclusion intents normalize into canonical exclusion/governance records carrying `target_hash`, `reason`, and lineage back to the affected record family. |
+| 4: Massive video proxying | Artifact preview DTOs carry authorized access metadata (`authorization_kind`, `access_url`, `expires_at`) so clients never depend on raw artifact paths. |
+| 5: HITL low-latency chat | `LiveActivityStream` and `StreamDelta` records remain the thin read boundary for fast UI feedback while preserving storage-native source identity. |
+| 6: S3 rate limiting | Backpressure fixtures normalize into canonical operational records and game-facing queue pressure so storage throttling is visible without blocking generators. |
+| 7: State Server replica crash | Replay window and replay checkpoint DTOs preserve the last acknowledged sequence boundary needed for cache rehydration semantics. |
+| 8: Concurrent conflicting intents | Conflicting intents are represented as separate append-only source objects with deterministic ordering metadata and canonical conflict/resolution records. |
 
 ## Gamification Alignment (docs/superpowers/research/data-gamification/)
 
-| Gamification concept | Coverage in this plan | Deferred |
-| --- | --- | --- |
-| Agent health / fatigue / performance | `AgentHealthVm`, `AgentPerformanceVm`, `AgentTrackRecordVm` added to `UnitActorVm` | Dynamic fatigue calculation, XP/leveling, reputation tiers beyond veteran/rookie |
-| Knowledge graph | `KnowledgeGraphVm` with `KnowledgeNodeVm` nodes and lineage-based links | Full graph traversal, topic clusters, reference bundles |
-| Queue pressure | `QueuePressureVm` with `queued_count`, `running_count`, `pressure_level` | Supply congestion visualization, encumbrance mechanics |
-| Event stories | `TelemetryVm.event_stories` chains related artifact/task events into narrative strings | Full event-story collapse, severity-based notification grouping |
-| Artifact families | `ArtifactRecord` carries `label` and `as_is_hash`; type classification via `media_type` in `AsIsRepresentationBody` | Explicit `ArtifactFamily` enum (text, code, dataset, image, audio, video, model) |
-| Session state / branching | `CorrelationMeta` carries `thread_id`, `run_id`, `session_id` equivalents | Explicit session state machine, branch/fork VM types |
-| Operator override / HITL | `IntentRecord` shapes for both action and exclusion intents | QTE-style intervention surfaces, timed dialogue choice VMs |
-| HOTL review surfaces | `LiveActivityStream` with `RuntimeStatus` for pipeline checkpointing | Refinery queue UI, checkpoint approval/rejection flows |
+| Gamification concept | Concrete plan capture |
+| --- | --- |
+| Agent health / fatigue / performance | `UnitActorVm` includes `AgentHealthVm`, `AgentPerformanceVm`, and `AgentTrackRecordVm` so the same canonical record supports RTS telemetry and RPG companion sheets. |
+| Knowledge graph | `KnowledgeGraphVm` and `KnowledgeNodeVm` expose artifact/reference lineage as navigable graph nodes rather than flat history. |
+| Queue pressure | `QueuePressureVm` and queue beacon projection make congestion visible as gameplay state instead of buried operational metrics. |
+| Event stories | `HistoryRowVm.event_story` and telemetry event chains group related task/artifact events into readable narrative beats. |
+| Artifact families | `ArtifactFamilyVm` classifies text/code/dataset/image/audio/video/model artifacts so the same object can render as relic, blueprint, dossier, replay, or codex entry. |
+| Session state / branching | `SessionStateVm` makes run/thread state and branch context first-class so RTS theaters and RPG chapters stay backed by the same truth. |
+| Operator override / HITL | `InterventionVm` and HOTL checkpoint rows expose human approval/override as deliberate gameplay actions backed by intents and observed outcomes. |
+| HOTL review surfaces | Checkpoint and authorized preview records keep live review grounded in lineage, timestamps, and source attribution. |
