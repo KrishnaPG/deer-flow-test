@@ -11,7 +11,6 @@ use bevy::log::{debug, trace};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
-use super::battle_command::{BattleCommandHudState, ShellVisibilityTier};
 use super::styles::glass_panel_frame;
 use super::{CommandMode, HudState, PendingCommand};
 
