@@ -3,6 +3,7 @@
 **Files:**
 - Modify: `crates/pipeline/raw_sources/Cargo.toml`
 - Create: `crates/pipeline/raw_sources/src/envelopes.rs`
+- Modify: `crates/pipeline/raw_sources/src/source_catalog.rs`
 - Create: `crates/pipeline/raw_sources/src/deerflow.rs`
 - Create: `crates/pipeline/raw_sources/src/mediated_reads.rs`
 - Modify: `crates/pipeline/raw_sources/src/lib.rs`
@@ -17,9 +18,9 @@
 - Test fixture: `crates/pipeline/raw_sources/tests/fixtures/deerflow_storage_backpressure.json`
 - Test fixture: `crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_checkpoint.json`
 
-**Milestone unlock:** DeerFlow can be represented as spec-aligned raw envelopes and state-server-like mediated payloads without leaking backend-specific internals above the raw-source layer
+**Milestone unlock:** DeerFlow can be represented as spec-aligned raw envelopes and state-server-like mediated payloads without leaking backend-specific internals above the raw-source layer, and every emitted envelope is tagged with a shared `GeneratorSourceKind` plus DeerFlow's generator profile from the storage contract
 
-**Forbidden shortcuts:** do not put canonical records in raw-sources; do not use `apps/deer_gui` bridge DTOs here; do not flatten multi-agent activity into one summary blob
+**Forbidden shortcuts:** do not put canonical records in raw-sources; do not use `apps/deer_gui` bridge DTOs here; do not flatten multi-agent activity into one summary blob; do not parse any fixture shape without attaching a shared `GeneratorSourceKind` and `GeneratorProfile::DeerFlow`
 
 - [ ] **Step 1: Write the failing DeerFlow adapter test and fixtures**
 
@@ -307,6 +308,8 @@ pub enum RawEnvelopeFamily {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RawEnvelopeBatch {
+    pub generator_profile: crate::source_catalog::GeneratorProfile,
+    pub source_kind: crate::source_catalog::GeneratorSourceKind,
     pub family: RawEnvelopeFamily,
     pub level: CanonicalLevelRef,
     pub plane: CanonicalPlaneRef,
@@ -388,6 +391,7 @@ use crate::{
     envelopes::{CanonicalLevelRef, CanonicalPlaneRef, RawEnvelopeBatch, RawEnvelopeFamily},
     error::RawSourceError,
     mediated_reads::{LiveActivityStream, ReplayWindow, ThreadStateSnapshot},
+    source_catalog::{GeneratorProfile, GeneratorSourceKind},
 };
 
 #[derive(Debug, Deserialize)]
@@ -461,6 +465,8 @@ pub fn load_deerflow_live_activity(fixture_json: &str) -> Result<LiveActivityStr
     let mut batches = fixture.source_objects;
     batches.extend(fixture.stream_deltas);
     batches.extend(fixture.runtime_status.into_iter().map(|status| RawEnvelopeBatch {
+        generator_profile: GeneratorProfile::DeerFlow,
+        source_kind: GeneratorSourceKind::RuntimeEvent,
         family: RawEnvelopeFamily::RuntimeStatus,
         level: CanonicalLevelRef::L0,
         plane: CanonicalPlaneRef::AsIs,
@@ -482,6 +488,8 @@ pub fn load_deerflow_intent(fixture_json: &str) -> Result<RawEnvelopeBatch, RawS
         serde_json::from_str(fixture_json).map_err(|_| RawSourceError::InvalidFixture)?;
 
     Ok(RawEnvelopeBatch {
+        generator_profile: GeneratorProfile::DeerFlow,
+        source_kind: GeneratorSourceKind::IntentEvent,
         family: RawEnvelopeFamily::Intent,
         level: CanonicalLevelRef::L0,
         plane: CanonicalPlaneRef::AsIs,
@@ -507,6 +515,8 @@ pub fn load_deerflow_conflicting_intents(fixture_json: &str) -> Result<Vec<RawEn
     Ok(fixtures
         .into_iter()
         .map(|fixture| RawEnvelopeBatch {
+            generator_profile: GeneratorProfile::DeerFlow,
+            source_kind: GeneratorSourceKind::IntentEvent,
             family: RawEnvelopeFamily::Intent,
             level: CanonicalLevelRef::L0,
             plane: CanonicalPlaneRef::AsIs,
@@ -548,6 +558,8 @@ pub fn load_deerflow_exclusion_intent(fixture_json: &str) -> Result<RawEnvelopeB
         serde_json::from_str(fixture_json).map_err(|_| RawSourceError::InvalidFixture)?;
 
     Ok(RawEnvelopeBatch {
+        generator_profile: GeneratorProfile::DeerFlow,
+        source_kind: GeneratorSourceKind::ExclusionEvent,
         family: RawEnvelopeFamily::Intent,
         level: CanonicalLevelRef::L0,
         plane: CanonicalPlaneRef::AsIs,
@@ -594,6 +606,7 @@ pub mod envelopes;
 pub mod error;
 pub mod mediated_reads;
 pub mod run_stream;
+pub mod source_catalog;
 pub mod thread_gateway;
 pub mod upload_gateway;
 
@@ -607,6 +620,10 @@ pub use mediated_reads::{
     ArtifactPreviewPayload, LiveActivityStream, ReplayCheckpoint, ReplayWindow, StorageBackpressure,
     ThreadStateSnapshot,
 };
+pub use source_catalog::{
+    bind_generator_source_kind, GeneratorProfile, GeneratorSourceKind, GeneratorSourceSpec,
+    SourcePlanePolicy, SourceStorageClass,
+};
 ```
 
 - [ ] **Step 4: Re-run the DeerFlow raw-source test**
@@ -618,6 +635,6 @@ Expected: PASS with DeerFlow fixtures loading into raw envelopes, ordered intent
 - [ ] **Step 5: Commit the DeerFlow raw-source layer**
 
 ```bash
-git add crates/pipeline/raw_sources/Cargo.toml crates/pipeline/raw_sources/src/lib.rs crates/pipeline/raw_sources/src/envelopes.rs crates/pipeline/raw_sources/src/deerflow.rs crates/pipeline/raw_sources/src/mediated_reads.rs crates/pipeline/raw_sources/tests/deerflow_adapter.rs crates/pipeline/raw_sources/tests/fixtures/deerflow_thread_snapshot.json crates/pipeline/raw_sources/tests/fixtures/deerflow_live_activity.json crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_window.json crates/pipeline/raw_sources/tests/fixtures/deerflow_intent.json crates/pipeline/raw_sources/tests/fixtures/deerflow_artifact_preview.json crates/pipeline/raw_sources/tests/fixtures/deerflow_exclusion_intent.json crates/pipeline/raw_sources/tests/fixtures/deerflow_conflicting_intents.json crates/pipeline/raw_sources/tests/fixtures/deerflow_storage_backpressure.json crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_checkpoint.json
+git add crates/pipeline/raw_sources/Cargo.toml crates/pipeline/raw_sources/src/lib.rs crates/pipeline/raw_sources/src/source_catalog.rs crates/pipeline/raw_sources/src/envelopes.rs crates/pipeline/raw_sources/src/deerflow.rs crates/pipeline/raw_sources/src/mediated_reads.rs crates/pipeline/raw_sources/tests/deerflow_adapter.rs crates/pipeline/raw_sources/tests/fixtures/deerflow_thread_snapshot.json crates/pipeline/raw_sources/tests/fixtures/deerflow_live_activity.json crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_window.json crates/pipeline/raw_sources/tests/fixtures/deerflow_intent.json crates/pipeline/raw_sources/tests/fixtures/deerflow_artifact_preview.json crates/pipeline/raw_sources/tests/fixtures/deerflow_exclusion_intent.json crates/pipeline/raw_sources/tests/fixtures/deerflow_conflicting_intents.json crates/pipeline/raw_sources/tests/fixtures/deerflow_storage_backpressure.json crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_checkpoint.json
 git commit -m "feat: add deerflow raw envelopes and mediated reads"
 ```
