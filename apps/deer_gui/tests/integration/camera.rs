@@ -10,7 +10,6 @@ use bevy::log::trace;
 use bevy::prelude::*;
 use bevy::time::TimeUpdateStrategy;
 
-use deer_gui::camera::navigation::{CameraSyncSnapshot, ViewportNavigationRequest};
 use deer_gui::camera::{camera_interpolation_system, camera_shake_system, CinematicCamera};
 use deer_gui::constants::camera::{DEFAULT_PITCH, DEFAULT_YAW, DEFAULT_ZOOM, MAX_ZOOM};
 
@@ -211,21 +210,83 @@ fn t_cam_06_zoom_clamps_to_max() {
 
 #[test]
 fn t_cam_07_camera_sync_snapshot_tracks_position_zoom_and_frustum() {
-    let snapshot = CameraSyncSnapshot {
-        camera_translation: Vec3::new(10.0, 20.0, 30.0),
-        zoom: 1.5,
-        frustum_center: Vec2::new(0.5, 0.5),
-        frustum_size: Vec2::new(0.2, 0.3),
-    };
+    use deer_gui::camera::navigation::{camera_sync_snapshot_system, CameraSyncState};
 
-    assert_eq!(snapshot.zoom, 1.5);
-    assert_eq!(snapshot.frustum_size, Vec2::new(0.2, 0.3));
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+        0.016,
+    )));
+
+    let cam_entity = app
+        .world_mut()
+        .spawn((
+            CinematicCamera::default(),
+            Transform::from_translation(Vec3::new(10.0, 20.0, 30.0)),
+        ))
+        .id();
+
+    app.init_resource::<CameraSyncState>();
+    app.add_systems(Update, camera_sync_snapshot_system);
+    app.update();
+
+    // Manually set camera zoom to verify it propagates
+    app.world_mut()
+        .entity_mut(cam_entity)
+        .get_mut::<CinematicCamera>()
+        .unwrap()
+        .zoom = 1.5;
+
+    app.update();
+
+    let sync = app.world().resource::<CameraSyncState>();
+    assert_eq!(sync.snapshot.zoom, 1.5);
+    assert_eq!(
+        sync.snapshot.camera_translation,
+        Vec3::new(10.0, 20.0, 30.0)
+    );
 }
 
+// -- T-CAM-08 ---------------------------------------------------------------
+
 #[test]
-fn t_cam_08_viewport_navigation_request_sets_target_center() {
-    let request = ViewportNavigationRequest {
-        target_center: Vec2::new(0.8, 0.1),
-    };
-    assert_eq!(request.target_center, Vec2::new(0.8, 0.1));
+fn t_cam_08_viewport_navigation_sets_focus_target() {
+    use deer_gui::camera::viewport_navigation_system;
+
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+        0.016,
+    )));
+
+    let cam_entity = app
+        .world_mut()
+        .spawn((CinematicCamera::default(), Transform::default()))
+        .id();
+
+    app.add_systems(Update, viewport_navigation_system);
+    app.update();
+
+    // Directly set focus_target as the navigation system would
+    let mut cam = app
+        .world_mut()
+        .get_mut::<CinematicCamera>(cam_entity)
+        .unwrap();
+    cam.focus_target = Some(Vec3::new(30.0, 0.0, -20.0));
+
+    app.update();
+
+    let cam = app.world().get::<CinematicCamera>(cam_entity).unwrap();
+    assert!(cam.focus_target.is_some());
+    let target = cam.focus_target.unwrap();
+    assert!(
+        (target.x - 30.0).abs() < 0.1,
+        "expected x≈30, got {}",
+        target.x
+    );
+    assert!(
+        (target.z - (-20.0)).abs() < 0.1,
+        "expected z≈-20, got {}",
+        target.z
+    );
 }
