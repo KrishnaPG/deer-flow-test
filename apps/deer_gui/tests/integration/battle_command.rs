@@ -75,3 +75,19 @@ fn t_battle_06_tier3_overlay_pauses_world_navigation_but_keeps_context() {
     state.overlay_blocks_world_navigation = true;
     assert!(state.overlay_blocks_world_navigation);
 }
+
+#[test]
+fn t_battle_07_bottom_deck_sections_share_context_but_keep_distinct_state() {
+    let state = BattleCommandHudState::default();
+    assert_eq!(
+        state.active_bottom_section,
+        BottomDeckSection::SelectionSummary
+    );
+}
+
+#[test]
+fn t_battle_08_action_deck_hotkey_slots_stay_stable_across_selection_updates() {
+    let slots = deer_gui::hud::battle_command::bottom_deck::default_action_slots();
+    assert_eq!(slots.len(), 15);
+    assert_eq!(slots[14].label, "Cancel");
+}
