@@ -11,6 +11,7 @@ use bevy::log::{debug, trace};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
+use super::battle_command::{BattleCommandHudState, ShellVisibilityTier};
 use super::styles::glass_panel_frame;
 use super::{CenterCanvasMode, HudState};
 
@@ -21,7 +22,19 @@ use super::{CenterCanvasMode, HudState};
 /// Renders the center canvas with mode-specific content.
 ///
 /// In `WorldView` mode, no panel is drawn — the 3D world shows through.
-pub fn center_canvas_system(mut contexts: EguiContexts, hud: Res<HudState>) {
+/// Short-circuits when battle command mode is active (tier > Tier1).
+pub fn center_canvas_system(
+    mut contexts: EguiContexts,
+    hud: Res<HudState>,
+    bc_hud: Option<Res<BattleCommandHudState>>,
+) {
+    if let Some(bc) = &bc_hud {
+        if bc.visibility_tier != ShellVisibilityTier::Tier1 {
+            trace!("center_canvas_system — battle mode active, skipping");
+            return;
+        }
+    }
+
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };

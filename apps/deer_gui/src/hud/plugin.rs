@@ -8,6 +8,9 @@ use bevy::log::info;
 use bevy::prelude::*;
 use bevy_egui::EguiPrimaryContextPass;
 
+use super::battle_command::{
+    battle_inspector_system, rail_collapse_system, tier3_overlay_system, BattleCommandHudState,
+};
 use super::bottom_console::bottom_console_system;
 use super::center_canvas::center_canvas_system;
 use super::event_ticker::event_ticker_system;
@@ -48,6 +51,7 @@ impl Plugin for HudPlugin {
         info!("HudPlugin::build — registering HUD resources and systems");
 
         app.init_resource::<HudState>()
+            .init_resource::<BattleCommandHudState>()
             // State-maintenance systems run in Update, before EguiPrimaryContextPass.
             .add_systems(
                 Update,
@@ -56,6 +60,7 @@ impl Plugin for HudPlugin {
                     command_dispatch_system,
                     shell_selection_to_hud_system,
                     shell_prefill_to_hud_system,
+                    rail_collapse_system,
                 ),
             )
             // Render systems run in EguiPrimaryContextPass, reading HudState.
@@ -69,6 +74,8 @@ impl Plugin for HudPlugin {
                     center_canvas_system,
                     event_ticker_system,
                     modal_system,
+                    battle_inspector_system,
+                    tier3_overlay_system,
                 )
                     .chain(),
             );

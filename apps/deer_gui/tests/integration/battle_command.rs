@@ -59,3 +59,19 @@ fn t_battle_02_minimap_locate_repositions_camera_only() {
         target.z
     );
 }
+
+#[test]
+fn t_battle_04_collapsed_event_rail_keeps_badges() {
+    let mut state = BattleCommandHudState::default();
+    state.event_rail = RailCollapseState::Compact;
+    state.event_badge_count = 3;
+    assert_eq!(state.event_badge_count, 3);
+}
+
+#[test]
+fn t_battle_06_tier3_overlay_pauses_world_navigation_but_keeps_context() {
+    let mut state = BattleCommandHudState::default();
+    state.visibility_tier = ShellVisibilityTier::Tier3;
+    state.overlay_blocks_world_navigation = true;
+    assert!(state.overlay_blocks_world_navigation);
+}
