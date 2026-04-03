@@ -30,6 +30,9 @@ fn derives_units_queue_history_and_telemetry_from_deerflow_records() {
     assert!(game_face.queue.rows.iter().any(|row| row.task_id == "task_scout" && row.status == "running"));
     assert!(game_face.history.rows.iter().any(|row| row.event_id == "evt_artifact_presented"));
     assert_eq!(game_face.telemetry.active_agents, 2);
+    assert!(!game_face.knowledge_graph.nodes.is_empty());
+    assert!(matches!(game_face.telemetry.queue_pressure.pressure_level, "low" | "moderate" | "high"));
+    assert!(game_face.telemetry.event_stories.iter().any(|s| s.contains("artifact")));
 }
 ```
 
@@ -54,6 +57,30 @@ pub struct UnitActorVm {
     pub source_record_id: String,
     pub status: String,
     pub panel_target: &'static str,
+    pub health: AgentHealthVm,
+    pub performance: AgentPerformanceVm,
+    pub track_record: AgentTrackRecordVm,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+pub struct AgentHealthVm {
+    pub current_status: String,
+    pub fatigue_level: f32,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+pub struct AgentPerformanceVm {
+    pub success_rate: f32,
+    pub avg_completion_time_ms: Option<u64>,
+    pub current_streak: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+pub struct AgentTrackRecordVm {
+    pub total_tasks: usize,
+    pub total_artifacts: usize,
+    pub veteran_tier: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -68,6 +95,7 @@ pub struct QueueRowVm {
     pub task_id: String,
     pub status: String,
     pub source_record_id: String,
+    pub priority: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -75,6 +103,15 @@ pub struct HistoryRowVm {
     pub event_id: String,
     pub source_record_id: String,
     pub label: String,
+    pub event_story: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct KnowledgeNodeVm {
+    pub node_id: String,
+    pub label: String,
+    pub source_record_id: String,
+    pub links: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -82,6 +119,15 @@ pub struct TelemetryVm {
     pub active_agents: usize,
     pub running_tasks: usize,
     pub artifact_count: usize,
+    pub queue_pressure: QueuePressureVm,
+    pub event_stories: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct QueuePressureVm {
+    pub queued_count: usize,
+    pub running_count: usize,
+    pub pressure_level: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -95,11 +141,17 @@ pub struct HistoryVm {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct KnowledgeGraphVm {
+    pub nodes: Vec<KnowledgeNodeVm>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GameFaceVm {
     pub units: Vec<UnitActorVm>,
     pub task_forces: Vec<TaskForceLinkVm>,
     pub queue: QueueVm,
     pub history: HistoryVm,
+    pub knowledge_graph: KnowledgeGraphVm,
     pub telemetry: TelemetryVm,
 }
 
@@ -108,8 +160,14 @@ pub fn derive_game_face_vm(records: &[AnyRecord]) -> GameFaceVm {
     let mut task_forces = Vec::new();
     let mut queue_rows = Vec::new();
     let mut history_rows = Vec::new();
+    let mut knowledge_nodes = Vec::new();
     let mut agent_ids = BTreeSet::new();
     let mut artifact_count = 0usize;
+    let mut running_count = 0usize;
+    let mut queued_count = 0usize;
+    let mut agent_task_counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut agent_artifact_counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut event_stories = Vec::new();
 
     for record in records {
         let header = record.header();
@@ -120,11 +178,31 @@ pub fn derive_game_face_vm(records: &[AnyRecord]) -> GameFaceVm {
         match record {
             AnyRecord::Task(task) => {
                 let agent_id = header.correlations.agent_id.as_ref().map(|id| id.to_string()).unwrap_or_else(|| "unassigned".into());
+                *agent_task_counts.entry(agent_id.clone()).or_default() += 1;
+
+                let is_running = task.body.status == "running";
+                if is_running {
+                    running_count += 1;
+                } else {
+                    queued_count += 1;
+                }
+
                 units.push(UnitActorVm {
                     agent_id: agent_id.clone(),
                     source_record_id: task.record_id().to_string(),
                     status: task.body.status.clone(),
                     panel_target: "task_detail",
+                    health: AgentHealthVm {
+                        current_status: if is_running { "active".into() } else { "idle".into() },
+                        fatigue_level: 0.0,
+                        last_error: None,
+                    },
+                    performance: AgentPerformanceVm::default(),
+                    track_record: AgentTrackRecordVm {
+                        total_tasks: *agent_task_counts.get(&agent_id).unwrap_or(&0),
+                        total_artifacts: *agent_artifact_counts.get(&agent_id).unwrap_or(&0),
+                        veteran_tier: if *agent_task_counts.get(&agent_id).unwrap_or(&0) >= 10 { "veteran" } else { "rookie" },
+                    },
                 });
                 task_forces.push(TaskForceLinkVm {
                     task_id: task.record_id().to_string(),
@@ -135,6 +213,7 @@ pub fn derive_game_face_vm(records: &[AnyRecord]) -> GameFaceVm {
                     task_id: task.record_id().to_string(),
                     status: task.body.status.clone(),
                     source_record_id: task.record_id().to_string(),
+                    priority: None,
                 });
             }
             AnyRecord::Artifact(artifact) => {
@@ -146,27 +225,49 @@ pub fn derive_game_face_vm(records: &[AnyRecord]) -> GameFaceVm {
                     .first()
                     .map(|id| id.to_string())
                     .unwrap_or_else(|| format!("artifact:{}", artifact.record_id()));
+
+                if let Some(agent_id) = header.correlations.agent_id.as_ref() {
+                    *agent_artifact_counts.entry(agent_id.to_string()).or_default() += 1;
+                }
+
                 history_rows.push(HistoryRowVm {
-                    event_id,
+                    event_id: event_id.clone(),
                     source_record_id: artifact.record_id().to_string(),
                     label: artifact.body.label.clone(),
+                    event_story: Some(format!("Artifact '{}' produced", artifact.body.label)),
                 });
+
+                knowledge_nodes.push(KnowledgeNodeVm {
+                    node_id: artifact.record_id().to_string(),
+                    label: artifact.body.label.clone(),
+                    source_record_id: artifact.record_id().to_string(),
+                    links: artifact.header.lineage.source_events.iter().map(|e| e.to_string()).collect(),
+                });
+
+                event_stories.push(format!("artifact:{}", artifact.body.label));
             }
             _ => {}
         }
     }
 
-    let running_tasks = queue_rows.iter().filter(|row| row.status == "running").count();
+    let pressure_level = if queued_count > 10 { "high" } else if queued_count > 3 { "moderate" } else { "low" };
 
     GameFaceVm {
         units,
         task_forces,
         queue: QueueVm { rows: queue_rows },
         history: HistoryVm { rows: history_rows },
+        knowledge_graph: KnowledgeGraphVm { nodes: knowledge_nodes },
         telemetry: TelemetryVm {
             active_agents: agent_ids.len(),
-            running_tasks,
+            running_tasks: running_count,
             artifact_count,
+            queue_pressure: QueuePressureVm {
+                queued_count,
+                running_count,
+                pressure_level,
+            },
+            event_stories,
         },
     }
 }
@@ -176,7 +277,7 @@ pub fn derive_game_face_vm(records: &[AnyRecord]) -> GameFaceVm {
 // crates/pipeline/derivations/src/lib.rs
 pub mod game_face;
 
-pub use game_face::{derive_game_face_vm, GameFaceVm, HistoryRowVm, QueueRowVm, TaskForceLinkVm, TelemetryVm, UnitActorVm};
+pub use game_face::{derive_game_face_vm, GameFaceVm, HistoryRowVm, KnowledgeGraphVm, KnowledgeNodeVm, QueuePressureVm, QueueRowVm, TaskForceLinkVm, TelemetryVm, UnitActorVm};
 ```
 
 - [ ] **Step 4: Re-run the DeerFlow game-facing derivation test**

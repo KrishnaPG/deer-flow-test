@@ -134,6 +134,7 @@ pub fn normalize_deerflow_live_activity(
             RawEnvelopeFamily::StreamDelta => emit_l2_from_stream_delta(batch, &mut records),
             RawEnvelopeFamily::RuntimeStatus => emit_runtime_status(batch, &mut records),
             RawEnvelopeFamily::SourceObject => emit_message_source(batch, &mut records),
+            RawEnvelopeFamily::Intent if is_exclusion_intent(batch) => emit_exclusion_intent(batch, &mut records),
             RawEnvelopeFamily::Intent => emit_intent_record(batch, &mut records),
             _ => {}
         }
