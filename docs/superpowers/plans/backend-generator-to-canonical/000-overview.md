@@ -18,6 +18,13 @@
 - It does **not** onboard Hermes, Rowboat, or PocketFlow yet; the resulting pipeline must make those follow-on adapters straightforward.
 - It does **not** implement a production state server. It introduces state-server-aligned mediated read DTOs and fixture-backed DeerFlow adapters that preserve the boundary.
 - It does **not** allow direct backend payloads, direct artifact paths, or app-local mutable truth to bypass storage/lineage semantics.
+- It does **not** implement production ABAC policy; it introduces intent envelope shapes aligned to the spec 11 intent boundary so that later adapters can route through policy validation.
+
+## Spec Alignment Notes
+
+- **Spec 11 (State Server Alignment):** Pipeline follows `generator → storage truth → mediated source → normalizer → canonical → derivation → world projection`. Lineage is append-only (`source_events`, `derived_from`, `supersedes`). Intent shapes are introduced as raw envelope families so that human/UI-originated actions can be modeled as commands that pass through policy/ABAC before becoming append-only records.
+- **Spec 12 (Levels & Planes):** `RecordHeader` carries `level`, `plane`, `source_level`, `source_plane`, `is_persisted_truth`, `is_index_projection`, `is_client_transient`. Planes `AsIs`, `Chunks`, `Embeddings` are defined in envelope refs. This slice exercises `AsIs` end-to-end; `Chunks` and `Embeddings` normalization are deferred (spec 12: representation policy is selective, not uniform).
+- **Spec 24 (Level/Plane/Lineage Matrix):** This plan exercises the following matrix cells: `L0_SourceRecord(L0/AsIs)`, `L1_SanitizedRecord(L1/AsIs)`, `TaskRecord(L2)`, `ArtifactRecord(L2/AsIs)`, `RuntimeStatusRecord(L0..L2)`, `IntentRecord(L2)`, `AsIsRepresentationRecord(L0/AsIs)`, `TransformRecord(L2)`. All other matrix cells (L3–L6 families, `ChunkRecord`, `EmbeddingRecord`, governance families like `DedupRecord`, `BranchRecord`, `VersionRecord`, etc.) are intentionally deferred to follow-on onboarding slices.
 
 ## File Structure
 
