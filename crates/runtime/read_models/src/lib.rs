@@ -4,6 +4,7 @@ pub mod intent;
 pub mod layout_runtime_state;
 pub mod linked_shell;
 pub mod policy;
+pub mod spatial_shell;
 pub mod temporal;
 
 pub use artifacts::{ArtifactPanelState, ArtifactRequestState};
@@ -21,4 +22,5 @@ pub use policy::{
     apply_policy_invalidation_to_linked_shell, reduce_policy_state, PolicyAction,
     PolicyOverlayState,
 };
-pub use temporal::{reduce_temporal_state, TemporalAction, TemporalState};
+pub use spatial_shell::{reduce_spatial_shell_state, SpatialShellAction, SpatialShellState};
+pub use temporal::{reduce_temporal_state, TemporalAction, TemporalState, WorldOverlayFreshness};

@@ -70,6 +70,9 @@ pub fn apply_policy_invalidation_to_linked_shell(
             if state.selected.as_deref() == Some(source_record_id.as_str()) {
                 state.selected = None;
             }
+            if state.focused.as_deref() == Some(source_record_id.as_str()) {
+                state.focused = None;
+            }
             state.pinned.retain(|id| id != source_record_id);
         }
     }

@@ -18,6 +18,15 @@ fn temporal_state_keeps_historical_cursor_stable_on_late_event() {
     assert!(next.is_stale);
     assert_eq!(next.stream_state.as_deref(), Some("degraded"));
     assert!(next.degraded);
+    assert_eq!(next.world_overlay_freshness.status, "stale");
+    assert_eq!(
+        next.world_overlay_freshness.stale_reason,
+        Some("late_event_inserted")
+    );
+    assert_eq!(
+        next.world_overlay_freshness.source_event_id.as_deref(),
+        Some("evt_9")
+    );
 }
 
 #[test]
@@ -29,6 +38,11 @@ fn temporal_state_returns_to_live_tail_and_clears_degradation() {
         is_stale: true,
         stream_state: Some("degraded".into()),
         degraded: true,
+        world_overlay_freshness: deer_runtime_read_models::WorldOverlayFreshness {
+            status: "stale",
+            stale_reason: Some("late_event_inserted"),
+            source_event_id: Some("evt_9".into()),
+        },
     };
 
     let next = reduce_temporal_state(state, TemporalAction::ReturnToLiveTail);
@@ -38,6 +52,9 @@ fn temporal_state_returns_to_live_tail_and_clears_degradation() {
     assert!(!next.is_stale);
     assert_eq!(next.stream_state.as_deref(), Some("live"));
     assert!(!next.degraded);
+    assert_eq!(next.world_overlay_freshness.status, "fresh");
+    assert_eq!(next.world_overlay_freshness.stale_reason, None);
+    assert_eq!(next.world_overlay_freshness.source_event_id, None);
 }
 
 #[test]
@@ -49,6 +66,11 @@ fn temporal_state_preserves_staleness_metadata_across_layout_restore() {
         stream_state: Some("degraded".into()),
         degraded: true,
         layout_instance: 1,
+        world_overlay_freshness: deer_runtime_read_models::WorldOverlayFreshness {
+            status: "stale",
+            stale_reason: Some("late_event_inserted"),
+            source_event_id: Some("evt_9".into()),
+        },
     };
 
     let next = reduce_temporal_state(state, TemporalAction::LayoutRestored { layout_instance: 2 });
@@ -59,6 +81,15 @@ fn temporal_state_preserves_staleness_metadata_across_layout_restore() {
     assert!(next.is_stale);
     assert_eq!(next.stream_state.as_deref(), Some("degraded"));
     assert!(next.degraded);
+    assert_eq!(next.world_overlay_freshness.status, "stale");
+    assert_eq!(
+        next.world_overlay_freshness.stale_reason,
+        Some("late_event_inserted")
+    );
+    assert_eq!(
+        next.world_overlay_freshness.source_event_id.as_deref(),
+        Some("evt_9")
+    );
 }
 
 #[test]
@@ -104,6 +135,7 @@ fn policy_overlay_tracks_explicit_exclusion_and_tombstone_invalidation() {
 fn policy_invalidation_clears_linked_shell_state_through_policy_api() {
     let linked = LinkedShellState {
         selected: Some("artifact_1".into()),
+        focused: Some("artifact_1".into()),
         pinned: vec!["artifact_1".into(), "artifact_2".into()],
         ..Default::default()
     };
@@ -119,5 +151,6 @@ fn policy_invalidation_clears_linked_shell_state_through_policy_api() {
     );
 
     assert_eq!(invalidated.selected, None);
+    assert_eq!(invalidated.focused, None);
     assert_eq!(invalidated.pinned, vec!["artifact_2".to_string()]);
 }
