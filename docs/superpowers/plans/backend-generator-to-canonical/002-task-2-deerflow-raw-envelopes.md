@@ -103,6 +103,19 @@
 }
 ```
 
+```json
+// crates/pipeline/raw_sources/tests/fixtures/deerflow_exclusion_intent.json
+{
+  "intent_id": "excl_1",
+  "thread_id": "thread_1",
+  "run_id": "run_1",
+  "agent_id": "operator_1",
+  "action": "request_exclusion",
+  "payload": { "target_hash": "sha256:abc123", "reason": "compliance_request", "target_record_id": "artifact_map_1" },
+  "requested_at": "2026-04-03T12:00:00Z"
+}
+```
+
 ```rust
 // crates/pipeline/raw_sources/tests/deerflow_adapter.rs
 use deer_pipeline_raw_sources::{
@@ -323,6 +336,47 @@ pub fn load_deerflow_intent(fixture_json: &str) -> Result<RawEnvelopeBatch, RawS
         payload: serde_json::json!({
             "action": fixture.action,
             "payload": fixture.payload,
+        }),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+struct DeerFlowExclusionIntentFixture {
+    intent_id: String,
+    thread_id: String,
+    run_id: String,
+    agent_id: String,
+    action: String,
+    payload: ExclusionIntentPayload,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExclusionIntentPayload {
+    target_hash: String,
+    reason: String,
+    target_record_id: String,
+}
+
+pub fn load_deerflow_exclusion_intent(fixture_json: &str) -> Result<RawEnvelopeBatch, RawSourceError> {
+    let fixture: DeerFlowExclusionIntentFixture =
+        serde_json::from_str(fixture_json).map_err(|_| RawSourceError::InvalidFixture)?;
+
+    Ok(RawEnvelopeBatch {
+        family: RawEnvelopeFamily::Intent,
+        level: CanonicalLevelRef::L0,
+        plane: CanonicalPlaneRef::AsIs,
+        source_object_id: format!("exclusion:{}", fixture.intent_id),
+        event_id: Some(fixture.intent_id),
+        thread_id: Some(fixture.thread_id),
+        run_id: Some(fixture.run_id),
+        task_id: None,
+        agent_id: Some(fixture.agent_id),
+        artifact_id: None,
+        payload: serde_json::json!({
+            "action": fixture.action,
+            "target_hash": fixture.payload.target_hash,
+            "reason": fixture.payload.reason,
+            "target_record_id": fixture.payload.target_record_id,
         }),
     })
 }

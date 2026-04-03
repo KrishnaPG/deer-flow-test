@@ -68,3 +68,29 @@
 - Modify: `crates/runtime/world_projection/src/world_object.rs` - add world object constructors for unit actors, task-force links, queue beacons, and history anchors with level/plane/source metadata.
 - Modify: `crates/runtime/world_projection/src/projection_rules.rs` - project DeerFlow-backed canonical records into world objects without inventing app-local truth.
 - Create: `crates/runtime/world_projection/tests/deerflow_pipeline_projection.rs` - end-to-end pipeline proof from DeerFlow raw fixture to world projection.
+
+## Stress-Test Alignment (docs/architecture/stess-tests.md)
+
+| Scenario | Coverage in this plan | Deferred |
+| --- | --- | --- |
+| 1: 10,000 parallel agents | Raw envelope batches support arbitrary cardinality; `agent_id` correlation tracks per-agent records; queue pressure telemetry detects load | Bloom-filter dedup, Parquet micro-batching, NATS JetStream backpressure |
+| 2: HOTL media pipelines | Mediated reads include live activity streams; `RuntimeStatus` envelopes carry pipeline state; operator intent shapes exist | Pre-signed URL gateway, large blob proxy avoidance |
+| 3: Right to be forgotten | `IntentRecord` with exclusion payload shapes the compliance path; `ExclusionRecord` is in the spec 24 matrix | Full exclusion ledger, anti-join DB view construction |
+| 4: Massive video proxying | `ArtifactRecord` carries `as_is_hash` identity anchor | Pre-signed URL generation, lakeFS/S3 version commit routing |
+| 5: HITL low-latency chat | `LiveActivityStream` DTOs and `StreamDelta` envelopes support sub-second token delivery | WebRTC offload, LiveKit egress integration |
+| 6: S3 rate limiting | Intent and envelope queues are append-only and NATS-aligned | NATS JetStream ingress queue, exponential backoff workflows |
+| 7: State Server replica crash | Lineage `source_events` and `derived_from` enable cache rehydration from NATS tail | Redis leadership, NATS JetStream replay from sequence |
+| 8: Concurrent conflicting intents | Both intents append as `IntentRecord` with deterministic `event_id`; lineage preserves both | NATS JetStream sequence ID, `argMax` materialized views |
+
+## Gamification Alignment (docs/superpowers/research/data-gamification/)
+
+| Gamification concept | Coverage in this plan | Deferred |
+| --- | --- | --- |
+| Agent health / fatigue / performance | `AgentHealthVm`, `AgentPerformanceVm`, `AgentTrackRecordVm` added to `UnitActorVm` | Dynamic fatigue calculation, XP/leveling, reputation tiers beyond veteran/rookie |
+| Knowledge graph | `KnowledgeGraphVm` with `KnowledgeNodeVm` nodes and lineage-based links | Full graph traversal, topic clusters, reference bundles |
+| Queue pressure | `QueuePressureVm` with `queued_count`, `running_count`, `pressure_level` | Supply congestion visualization, encumbrance mechanics |
+| Event stories | `TelemetryVm.event_stories` chains related artifact/task events into narrative strings | Full event-story collapse, severity-based notification grouping |
+| Artifact families | `ArtifactRecord` carries `label` and `as_is_hash`; type classification via `media_type` in `AsIsRepresentationBody` | Explicit `ArtifactFamily` enum (text, code, dataset, image, audio, video, model) |
+| Session state / branching | `CorrelationMeta` carries `thread_id`, `run_id`, `session_id` equivalents | Explicit session state machine, branch/fork VM types |
+| Operator override / HITL | `IntentRecord` shapes for both action and exclusion intents | QTE-style intervention surfaces, timed dialogue choice VMs |
+| HOTL review surfaces | `LiveActivityStream` with `RuntimeStatus` for pipeline checkpointing | Refinery queue UI, checkpoint approval/rejection flows |
