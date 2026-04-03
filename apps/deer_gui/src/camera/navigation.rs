@@ -5,6 +5,8 @@
 
 use bevy::prelude::*;
 
+use super::components::CinematicCamera;
+
 /// A snapshot of the camera's current viewport state.
 ///
 /// Used to synchronize minimap and viewport panels with the main camera.
@@ -20,6 +22,17 @@ pub struct CameraSyncSnapshot {
     pub frustum_size: Vec2,
 }
 
+impl Default for CameraSyncSnapshot {
+    fn default() -> Self {
+        Self {
+            camera_translation: Vec3::ZERO,
+            zoom: 1.0,
+            frustum_center: Vec2::splat(0.5),
+            frustum_size: Vec2::ONE,
+        }
+    }
+}
+
 /// A request to navigate the viewport to a new center point.
 ///
 /// Emitted by minimap interaction and consumed by the camera system.
@@ -27,4 +40,29 @@ pub struct CameraSyncSnapshot {
 pub struct ViewportNavigationRequest {
     /// Target center in normalized coordinates (0..1 range).
     pub target_center: Vec2,
+}
+
+/// Resource that holds the latest camera sync snapshot.
+///
+/// Updated each frame by `camera_sync_snapshot_system`.
+#[derive(Resource, Default)]
+pub struct CameraSyncState {
+    pub snapshot: CameraSyncSnapshot,
+}
+
+/// System that reads the current camera state and updates the sync snapshot.
+///
+/// Runs after interpolation so the snapshot reflects the current frame's position.
+pub fn camera_sync_snapshot_system(
+    mut sync_state: ResMut<CameraSyncState>,
+    query: Query<(&CinematicCamera, &Transform)>,
+) {
+    for (cam, transform) in &query {
+        sync_state.snapshot = CameraSyncSnapshot {
+            camera_translation: transform.translation,
+            zoom: cam.zoom,
+            frustum_center: Vec2::splat(0.5),
+            frustum_size: Vec2::new(1.0 / cam.zoom, 1.0 / cam.zoom),
+        };
+    }
 }

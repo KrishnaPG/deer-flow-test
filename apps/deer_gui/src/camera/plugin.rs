@@ -9,6 +9,7 @@ use bevy::prelude::{
 };
 
 use super::components::CinematicCamera;
+use super::navigation::{camera_sync_snapshot_system, CameraSyncState};
 use super::systems::{
     camera_focus_system, camera_input_system, camera_interpolation_system, camera_shake_system,
     viewport_navigation_system,
@@ -29,17 +30,20 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         info!("CameraPlugin::build — registering camera systems");
 
-        app.add_systems(Startup, camera_spawn_system).add_systems(
-            Update,
-            (
-                camera_input_system,
-                camera_interpolation_system,
-                camera_shake_system,
-                viewport_navigation_system,
-                camera_focus_system,
-            )
-                .chain(),
-        );
+        app.add_systems(Startup, camera_spawn_system)
+            .init_resource::<CameraSyncState>()
+            .add_systems(
+                Update,
+                (
+                    camera_input_system,
+                    camera_interpolation_system,
+                    camera_shake_system,
+                    viewport_navigation_system,
+                    camera_focus_system,
+                    camera_sync_snapshot_system,
+                )
+                    .chain(),
+            );
     }
 }
 

@@ -6,7 +6,7 @@
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::input::ButtonInput;
 use bevy::log::{debug, trace};
-use bevy::math::Vec3;
+use bevy::math::{Vec2, Vec3};
 use bevy::prelude::{MessageReader, MouseButton, Query, Res, Time, Transform};
 
 use super::components::CinematicCamera;
@@ -154,19 +154,20 @@ pub fn camera_shake_system(
 
 /// Reads viewport navigation requests and sets the camera focus target.
 ///
+/// Converts normalized viewport coordinates (0..1) to world-space positions
+/// using the camera's current translation and zoom level.
+///
 /// Runs before the focus system, which consumes the focus target.
 pub fn viewport_navigation_system(
     requests: Option<MessageReader<ViewportNavigationRequest>>,
-    mut query: Query<&mut CinematicCamera>,
+    mut query: Query<(&mut CinematicCamera, &Transform)>,
 ) {
     let Some(mut requests) = requests else { return };
     for request in requests.read() {
-        for mut cam in &mut query {
-            cam.focus_target = Some(Vec3::new(
-                request.target_center.x,
-                0.0,
-                request.target_center.y,
-            ));
+        for (mut cam, transform) in &mut query {
+            let world_pos =
+                unproject_viewport_to_world(request.target_center, transform.translation, cam.zoom);
+            cam.focus_target = Some(world_pos);
             trace!(
                 "viewport_navigation: target_center={:?} → focus_target={:?}",
                 request.target_center,
@@ -174,6 +175,17 @@ pub fn viewport_navigation_system(
             );
         }
     }
+}
+
+/// Converts normalized viewport coordinates (0..1) to world-space position.
+///
+/// The viewport center (0.5, 0.5) maps to the camera's current translation.
+/// The scale is determined by the zoom level and orbit radius.
+fn unproject_viewport_to_world(normalized: Vec2, camera_translation: Vec3, zoom: f32) -> Vec3 {
+    let scale = zoom * 100.0;
+    let x = (normalized.x - 0.5) * scale + camera_translation.x;
+    let z = (normalized.y - 0.5) * scale + camera_translation.z;
+    Vec3::new(x, 0.0, z)
 }
 
 // ---------------------------------------------------------------------------

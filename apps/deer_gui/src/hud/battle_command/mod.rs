@@ -4,6 +4,8 @@
 //! command shell overlay within the HUD.
 
 mod contracts;
+mod minimap;
 mod state;
+mod world_viewport;
 
 pub use state::*;
