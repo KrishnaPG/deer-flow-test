@@ -1,0 +1,13 @@
+[package]
+name = "deer-view-telemetry-view"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deer-runtime-world-projection = { path = "../../runtime/world_projection" }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+deer-foundation-contracts = { path = "../../foundation/contracts" }
+deer-foundation-domain = { path = "../../foundation/domain" }
+insta = { version = "1.43.2", features = ["yaml"] }
