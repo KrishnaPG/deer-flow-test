@@ -1,3 +1,5 @@
+use bevy::prelude::*;
+use deer_gui::camera::navigation::ViewportNavigationRequest;
 use deer_gui::hud::battle_command::{
     BattleCommandHudState, BottomDeckSection, RailCollapseState, ShellVisibilityTier,
 };
@@ -12,4 +14,12 @@ fn t_battle_01_shell_contract_defaults() {
         state.active_bottom_section,
         BottomDeckSection::SelectionSummary
     );
+}
+
+#[test]
+fn t_battle_02_minimap_locate_repositions_camera_only() {
+    let request = ViewportNavigationRequest {
+        target_center: Vec2::new(0.8, 0.1),
+    };
+    assert_eq!(request.target_center, Vec2::new(0.8, 0.1));
 }

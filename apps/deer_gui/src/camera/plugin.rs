@@ -11,6 +11,7 @@ use bevy::prelude::{
 use super::components::CinematicCamera;
 use super::systems::{
     camera_focus_system, camera_input_system, camera_interpolation_system, camera_shake_system,
+    viewport_navigation_system,
 };
 use crate::constants::camera::ORBIT_RADIUS;
 
@@ -34,6 +35,7 @@ impl Plugin for CameraPlugin {
                 camera_input_system,
                 camera_interpolation_system,
                 camera_shake_system,
+                viewport_navigation_system,
                 camera_focus_system,
             )
                 .chain(),
