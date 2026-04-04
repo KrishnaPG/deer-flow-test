@@ -1,0 +1,7 @@
+[package]
+name = "deer-storage-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deer-foundation-contracts = { path = "../../foundation/contracts" }

@@ -11,6 +11,7 @@ members = [
     "crates/pipeline/raw_sources",
     "crates/runtime/read_models",
     "crates/runtime/world_projection",
+    "crates/storage/core",
     "crates/views/scene3d",
     "crates/views/chat_thread",
     "crates/views/list_detail",
