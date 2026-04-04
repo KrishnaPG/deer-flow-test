@@ -34,7 +34,7 @@ To prevent the State Server from becoming a write bottleneck, to ensure ultra-lo
 
 1. **The Absolute Single Source of Truth:** Object Storage (e.g., S3, lakeFS, Iceberg) is the *only* immutable source of truth. **No component ever writes raw data or artifacts directly to a database.**
 2. **Absolute Immutability (Append-Only):** Storage is strictly append-only. `UPDATE` and `DELETE` operations are architecturally forbidden. History is never rewritten.
-3. **Tri-Plane Storage Hierarchy (1:N:M):** All data exists physically on Storage across levels L0 to L4 in a relational hierarchy. To avoid data duplication and support multiple AI models, data is split into three planes linked by immutable content hashes:
+3. **Tri-Plane Storage Hierarchy (1:N:M):** All data exists physically on Storage across levels L0 to L6 in a relational hierarchy. To avoid data duplication and support multiple AI models, data is split into three planes linked by immutable content hashes:
     *   **As-Is Plane (1):** The actual canonical data (raw video, chat JSON, OCR text, synthesized Markdown). Identified by `as_is_hash = SHA256(payload)`.
     *   **Chunks Plane (N):** The segmented data derived from the As-Is plane. Stores the chunk payload and is identified by `chunk_hash = SHA256(as_is_hash + chunking_strategy + chunk_index)`.
     *   **Embeddings Plane (M):** The mathematical vector representations of the Chunks. **Strict Rule:** This plane *only* stores the vector array and the pointer (`chunk_hash`) back to the Chunks plane. It never duplicates the payload text.
