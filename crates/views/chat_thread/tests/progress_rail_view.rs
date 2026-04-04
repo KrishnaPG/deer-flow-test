@@ -31,11 +31,13 @@ fn progress_rail_view_shows_clarification_and_degradation() {
         ],
     };
     let temporal = TemporalState {
+        layout_instance: 0,
         mode: "live_tail",
         cursor_id: None,
         is_stale: false,
         stream_state: Some("degraded".into()),
         degraded: true,
+        world_overlay_freshness: Default::default(),
     };
 
     let rendered = render_progress_rail_view(&vm, &temporal);
@@ -81,11 +83,13 @@ fn progress_rail_view_preserves_historical_context_when_stale_and_degraded() {
         tasks: vec![],
     };
     let temporal = TemporalState {
+        layout_instance: 0,
         mode: "historical",
         cursor_id: Some("checkpoint_7".into()),
         is_stale: true,
         stream_state: Some("degraded".into()),
         degraded: true,
+        world_overlay_freshness: Default::default(),
     };
 
     let rendered = render_progress_rail_view(&vm, &temporal);

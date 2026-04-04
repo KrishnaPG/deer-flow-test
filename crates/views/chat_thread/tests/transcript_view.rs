@@ -31,11 +31,13 @@ fn transcript_view_renders_clarification_rows_and_degraded_state() {
         }],
     };
     let temporal = TemporalState {
+        layout_instance: 0,
         mode: "live_tail",
         cursor_id: None,
         is_stale: false,
         stream_state: Some("degraded".into()),
         degraded: true,
+        world_overlay_freshness: Default::default(),
     };
 
     let rendered = render_transcript_view(&vm, &temporal);
