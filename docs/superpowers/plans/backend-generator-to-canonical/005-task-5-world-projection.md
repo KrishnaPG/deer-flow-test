@@ -1,156 +1,50 @@
-## Task 5: Project DeerFlow Canonical Records Into World Objects And Prove The End-To-End Path
+## Task 5: Register The Battle-Command And World-Primary Shell Views In The Same C:L2 Catalog
 
 **Files:**
-- Modify: `crates/runtime/world_projection/src/world_object.rs`
-- Modify: `crates/runtime/world_projection/src/projection_rules.rs`
-- Test: `crates/runtime/world_projection/tests/deerflow_pipeline_projection.rs`
+- Modify: `crates/pipeline/normalizers/src/c_view_catalog.rs`
+- Modify: `crates/pipeline/raw_sources/src/c_query_contract.rs`
+- Modify: `crates/pipeline/normalizers/src/lib.rs`
+- Test: `crates/pipeline/normalizers/tests/c_l2_world_shell_catalog.rs`
 
-**Milestone unlock:** the reusable stack proves `DeerFlow -> raw -> canonical -> L2 game-facing -> world objects` without involving `deer_gui`
+**Milestone unlock:** battle-command and world-primary are expressed as one shell consumer slice inside hierarchy C, with explicit `C:L2` SQL view contracts over shared `A:L2+` and `B:L2+` storage rows rather than a separate world-truth layer.
 
-**Forbidden shortcuts:** do not construct world objects directly from raw envelopes; do not drop level/plane/source metadata at projection time; do not make world objects the canonical truth layer
+**Forbidden shortcuts:** do not describe world or battle state as source-of-truth data; do not build these shell views on raw `L0/L1`; do not bypass the shared `C:L2` catalog with app-local code; do not define shell requirements without naming exact view ids and output columns.
 
-- [ ] **Step 1: Write the failing end-to-end projection test**
+- [ ] **Step 1: Write the failing world-shell catalog test**
 
-```rust
-// crates/runtime/world_projection/tests/deerflow_pipeline_projection.rs
-use deer_pipeline_derivations::derive_game_face_vm;
-use deer_pipeline_normalizers::normalize_deerflow_live_activity;
-use deer_pipeline_raw_sources::load_deerflow_live_activity;
-use deer_runtime_world_projection::project_world_objects;
-use insta::assert_yaml_snapshot;
+Write a test that proves all of the following are registered for the battle-command/world-primary shell slice:
 
-#[test]
-fn projects_deerflow_pipeline_into_world_units_queue_and_history_objects() {
-    let activity = load_deerflow_live_activity(include_str!("../../pipeline/raw_sources/tests/fixtures/deerflow_live_activity.json")).unwrap();
-    let normalized = normalize_deerflow_live_activity(&activity).unwrap();
-    let projection = project_world_objects(&normalized.records);
-    let game_face = derive_game_face_vm(&normalized.records);
+- `c_l2_battle_command_summary_v`
+- `c_l2_battle_command_units_v`
+- `c_l2_battle_command_history_v`
+- `c_l2_battle_command_artifacts_v`
 
-    assert_eq!(game_face.telemetry.active_agents, 2);
-    assert_yaml_snapshot!(projection, @r#"
-objects:
-  - kind: WorldUnitActor
-    source_record_id: task_scout
-    drill_down_target: task_detail
-  - kind: WorldArtifactUnlock
-    source_record_id: artifact_map_1
-    drill_down_target: artifact_detail
-  - kind: WorldHistoryAnchor
-    source_record_id: artifact_map_1
-    drill_down_target: history_detail
-"#);
-}
-```
+For each view, assert:
 
-- [ ] **Step 2: Run the world-projection pipeline test and confirm it fails**
+- it is owned by the battle-command/world-primary shell in `c_query_contract.rs`
+- it reads directly from shared `A:L2+` and `B:L2+` row families
+- it names required columns for tactical summary, units, history anchors, or artifact unlocks
+- it declares ABAC/exclusion behavior and refresh policy
 
-Run: `cargo test -p deer-runtime-world-projection --test deerflow_pipeline_projection -v`
+- [ ] **Step 2: Run the world-shell catalog test and confirm it fails**
 
-Expected: FAIL with missing world object kinds and projection rules for DeerFlow-backed units/history anchors.
+Run: `cargo test -p deer-pipeline-normalizers --test c_l2_world_shell_catalog -v`
 
-- [ ] **Step 3: Extend world objects and projection rules**
+Expected: FAIL with missing battle-command/world-primary `C:L2` registrations.
 
-```rust
-// crates/runtime/world_projection/src/world_object.rs
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct WorldObject {
-    pub kind: &'static str,
-    pub source_record_id: String,
-    pub drill_down_target: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub supersedes: Option<RecordRef>,
-    #[serde(skip_serializing)]
-    pub level: &'static str,
-    #[serde(skip_serializing)]
-    pub plane: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-}
+- [ ] **Step 3: Implement the battle-command/world-primary shell registrations**
 
-impl WorldObject {
-    pub fn unit_actor(source_record_id: &str, drill_down_target: &'static str, agent_id: Option<String>) -> Self {
-        Self {
-            kind: "WorldUnitActor",
-            source_record_id: source_record_id.to_owned(),
-            drill_down_target,
-            supersedes: None,
-            level: "L2",
-            plane: "AsIs",
-            agent_id,
-        }
-    }
+Update `c_query_contract.rs` and `c_view_catalog.rs` so the battle-command/world-primary shell declares and owns these views:
 
-    pub fn history_anchor(source_record_id: &str, drill_down_target: &'static str) -> Self {
-        Self {
-            kind: "WorldHistoryAnchor",
-            source_record_id: source_record_id.to_owned(),
-            drill_down_target,
-            supersedes: None,
-            level: "L2",
-            plane: "AsIs",
-            agent_id: None,
-        }
-    }
-}
-```
+- `c_l2_battle_command_summary_v` - one row per battle/session with active agents, running tasks, queued tasks, pressure level, latest event id, and refresh watermark
+- `c_l2_battle_command_units_v` - one row per tactical unit/task-agent pairing with lane/state/health and lineage anchors
+- `c_l2_battle_command_history_v` - one row per history anchor with event story, artifact linkage, and timeline ordering
+- `c_l2_battle_command_artifacts_v` - one row per artifact unlock/access state with family, producer, visibility, and creation timestamp
 
-```rust
-// crates/runtime/world_projection/src/projection_rules.rs
-use deer_foundation_contracts::CanonicalRecord;
-use deer_foundation_domain::AnyRecord;
+These views must read directly from shared `A:L2+` and `B:L2+` storage rows. They may reuse the same join conventions as Task 4, but they do not become a second-layer `C-on-C` canon.
 
-use crate::world_object::{WorldObject, WorldProjection};
+- [ ] **Step 4: Re-run the world-shell catalog test and impacted catalog tests**
 
-pub fn project_world_objects(records: &[AnyRecord]) -> WorldProjection {
-    let objects = records
-        .iter()
-        .filter_map(|record| match record {
-            AnyRecord::Task(task) => Some(
-                WorldObject::unit_actor(
-                    task.record_id().as_str(),
-                    "task_detail",
-                    task.header
-                        .correlations
-                        .agent_id
-                        .as_ref()
-                        .map(|id| id.to_string()),
-                )
-                .with_supersession(task.header.lineage.supersedes.clone()),
-            ),
-            AnyRecord::Artifact(artifact) => Some(
-                WorldObject::artifact_unlock(artifact.record_id().as_str(), "artifact_detail")
-                    .with_supersession(artifact.header.lineage.supersedes.clone()),
-            ),
-            AnyRecord::Artifact(artifact) => Some(
-                WorldObject::history_anchor(artifact.record_id().as_str(), "history_detail")
-                    .with_supersession(artifact.header.lineage.supersedes.clone()),
-            ),
-            _ => None,
-        })
-        .collect();
+Run: `cargo test -p deer-pipeline-normalizers --test c_l2_world_shell_catalog -v && cargo test -p deer-pipeline-normalizers --test c_l2_projection_catalog -v`
 
-    WorldProjection { objects }
-}
-```
-
-- [ ] **Step 4: Run the end-to-end DeerFlow projection proof and the impacted package sweep**
-
-Run: `cargo test -p deer-runtime-world-projection --test deerflow_pipeline_projection -v && cargo test -p deer-pipeline-raw-sources -v && cargo test -p deer-pipeline-normalizers -v && cargo test -p deer-pipeline-derivations -v && cargo test -p deer-runtime-world-projection -v`
-
-Expected: PASS with a reusable DeerFlow-backed pipeline proving raw capture, canonicalization, L2 game-facing derivation, and world projection.
-
-- [ ] **Step 5: Commit the DeerFlow world-projection proof**
-
-```bash
-git add crates/runtime/world_projection/src/world_object.rs crates/runtime/world_projection/src/projection_rules.rs crates/runtime/world_projection/tests/deerflow_pipeline_projection.rs
-git commit -m "feat: project deerflow pipeline into world objects"
-```
-
-## Self-Review Checklist
-
-- The plan starts in shared reusable crates and does not debut new behavior inside `apps/deer_gui`.
-- The pipeline follows the state-server-aligned order: generator -> storage truth -> mediated source -> canonical -> derivation -> world projection.
-- L0/L1/L2 occupancy is explicit and tested; L3+ is intentionally out of scope for this first DeerFlow onboarding slice.
-- `as_is` is required end to end, and selective chunk/representation support is introduced without making embeddings a blocker.
-- Correlation and lineage metadata are preserved through normalization and exposed in later game-facing projections.
-- The end-to-end proof shows a pattern that Hermes/Rowboat/PocketFlow can follow by swapping only the raw-source adapter and sparse/rich mapping rules.
+Expected: PASS with battle-command/world-primary documented as one shell-defined `C:L2` consumer package in the same presentation catalog.

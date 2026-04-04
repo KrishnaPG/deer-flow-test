@@ -1,113 +1,62 @@
-# Shared Pipeline And DeerFlow Onboarding Implementation Plan
+# A/B Storage Contracts And C:L2 View Catalog Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend the existing reusable pipeline so backend generators can flow from generator capture through storage-aware raw envelopes, state-server-mediated reads, lineage-safe canonical records, and L2 game-facing projections, with DeerFlow as the first onboarding slice and later generators following the same contract.
+**Goal:** Define a generator-agnostic backend contract where Hierarchy A and Hierarchy B physically exist in storage across `L0`-`L6`, and every app/tool/game reads only from named `C:L2` SQL views or materialized views. DeerFlow is the first generator binding and first consumer proof slice.
 
-**Architecture:** Reuse the current foundation, raw-source, normalizer, derivation, and world-projection crates instead of inventing app-local glue. Lock the shared generator contract first: define the generator-agnostic source object kinds that can land in storage, how each one maps into levels/planes, and what hashes/lineage anchors every promotion step. Then bind DeerFlow fixtures to that shared contract, normalize them via explicit promotion rules keyed by generator profile plus source kind, and finish with reusable game-facing derivations plus world objects backed by lineage and backlinks.
+**Architecture:** Hierarchy A stores observed execution/orchestration facts. Hierarchy B stores normalized content, operational, and lineage-bearing storage rows derived from A. Hierarchy C is the presentation hierarchy only: a catalog of storage-native SQL views/materialized views defined over `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6`. Presentation canonicalization is the authored `C:L2` SQL contract set, not app-local glue and not direct `L0/L1` consumption.
 
-**Tech Stack:** Rust workspace crates, `serde`, `serde_json`, `chrono`, `thiserror`, `insta`, existing DeerFlow fixture/bridge shapes as reference only
+**Tech Stack:** Rust workspace crates, storage schema contracts, SQL view/materialized view definitions, `serde`, `serde_json`, `chrono`, `thiserror`, `insta`
 
 ---
 
+## Architecture Invariants
+
+- Hierarchy A and Hierarchy B are the only physical storage hierarchies in this slice.
+- `L0` and `L1` are storage evidence and sanitation layers; consumers never query them directly.
+- `C:L2` is the minimum consumer query surface for apps/tools/games.
+- Every `C:L2` contract must declare source families, allowed source levels, join keys, row grain, output columns, ABAC/exclusion behavior, and refresh policy.
+- DeerFlow binds into the shared A/B contract; it does not redefine the shared model.
+- Shells are not separate architectures. Each shell contributes required `C:L2` view definitions within the same presentation hierarchy.
+
 ## Scope Boundary
 
-- This plan covers the shared reusable spine plus DeerFlow onboarding only.
-- It modifies existing crates: `foundation/contracts`, `foundation/domain`, `pipeline/raw_sources`, `pipeline/normalizers`, `pipeline/derivations`, and `runtime/world_projection`.
-- It does **not** modify `apps/deer_gui` or any proof app.
-- It does **not** onboard Hermes, Rowboat, or PocketFlow yet; the resulting pipeline must make those follow-on adapters straightforward.
-- It does **not** implement a production state server. It introduces state-server-aligned mediated read DTOs and fixture-backed DeerFlow adapters that preserve the boundary.
-- It does **not** allow direct backend payloads, direct artifact paths, or app-local mutable truth to bypass storage/lineage semantics.
-- It does **not** implement production ABAC policy; it introduces intent envelope shapes aligned to the spec 11 intent boundary so that later adapters can route through policy validation.
-- It **does** capture the contract surfaces this slice needs for exclusions, authorized artifact previews, ordered intents, replay checkpoints, and storage backpressure so later infrastructure work has a canonical target instead of app-local glue.
+- This plan defines the shared A/B storage contract, the shared `C:L2` query contract, and the metadata needed to support both.
+- This plan includes DeerFlow as the first generator profile and the first consumer-shell registration only.
+- This plan does not allow direct app reads from generator payloads or from raw `L0/L1` storage.
+- This plan does not make client caches, UI state, or world objects the canonical source of truth.
+- This plan does not onboard other generators yet; later generators must fit the same A/B/C contract.
 
-## Spec Alignment Notes
+## Plan Shape
 
-- **Spec 11 (State Server Alignment):** Pipeline follows `generator → storage truth → mediated source → normalizer → canonical → derivation → world projection`. Lineage is append-only (`source_events`, `derived_from`, `supersedes`). Intent shapes are introduced as raw envelope families so that human/UI-originated actions can be modeled as commands that pass through policy/ABAC before becoming append-only records.
-- **Spec 12 (Levels & Planes):** `RecordHeader` carries `level`, `plane`, `source_level`, `source_plane`, `is_persisted_truth`, `is_index_projection`, `is_client_transient`. Planes `AsIs`, `Chunks`, `Embeddings` are defined in envelope refs. This slice implements `AsIs` end to end and explicitly preserves the hash anchors and metadata that future `Chunks` and `Embeddings` work must build on.
-- **Spec 24 (Level/Plane/Lineage Matrix):** This plan exercises the matrix cells needed for DeerFlow onboarding now: `L0_SourceRecord(L0/AsIs)`, `L1_SanitizedRecord(L1/AsIs)`, `TaskRecord(L2)`, `ArtifactRecord(L2/AsIs)`, `RuntimeStatusRecord(L0..L2)`, `IntentRecord(L2)`, `ExclusionRecord(L2)`, `ConflictRecord(L2)`, `ReplayCheckpointRecord(L2)`, `AsIsRepresentationRecord(L0/AsIs)`, and `TransformRecord(L2)`. The remaining matrix families stay out of scope for this slice rather than being redefined incompletely.
+1. Task 0 defines the shared A/B storage family registry plus the shared `C:L2` SQL-view contract registry.
+2. Task 1 hardens record metadata so A/B rows carry immutable joins, lineage, ABAC/exclusion, and refresh data required by `C:L2` views.
+3. Task 2 lands DeerFlow source objects into shared A/B storage families without leaking app-facing canon.
+4. Task 3 sanitizes DeerFlow landing rows into shared `A:L2+` and `B:L2+` projection inputs.
+5. Task 4 registers shared commander/researcher/thread/core-shell `C:L2` views against those A/B inputs.
+6. Task 5 registers the battle-command/world-primary shell views in the same `C:L2` catalog.
 
 ## File Structure
 
-### Storage contract and derivation rules
+### Shared storage and query contracts
 
-- Create: `crates/pipeline/raw_sources/src/source_catalog.rs` - authoritative shared generator source-object catalog describing immutable storage object kinds, generator profiles, hash anchors, and source level/plane semantics.
-- Modify: `crates/pipeline/raw_sources/src/lib.rs` - export the source catalog so adapters and tests share one classification contract.
-- Create: `crates/pipeline/raw_sources/tests/generator_source_catalog.rs` - prove the shared catalog classifies generic source kinds and that DeerFlow binds cleanly to them.
-- Create: `crates/pipeline/normalizers/src/promotion_policy.rs` - authoritative shared promotion matrix mapping generator profile plus source kind into canonical families, levels, planes, and storage dispositions.
-- Modify: `crates/pipeline/normalizers/src/lib.rs` - export the promotion policy for normalizers and tests.
-- Create: `crates/pipeline/normalizers/tests/generator_promotion_policy.rs` - prove the shared policy covers the generic source kinds and DeerFlow's first binding without leaving implicit holes.
+- Create: `crates/pipeline/raw_sources/src/storage_contract.rs` - authoritative registry of shared A/B family ids, allowed levels, immutable keys, and lineage anchors.
+- Create: `crates/pipeline/raw_sources/src/c_query_contract.rs` - shell registry naming which `C:L2` views each consumer requires.
+- Modify: `crates/pipeline/raw_sources/src/lib.rs` - export the shared storage and query contracts.
+- Create: `crates/pipeline/raw_sources/tests/storage_contract.rs` - prove generator bindings land in explicit A/B families and consumer guards reject direct `L0/L1` reads.
+- Create: `crates/pipeline/normalizers/src/c_view_catalog.rs` - authoritative `C:L2` SQL view/materialized-view catalog.
+- Modify: `crates/pipeline/normalizers/src/lib.rs` - export the `C:L2` view catalog.
+- Create: `crates/pipeline/normalizers/tests/c_view_catalog.rs` - prove every registered `C:L2` view reads only from allowed A/B levels and has a complete contract.
 
-### Foundation metadata hardening
+### Foundation metadata
 
-- Modify: `crates/foundation/contracts/src/meta.rs` - extend correlation metadata with `agent_id` and source object anchors needed by generator onboarding.
-- Modify: `crates/foundation/contracts/src/records.rs` - add source level/plane and storage-disposition convenience flags to `RecordHeader`.
-- Modify: `crates/foundation/domain/src/common.rs` - add header builders that preserve correlations and explicit source level/plane metadata.
-- Modify: `crates/foundation/domain/src/common.rs` - extend the `define_record!` macro with `new_with_meta(...)` while keeping existing `new(...)` intact.
-- Create: `crates/foundation/contracts/tests/source_metadata_contracts.rs` - verify required source/plane fields and correlation metadata.
-- Create: `crates/foundation/domain/tests/source_aware_record_builders.rs` - verify records can preserve correlation and source metadata without breaking existing constructors.
+- Modify: `crates/foundation/contracts/src/meta.rs` - add immutable join keys, correlation anchors, ABAC/exclusion metadata, and view-refresh metadata.
+- Modify: `crates/foundation/contracts/src/records.rs` - carry the new metadata on stored A/B rows.
+- Modify: `crates/foundation/domain/src/common.rs` - preserve that metadata through builders.
+- Create: `crates/foundation/contracts/tests/source_metadata_contracts.rs` - verify headers expose the metadata required by `C:L2` SQL definitions.
+- Create: `crates/foundation/domain/tests/source_aware_record_builders.rs` - verify builders preserve join, lineage, access, and refresh metadata.
 
-### DeerFlow raw source and mediated-read layer
+### DeerFlow first binding
 
-- Create: `crates/pipeline/raw_sources/src/envelopes.rs` - raw envelope families aligned to the spec catalog.
-- Modify: `crates/pipeline/raw_sources/src/source_catalog.rs` - bind DeerFlow's fixture shapes to the shared generator source kinds instead of inventing DeerFlow-only kinds.
-- Create: `crates/pipeline/raw_sources/src/deerflow.rs` - DeerFlow-specific fixture/parser adapter that emits raw envelope batches.
-- Create: `crates/pipeline/raw_sources/src/mediated_reads.rs` - state-server-aligned live stream, snapshot, replay window, and artifact preview DTOs.
-- Modify: `crates/pipeline/raw_sources/src/lib.rs` - export the new envelope, DeerFlow, and mediated-read APIs.
-- Modify: `crates/pipeline/raw_sources/Cargo.toml` - add any crate dependencies needed by the new modules.
-- Create: `crates/pipeline/raw_sources/tests/deerflow_adapter.rs` - end-to-end fixture test for DeerFlow raw capture and mediated read shaping.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_thread_snapshot.json` - DeerFlow thread/run snapshot fixture.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_live_activity.json` - DeerFlow multi-agent live activity fixture.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_window.json` - DeerFlow replay/history fixture.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_artifact_preview.json` - ABAC-authorized artifact preview fixture with signed access metadata.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_exclusion_intent.json` - compliance exclusion intent fixture.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_conflicting_intents.json` - concurrent intent fixture with deterministic sequence ids.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_storage_backpressure.json` - storage backpressure fixture for rate-limit stress coverage.
-- Create: `crates/pipeline/raw_sources/tests/fixtures/deerflow_replay_checkpoint.json` - replay checkpoint fixture for cache rehydration alignment.
-
-### Canonical normalization
-
-- Modify: `crates/pipeline/normalizers/src/lib.rs` - export the new DeerFlow normalization entrypoint.
-- Modify: `crates/pipeline/normalizers/src/carrier.rs` - normalize DeerFlow raw envelopes into L0/L1/L2 carrier records with correlations and lineage.
-- Modify: `crates/pipeline/normalizers/src/promotion_policy.rs` - drive normalization through explicit generator-profile-plus-source-kind rules rather than ad hoc matches.
-- Modify: `crates/pipeline/normalizers/src/representation.rs` - emit representation records for DeerFlow `as_is` and selective `chunks` payloads.
-- Modify: `crates/pipeline/normalizers/src/governance.rs` - emit transform records for DeerFlow promotion steps.
-- Create: `crates/pipeline/normalizers/tests/deerflow_levels_lineage.rs` - verify L0/L1/L2 occupancy, lineage backlinks, correlation preservation, exclusions, ordered intents, replay checkpoints, and backpressure records.
-
-### L2 game-facing derivations
-
-- Create: `crates/pipeline/derivations/src/game_face.rs` - derive agent units, task-force links, queue rows, history rows, knowledge nodes, intervention surfaces, session state, artifact families, and telemetry summaries from canonical records.
-- Modify: `crates/pipeline/derivations/src/lib.rs` - export the new game-facing VM entrypoints.
-- Create: `crates/pipeline/derivations/tests/deerflow_game_face.rs` - verify DeerFlow canonical records derive into stable L2 game-facing views with backlinks.
-
-### World projection
-
-- Modify: `crates/runtime/world_projection/src/world_object.rs` - add world object constructors for unit actors, task-force links, queue beacons, and history anchors with level/plane/source metadata.
-- Modify: `crates/runtime/world_projection/src/projection_rules.rs` - project DeerFlow-backed canonical records into world objects without inventing app-local truth.
-- Create: `crates/runtime/world_projection/tests/deerflow_pipeline_projection.rs` - end-to-end pipeline proof from DeerFlow raw fixture to world projection.
-
-## Stress-Test Alignment (docs/architecture/stess-tests.md)
-
-| Scenario | Concrete plan capture |
-| --- | --- |
-| 1: 10,000 parallel agents | Raw envelope batches remain cardinality-safe, intent/event ordering is explicit via `sequence_id`, and game-facing queue pressure surfaces expose load before collapse. |
-| 2: HOTL media pipelines | Mediated reads include runtime/checkpoint surfaces, authorized artifact preview DTOs, and intervention records so supervisory review appears as observed state rather than app-local mutation. |
-| 3: Right to be forgotten | Exclusion intents normalize into canonical exclusion/governance records carrying `target_hash`, `reason`, and lineage back to the affected record family. |
-| 4: Massive video proxying | Artifact preview DTOs carry authorized access metadata (`authorization_kind`, `access_url`, `expires_at`) so clients never depend on raw artifact paths. |
-| 5: HITL low-latency chat | `LiveActivityStream` and `StreamDelta` records remain the thin read boundary for fast UI feedback while preserving storage-native source identity. |
-| 6: S3 rate limiting | Backpressure fixtures normalize into canonical operational records and game-facing queue pressure so storage throttling is visible without blocking generators. |
-| 7: State Server replica crash | Replay window and replay checkpoint DTOs preserve the last acknowledged sequence boundary needed for cache rehydration semantics. |
-| 8: Concurrent conflicting intents | Conflicting intents are represented as separate append-only source objects with deterministic ordering metadata and canonical conflict/resolution records. |
-
-## Gamification Alignment (docs/superpowers/research/data-gamification/)
-
-| Gamification concept | Concrete plan capture |
-| --- | --- |
-| Agent health / fatigue / performance | `UnitActorVm` includes `AgentHealthVm`, `AgentPerformanceVm`, and `AgentTrackRecordVm` so the same canonical record supports RTS telemetry and RPG companion sheets. |
-| Knowledge graph | `KnowledgeGraphVm` and `KnowledgeNodeVm` expose artifact/reference lineage as navigable graph nodes rather than flat history. |
-| Queue pressure | `QueuePressureVm` and queue beacon projection make congestion visible as gameplay state instead of buried operational metrics. |
-| Event stories | `HistoryRowVm.event_story` and telemetry event chains group related task/artifact events into readable narrative beats. |
-| Artifact families | `ArtifactFamilyVm` classifies text/code/dataset/image/audio/video/model artifacts so the same object can render as relic, blueprint, dossier, replay, or codex entry. |
-| Session state / branching | `SessionStateVm` makes run/thread state and branch context first-class so RTS theaters and RPG chapters stay backed by the same truth. |
-| Operator override / HITL | `InterventionVm` and HOTL checkpoint rows expose human approval/override as deliberate gameplay actions backed by intents and observed outcomes. |
-| HOTL review surfaces | Checkpoint and authorized preview records keep live review grounded in lineage, timestamps, and source attribution. |
+- Create: `crates/pipeline/raw_sources/src/deerflow.rs` - bind DeerFlow fixture shapes into shared A/B family ids.
+- Create: `crates/pipeline/raw_sources/tests/deerflow_adapter.rs` - verify DeerFlow lands in the shared storage contract without DeerFlow-only canon.

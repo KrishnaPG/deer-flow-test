@@ -1,4 +1,4 @@
-## Task 1: Harden Foundation Metadata For Source-Level Generator Onboarding
+## Task 1: Harden Foundation Metadata For Immutable Joins, Lineage, ABAC, And C:L2 View Refresh
 
 **Files:**
 - Modify: `crates/foundation/contracts/src/meta.rs`
@@ -7,296 +7,75 @@
 - Test: `crates/foundation/contracts/tests/source_metadata_contracts.rs`
 - Test: `crates/foundation/domain/tests/source_aware_record_builders.rs`
 
-**Milestone unlock:** foundation records can express source level/plane, storage flags, and agent-aware correlations required by state-server-aligned generator pipelines
+**Milestone unlock:** every stored A/B record carries the immutable join keys, lineage anchors, correlation metadata, ABAC/exclusion metadata, and view-refresh metadata required to author and refresh `C:L2` SQL views without app-local reconstruction.
 
-**Forbidden shortcuts:** do not break existing `new(...)` constructors; do not push source metadata down into app code; do not encode level/plane only in ad hoc strings
+**Forbidden shortcuts:** do not use mutable display ids as join keys; do not infer lineage from payload text; do not leave ABAC/exclusion decisions in app code; do not let `C:L2` refresh depend on client caches; do not add metadata that is DeerFlow-specific unless it is nested behind a generator-binding field.
 
-- [ ] **Step 1: Write the failing contract tests**
+### Metadata that must exist after this task
 
-```rust
-// crates/foundation/contracts/tests/source_metadata_contracts.rs
-use deer_foundation_contracts::{
-    AgentId, CanonicalLevel, CanonicalPlane, CorrelationMeta, IdentityMeta, LineageMeta,
-    RecordFamily, RecordHeader, RecordId, StorageDisposition,
-};
+| Metadata block | Required fields | Why `C:L2` needs it |
+| --- | --- | --- |
+| `JoinKeysMeta` | `generator_key`, `storage_object_key`, `session_key`, `thread_key`, `run_key`, `agent_key`, `task_key`, `artifact_key`, `intent_key`, `exclusion_key` | stable SQL joins across A and B |
+| `LineageMeta` | `source_record_id`, `source_hash`, `derived_from`, `supersedes`, `transform_key` | traceable provenance and replay-safe rebuilds |
+| `CorrelationMeta` | `trace_id`, `mission_id`, `thread_id`, `run_id`, `task_id`, `agent_id`, `actor_id` | cross-family stitching without payload heuristics |
+| `AccessControlMeta` | `abac_scope`, `policy_tags`, `exclusion_targets`, `redaction_mode`, `authorized_projection` | enforce view-level visibility and exclusions |
+| `ViewRefreshMeta` | `eligible_c_views`, `refresh_mode`, `refresh_watermark`, `refresh_group`, `invalidated_by`, `last_source_level` | deterministic `C:L2` refresh and invalidation |
 
-#[test]
-fn record_header_tracks_source_level_plane_and_storage_flags() {
-    let header = RecordHeader::new(
-        RecordId::from_static("rec_1"),
-        RecordFamily::L2View,
-        CanonicalLevel::L2,
-        CanonicalPlane::AsIs,
-        StorageDisposition::StorageNative,
-        IdentityMeta::hash_anchored(RecordId::from_static("rec_1"), None, None, None),
-        CorrelationMeta {
-            agent_id: Some(AgentId::from_static("agent_1")),
-            ..Default::default()
-        },
-        LineageMeta::root(),
-    );
+- [ ] **Step 1: Write the failing foundation metadata tests**
 
-    assert_eq!(header.source_level, CanonicalLevel::L2);
-    assert_eq!(header.source_plane, CanonicalPlane::AsIs);
-    assert!(header.is_persisted_truth);
-    assert!(!header.is_index_projection);
-    assert!(!header.is_client_transient);
-    assert_eq!(header.correlations.agent_id.unwrap().as_str(), "agent_1");
-}
-```
+Create contract tests that prove all of the following:
 
-```rust
-// crates/foundation/domain/tests/source_aware_record_builders.rs
-use deer_foundation_contracts::{
-    AgentId, CanonicalLevel, CanonicalPlane, CorrelationMeta, IdentityMeta, LineageMeta,
-    RecordId,
-};
-use deer_foundation_domain::{MessageBody, MessageRecord};
+- record headers expose immutable join keys separately from user-facing labels
+- lineage metadata can identify both the immediate source row and any canonical transforms applied later
+- correlation metadata preserves agent, actor, run, thread, and task anchors needed for joins across A/B families
+- access-control metadata can express ABAC scope plus exclusion/redaction targets used by `C:L2` views
+- refresh metadata can declare which `C:L2` views a row can invalidate or refresh and which watermark field they use
 
-#[test]
-fn source_aware_record_builder_preserves_correlation_and_source_dimensions() {
-    let record = MessageRecord::new_with_meta(
-        RecordId::from_static("msg_1"),
-        IdentityMeta::hash_anchored(RecordId::from_static("msg_1"), None, None, None),
-        CorrelationMeta {
-            agent_id: Some(AgentId::from_static("agent_1")),
-            ..Default::default()
-        },
-        LineageMeta::root(),
-        CanonicalLevel::L0,
-        CanonicalPlane::AsIs,
-        MessageBody {
-            role: "assistant".into(),
-            text: "Scouting ridge".into(),
-        },
-    );
+Create domain-builder tests that prove all of the following:
 
-    assert_eq!(record.header.level, CanonicalLevel::L2);
-    assert_eq!(record.header.source_level, CanonicalLevel::L0);
-    assert_eq!(record.header.source_plane, CanonicalPlane::AsIs);
-    assert_eq!(
-        record.header.correlations.agent_id.as_ref().map(|id| id.as_str()),
-        Some("agent_1")
-    );
-}
-```
+- default builders keep existing behavior for simple records
+- source-aware builders can preserve join keys and lineage when moving from A-level capture into B-level records
+- builders can attach refresh metadata without requiring app-local code to patch headers later
 
 - [ ] **Step 2: Run the targeted foundation tests and confirm they fail**
 
-Run: `cargo test -p deer-foundation-contracts --test source_metadata_contracts -v && cargo test -p deer-foundation-domain --test source_aware_record_builders -v`
+Run the contracts test target and the domain-builder test target.
 
-Expected: FAIL with missing `agent_id`, `source_level`, `source_plane`, storage flag fields, and missing `new_with_meta`.
+Expected: failure because the header does not yet expose dedicated join-key, access-control, or view-refresh metadata and the builders cannot preserve them.
 
-- [ ] **Step 3: Implement the minimal contract and domain metadata extensions**
+- [ ] **Step 3: Extend foundation contracts with explicit metadata blocks**
 
-```rust
-// crates/foundation/contracts/src/meta.rs
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CorrelationMeta {
-    pub mission_id: Option<MissionId>,
-    pub run_id: Option<RunId>,
-    pub artifact_id: Option<ArtifactId>,
-    pub trace_id: Option<TraceId>,
-    pub thread_id: Option<ThreadId>,
-    pub task_id: Option<TaskId>,
-    pub agent_id: Option<AgentId>,
-}
-```
+Update `meta.rs` and `records.rs` so that every stored A/B record header can carry:
 
-```rust
-// crates/foundation/contracts/src/records.rs
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RecordHeader {
-    pub record_id: RecordId,
-    pub family: RecordFamily,
-    pub level: CanonicalLevel,
-    pub plane: CanonicalPlane,
-    pub source_level: CanonicalLevel,
-    pub source_plane: CanonicalPlane,
-    pub storage: StorageDisposition,
-    pub is_persisted_truth: bool,
-    pub is_index_projection: bool,
-    pub is_client_transient: bool,
-    pub identity: IdentityMeta,
-    pub correlations: CorrelationMeta,
-    pub lineage: LineageMeta,
-    pub observed_at: DateTime<Utc>,
-}
+- `JoinKeysMeta` for immutable relational keys
+- expanded `LineageMeta` that distinguishes source anchors from later transforms
+- expanded `CorrelationMeta` for cross-family stitching
+- `AccessControlMeta` for ABAC and exclusion/redaction state
+- `ViewRefreshMeta` for `C:L2` refresh dependencies and watermarks
 
-impl RecordHeader {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        record_id: RecordId,
-        family: RecordFamily,
-        level: CanonicalLevel,
-        plane: CanonicalPlane,
-        storage: StorageDisposition,
-        identity: IdentityMeta,
-        correlations: CorrelationMeta,
-        lineage: LineageMeta,
-    ) -> Self {
-        Self::new_with_source(
-            record_id,
-            family,
-            level,
-            plane,
-            level,
-            plane,
-            storage,
-            identity,
-            correlations,
-            lineage,
-        )
-    }
+Make the new fields first-class header members rather than opaque JSON blobs so SQL view definitions can rely on stable field names.
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_source(
-        record_id: RecordId,
-        family: RecordFamily,
-        level: CanonicalLevel,
-        plane: CanonicalPlane,
-        source_level: CanonicalLevel,
-        source_plane: CanonicalPlane,
-        storage: StorageDisposition,
-        identity: IdentityMeta,
-        correlations: CorrelationMeta,
-        lineage: LineageMeta,
-    ) -> Self {
-        Self {
-            record_id,
-            family,
-            level,
-            plane,
-            source_level,
-            source_plane,
-            is_persisted_truth: matches!(storage, StorageDisposition::StorageNative),
-            is_index_projection: matches!(storage, StorageDisposition::IndexProjection),
-            is_client_transient: matches!(storage, StorageDisposition::ClientTransient),
-            storage,
-            identity,
-            correlations,
-            lineage,
-            observed_at: Utc::now(),
-        }
-    }
-}
-```
+- [ ] **Step 4: Extend domain builders to preserve the new metadata end to end**
 
-```rust
-// crates/foundation/domain/src/common.rs
-pub fn build_header(
-    record_id: RecordId,
-    family: RecordFamily,
-    level: CanonicalLevel,
-    plane: CanonicalPlane,
-    storage: StorageDisposition,
-    identity: IdentityMeta,
-    lineage: LineageMeta,
-) -> RecordHeader {
-    build_header_with_meta(
-        record_id,
-        family,
-        level,
-        plane,
-        level,
-        plane,
-        storage,
-        identity,
-        CorrelationMeta::default(),
-        lineage,
-    )
-}
+Update `common.rs` so record builders support both:
 
-#[allow(clippy::too_many_arguments)]
-pub fn build_header_with_meta(
-    record_id: RecordId,
-    family: RecordFamily,
-    level: CanonicalLevel,
-    plane: CanonicalPlane,
-    source_level: CanonicalLevel,
-    source_plane: CanonicalPlane,
-    storage: StorageDisposition,
-    identity: IdentityMeta,
-    correlations: CorrelationMeta,
-    lineage: LineageMeta,
-) -> RecordHeader {
-    RecordHeader::new_with_source(
-        record_id,
-        family,
-        level,
-        plane,
-        source_level,
-        source_plane,
-        storage,
-        identity,
-        correlations,
-        lineage,
-    )
-}
+- existing simple constructors for callers that do not need explicit metadata overrides
+- source-aware constructors that accept join keys, lineage, correlation, access-control, and refresh metadata in one place
 
-#[macro_export]
-macro_rules! define_record {
-    ($name:ident, $body:ty, $family:expr, $level:expr, $plane:expr, $storage:expr) => {
-        #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-        pub struct $name {
-            pub header: deer_foundation_contracts::RecordHeader,
-            pub body: $body,
-        }
+Ensure the builders can preserve an A-level source anchor while emitting a B-level record that later participates in `C:L2` SQL joins.
 
-        impl $name {
-            pub fn new(
-                record_id: deer_foundation_contracts::RecordId,
-                identity: deer_foundation_contracts::IdentityMeta,
-                lineage: deer_foundation_contracts::LineageMeta,
-                body: $body,
-            ) -> Self {
-                Self {
-                    header: crate::common::build_header(
-                        record_id, $family, $level, $plane, $storage, identity, lineage,
-                    ),
-                    body,
-                }
-            }
+- [ ] **Step 5: Re-run the targeted foundation tests**
 
-            pub fn new_with_meta(
-                record_id: deer_foundation_contracts::RecordId,
-                identity: deer_foundation_contracts::IdentityMeta,
-                correlations: deer_foundation_contracts::CorrelationMeta,
-                lineage: deer_foundation_contracts::LineageMeta,
-                source_level: deer_foundation_contracts::CanonicalLevel,
-                source_plane: deer_foundation_contracts::CanonicalPlane,
-                body: $body,
-            ) -> Self {
-                Self {
-                    header: crate::common::build_header_with_meta(
-                        record_id,
-                        $family,
-                        $level,
-                        $plane,
-                        source_level,
-                        source_plane,
-                        $storage,
-                        identity,
-                        correlations,
-                        lineage,
-                    ),
-                    body,
-                }
-            }
-        }
-    };
-}
-```
+Re-run the contracts and domain-builder tests.
 
-- [ ] **Step 4: Re-run the targeted foundation tests**
+Expected: pass with headers and builders exposing the metadata needed by `C:L2` SQL view definitions and refresh logic.
 
-Run: `cargo test -p deer-foundation-contracts --test source_metadata_contracts -v && cargo test -p deer-foundation-domain --test source_aware_record_builders -v`
+- [ ] **Step 6: Verify metadata coverage against the C:L2 contract**
 
-Expected: PASS with source-level/source-plane metadata and agent-aware correlations preserved.
+Review the Task 0 view requirements and confirm each required contract dimension now has a foundation-level source of truth:
 
-- [ ] **Step 5: Commit the foundation metadata hardening**
-
-```bash
-git add crates/foundation/contracts/src/meta.rs crates/foundation/contracts/src/records.rs crates/foundation/contracts/tests/source_metadata_contracts.rs crates/foundation/domain/src/common.rs crates/foundation/domain/tests/source_aware_record_builders.rs
-git commit -m "feat: add source-aware record metadata"
-```
+- join keys for SQL joins
+- lineage for provenance and replay
+- correlation for cross-family grouping
+- ABAC/exclusion for visibility
+- refresh metadata for view invalidation and materialization
