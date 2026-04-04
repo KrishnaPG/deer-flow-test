@@ -5,7 +5,7 @@
 - Modify: `crates/pipeline/normalizers/src/lib.rs`
 - Test: `crates/pipeline/normalizers/tests/c_l2_projection_catalog.rs`
 
-**Milestone unlock:** the shared presentation hierarchy is explicit, and the first reusable `C:L2` SQL views are registered for commander, researcher, thread, and core shell surfaces over shared `A:L2+` and `B:L2+` storage rows.
+**Milestone unlock:** the shared presentation hierarchy is explicit, and the first reusable shell-defined `C:L2` contracts are satisfied by generator-supplied SQL views for commander, researcher, thread, and core shell surfaces over shared `A:L2+` and `B:L2+` storage rows.
 
 **Forbidden shortcuts:** do not create app-local projection code instead of SQL view contracts; do not read raw `L0/L1` rows; do not define shell views without explicit source families, join keys, row grain, required columns, and ABAC/exclusion behavior.
 
@@ -35,7 +35,7 @@ Expected: FAIL with missing `C:L2` view specs and no shared registration of the 
 
 - [ ] **Step 3: Implement the shared C:L2 presentation view catalog**
 
-Update `c_view_catalog.rs` so it contains the authoritative `C:L2` catalog for this plan slice.
+Update `c_view_catalog.rs` so it contains the authoritative generator-supplied implementation catalog for the shell-defined `C:L2` contracts in this plan slice.
 
 Register SQL definitions for:
 
