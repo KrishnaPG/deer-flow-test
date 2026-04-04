@@ -9,20 +9,21 @@
 - Modify: `crates/pipeline/normalizers/src/lib.rs`
 - Test: `crates/pipeline/normalizers/tests/c_view_catalog.rs`
 
-**Milestone unlock:** every backend generator object binds to an explicit A/B storage family, every consumer shell declares the exact `C:L2` views it requires, and presentation canon is defined as a storage-native SQL view catalog rather than a generic promotion story.
+**Milestone unlock:** every backend generator object binds to an explicit A/B storage family, every consumer shell declares which `A:L2+`/`B:L2+` rows are admissible at `C:L0`, optional `C:L1` presentation transforms are explicit, every shell declares the exact shell-owned `C:L2` views it requires, and presentation canon is defined as a storage-native SQL view catalog rather than a generic promotion story.
 
-**Forbidden shortcuts:** do not let consumers query raw `L0/L1`; do not invent DeerFlow-only family ids; do not define a `C:L2` view without join keys, row grain, source families, output columns, ABAC/exclusion behavior, and refresh policy; do not split shell-specific views into separate architectures.
+**Forbidden shortcuts:** do not let consumers query raw `A/B:L0/L1`; do not invent DeerFlow-only family ids; do not treat `B:L3+` as a special presentation source class distinct from the rest of `B:L2+`; do not define a `C:L2` view without join keys, row grain, source families, output columns, ABAC/exclusion behavior, and refresh policy; do not split shell-specific views into separate architectures.
 
 ### Required contract decisions in this task
 
 | Concern | Required contract |
 | --- | --- |
 | Physical storage | Hierarchies A and B physically exist across `L0`-`L6` |
-| Presentation hierarchy | Hierarchy C is query-only and starts at `C:L2` |
+| Presentation hierarchy | `C:L0` admits shell-declared `A:L2+`/`B:L2+` rows, `C:L1` is optional transform/reduction/formatting, and `C:L2` is the shell-owned SQL/materialized-view query layer |
 | Minimum query surface | consumers query `C:L2` only |
-| Allowed `C:L2` inputs | `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6` only |
+| Allowed `C:L0` inputs | all shell-declared admissible rows from `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6` |
+| Optional presentation reduction | `C:L1` may transform, reduce, or format `C:L0` inputs before `C:L2` queries |
 | Presentation canon | named SQL views/materialized views plus refresh metadata |
-| Shell ownership | each shell declares required `C:L2` view ids explicitly |
+| Shell ownership | each shell declares admissible `C:L0` inputs and required `C:L2` view ids explicitly |
 
 ### Shared A/B family ids that must exist after this task
 
@@ -81,10 +82,12 @@ Every `C:L2` view definition must declare:
 Create tests that prove all of the following before any implementation exists:
 
 - the shared registry names the A and B families above and attaches each family to explicit allowed levels
-- consumer-facing access helpers reject direct reads from raw `L0/L1` families
+- consumer-facing access helpers reject direct reads from raw `A/B:L0/L1` families
 - DeerFlow binds to shared family ids instead of introducing DeerFlow-only families
+- `B:L3+` sources are accepted through the same `B:L2+` admissibility rule as the rest of B, not through a special-case path
 - each `C:L2` view listed above is registered with complete metadata
-- each registered `C:L2` contract depends only on `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6`
+- each shell registry declares its admissible `C:L0` inputs from `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6`
+- each registered `C:L2` contract depends only on those shell-admissible `C:L0` inputs, optionally through `C:L1`
 
 - [ ] **Step 2: Run the targeted tests and confirm they fail**
 
@@ -100,17 +103,19 @@ Add `storage_contract.rs` with:
 - hierarchy and allowed-level metadata for each family id
 - immutable keys, row grain, lineage anchors, and storage kind for each family id
 - DeerFlow-first binding hooks that map DeerFlow source shapes into the shared family ids without changing the registry surface
-- helpers that mark families as consumer-visible only through registered `C:L2` views
+- helpers that mark `A:L2+` and `B:L2+` families as admissible to `C:L0` only when a shell declares them, without special-casing `B:L3+`
+- helpers that mark consumer-visible query access as available only through registered shell-owned `C:L2` views
 
 - [ ] **Step 4: Implement the shared C query contract and SQL catalog**
 
 Add `c_query_contract.rs` and `c_view_catalog.rs` with:
 
-- a shell registry naming which `C:L2` view ids each shell requires
+- a shell registry naming which `A:L2+` and `B:L2+` family rows are admissible at `C:L0` for each shell and which `C:L2` view ids each shell requires
 - a `CViewContract` type carrying the full projection metadata listed above
+- an optional `C:L1` contract type for presentation-side transform/reduction/formatting between admissible inputs and `C:L2`
 - explicit SQL text or SQL-builder output for each DeerFlow `C:L2` view listed in this task
 - validation that every view declares join keys, columns, ABAC/exclusion behavior, and refresh metadata
-- validation that every view reads only from allowed A/B levels and never from raw `L0/L1`
+- validation that every view reads only from shell-admissible `C:L0` inputs, optionally through `C:L1`, with those inputs sourced from allowed `A:L2+`/`B:L2+` levels and never from raw `A/B:L0/L1`
 
 - [ ] **Step 5: Re-run the targeted tests**
 
@@ -123,6 +128,6 @@ Expected: pass with explicit A/B family definitions, consumer query restrictions
 Verify all of the following are now true:
 
 - A and B are the only physical storage hierarchies in the contract
-- C exists only as registered `C:L2` SQL view contracts in this slice
-- no consumer shell depends on raw `L0/L1`
+- C exists as a presentation hierarchy with shell-declared `C:L0`, optional `C:L1`, and registered shell-owned `C:L2` contracts in this slice
+- no consumer shell depends on raw `A/B:L0/L1`
 - DeerFlow is only a binding layer on top of the shared contract
