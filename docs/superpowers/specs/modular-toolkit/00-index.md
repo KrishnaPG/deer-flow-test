@@ -23,7 +23,7 @@ Core position:
 | --- | --- |
 | `00-index.md` | entry point, scope, file map |
 | `01-architecture-position.md` | architectural stance and core principles |
-| `02-workspace-and-layering.md` | workspace shape and strict data layering |
+| `02-workspace-and-layering.md` | workspace shape, A/B storage rows, and C:L2 presentation layering |
 | `03-reusable-modules.md` | lego-brick modules, contracts, and boundaries |
 | `04-authoring-tools-as-proving-grounds.md` | tool apps that prove each module slice |
 | `05-tdd-by-contract.md` | test strategy and module-first TDD workflow |
@@ -39,18 +39,18 @@ Core position:
 | `15-discovery-object-taxonomy.md` | taxonomy for artifacts, views, insights, predictions, and prescriptions |
 | `16-retrieval-and-indexing-contract.md` | mediated reads, chunking, embeddings, and index/backlink contracts |
 | `17-view-taxonomy-and-lod.md` | thumbnail/tooltip/panel/world view taxonomy and context rules |
-| `18-generator-mapping-matrix.md` | how DeerFlow, PocketFlow, Rowboat, Hermes, and others map into canonical contracts |
+| `18-generator-mapping-matrix.md` | how DeerFlow, PocketFlow, Rowboat, Hermes, and others map into shared A/B contracts |
 | `19-ui-state-server-boundary.md` | exact allowed and forbidden UI/runtime boundary assumptions |
 | `20-intent-and-mediated-read-model.md` | external read/write payload families and mediated access rules |
 | `21-implementation-readiness-checklist.md` | hard no-go gate before any crate/runtime implementation |
-| `22-canonical-record-families.md` | generator-agnostic canonical record families |
+| `22-canonical-record-families.md` | generator-agnostic A/B storage row families |
 | `23-correlation-and-identity-contract.md` | identity and correlation contract for all major record families |
 | `24-level-plane-lineage-matrix.md` | occupancy matrix across levels, planes, and lineage needs |
 | `25-generator-capability-matrix.md` | rich/sparse support map per generator and record family |
-| `26-normalizer-promotion-rules.md` | level promotion rules from raw capture to higher-order outputs |
-| `27-raw-envelope-family-catalog.md` | pre-canonical raw envelope families |
-| `28-entity-view-matrix.md` | field and context expectations per entity and view tier |
-| `29-world-projection-object-contract.md` | source-linked world object families and allowed semantics |
+| `26-normalizer-promotion-rules.md` | normalizer rules from raw capture into shared A/B L2+ rows |
+| `27-raw-envelope-family-catalog.md` | raw envelope families before A/B row production |
+| `28-entity-view-matrix.md` | field and context expectations for presentation-layer entities and C:L2 view tiers |
+| `29-world-projection-object-contract.md` | downstream world projection objects derived from backing C:L2 views |
 | `30-library-decision-matrix.md` | exact OSS choices per implementation stage |
 | `31-custom-code-boundaries.md` | what remains custom and what must not be custom first |
 | `32-interactive-chat-lifecycle.md` | generator-agnostic lifecycle for interactive chat-oriented clients |
@@ -63,15 +63,18 @@ Core position:
 | `39-linked-interaction-contract.md` | canonical shell-level brushing, filtering, selection, focus, pinning, compare, and intent interaction rules |
 | `40-shell-and-linked-interaction-stress-test.md` | stress test of shell and linked-interaction contracts against RTS HUD and state-server edge cases |
 | `41-final-integration-tranche.md` | world-primary, temporal, failover, policy, and intent-boundary integration tranche before planning |
+| `42-new-generator-onboarding-contract.md` | contract and readiness gate for onboarding any new backend generator |
 
 ## Stable Decisions
 
 - Save this line of work under `docs/superpowers/` only.
 - Prefer multiple small files over one large design file.
 - Follow strict layering:
-  `raw -> canonical domain -> derived VM -> reusable view/panel -> app`.
+  `raw -> shared A/B storage rows -> C:L2 SQL/materialized-view presentation layer -> reusable view/panel consumers -> world projection as downstream consumer -> app`.
 - Reusable modules must stay app-agnostic.
 - Tool apps must consume the same reusable modules as runtime apps.
+- Presentation logic belongs in `C:L2` SQL/materialized views rather than ad hoc app-local derivations.
+- World projection is fed by presentation-layer outputs and must not be treated as the primary presentation contract.
 - `deer_gui` is one composition target, not the monolithic center.
 - planning acceptance recorded in
   `docs/superpowers/specs/modular-toolkit/10-planning-guardrails.md`
@@ -111,22 +114,23 @@ Read in this order:
 23. `23-correlation-and-identity-contract.md`
 24. `24-level-plane-lineage-matrix.md`
 25. `25-generator-capability-matrix.md`
-26. `26-normalizer-promotion-rules.md`
-27. `27-raw-envelope-family-catalog.md`
-28. `28-entity-view-matrix.md`
-29. `29-world-projection-object-contract.md`
-30. `30-library-decision-matrix.md`
-31. `31-custom-code-boundaries.md`
-32. `32-interactive-chat-lifecycle.md`
-33. `33-chat-event-and-state-mapping.md`
-34. `34-chat-artifact-lifecycle.md`
-35. `35-carrier-core-and-typed-extensions-contract.md`
-36. `36-view-contract-support-model.md`
-37. `37-shell-mode-support-matrix.md`
-38. `38-generator-shell-mode-support-evaluation.md`
-39. `39-linked-interaction-contract.md`
-40. `40-shell-and-linked-interaction-stress-test.md`
-41. `41-final-integration-tranche.md`
+26. `42-new-generator-onboarding-contract.md`
+27. `26-normalizer-promotion-rules.md`
+28. `27-raw-envelope-family-catalog.md`
+29. `28-entity-view-matrix.md`
+30. `35-carrier-core-and-typed-extensions-contract.md`
+31. `36-view-contract-support-model.md`
+32. `29-world-projection-object-contract.md`
+33. `30-library-decision-matrix.md`
+34. `31-custom-code-boundaries.md`
+35. `32-interactive-chat-lifecycle.md`
+36. `33-chat-event-and-state-mapping.md`
+37. `34-chat-artifact-lifecycle.md`
+38. `37-shell-mode-support-matrix.md`
+39. `38-generator-shell-mode-support-evaluation.md`
+40. `39-linked-interaction-contract.md`
+41. `40-shell-and-linked-interaction-stress-test.md`
+42. `41-final-integration-tranche.md`
 
 ## Superseded Document
 
