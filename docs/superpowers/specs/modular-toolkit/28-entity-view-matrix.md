@@ -19,7 +19,7 @@
 
 - Matrix entries describe presentation-facing projection targets, not storage-truth declarations.
 - Admissible `C:L0` inputs come from allowed A/B `L2+` rows; this includes high-order semantic rows such as `InsightRecord`, `PredictionRecord`, `PrescriptionRecord`, and `OutcomeRecord`.
-- Shells own the canonical `C:L2` views that project those inputs into thumbnail, tooltip, panel, and optional world-facing surfaces.
+- Shells define the canonical `C:L2` contracts for thumbnail, tooltip, panel, and optional world-facing surfaces, and generators supply the concrete query projections that satisfy those contracts from admissible A/B `L2+` inputs.
 
 ## Required Contract Fields Per Entry
 
