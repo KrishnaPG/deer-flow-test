@@ -52,7 +52,7 @@ Meaning:
 - storage-backed cleanup of raw capture without yet turning it into target-specific
   views
 
-### L2 - Views
+### L2 - Reusable Semantic Projections
 
 Examples:
 
@@ -67,7 +67,7 @@ Canonical semantic extension:
 
 Meaning:
 
-- the first layer where domain-facing and client-facing views are shaped
+- the first layer where reusable semantic/storage projections are available for downstream `C:L2` SQL views and other `L2+` derivations
 
 ### L3 - Aggregates / Insights
 
@@ -234,7 +234,7 @@ The toolkit should treat these as independent from UI layers.
 
 Examples:
 
-- a `TranscriptVm` row may reflect an L2 view backed by L0 and L1 records
+- a `TranscriptVm` may expose `C:L2` presentation over an `L2_ViewRecord` backed by lower-level records
 - an anomaly marker may be an L3 insight
 - a forecast card may be L4
 - an intervention prompt may be L5
@@ -254,5 +254,4 @@ At minimum, records should support fields equivalent to:
 
 ## Anti-Drift Rule
 
-If a view cannot state whether it is showing L0, L2, L3, L4, or L5 data, the
-design is too vague.
+If a presentation surface or view contract cannot state the level provenance of the data it shows, the design is too vague.

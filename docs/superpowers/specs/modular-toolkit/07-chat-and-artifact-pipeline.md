@@ -51,20 +51,20 @@ transport details into views.
 
 ### Normalizer Layer
 
-This layer translates raw DeerFlow events into canonical records.
+This layer translates raw DeerFlow events into shared A/B storage-row families, with normalizers responsible for the shared `L2+` rows that downstream `C:L2` views query.
 
 Examples:
 
-- `values` stream events -> thread snapshot updates
-- `messages-tuple` -> incremental message or tool-call updates
-- custom `task_*` events -> subtask progress records
-- artifact lists -> canonical artifact records
-- clarification tool messages -> clarification records
+- `values` stream events -> updated `SessionRecord`, `RunRecord`, and related A/B storage rows
+- `messages-tuple` -> append-only `MessageRecord` and `ToolCallRecord` rows with lineage
+- custom `task_*` events -> `TaskRecord` and `RuntimeStatusRecord` rows
+- artifact lists -> `ArtifactRecord` rows plus linked representation/index rows where payload access is needed
+- clarification tool messages -> `ClarificationRecord` rows plus linked intent/transform rows where policy or pause state must be preserved
 
-### Canonical Record Layer
+### A/B Storage Row Layer
 
 This layer gives the rest of the toolkit stable concepts across the ontology
-families.
+families, stored as shared A/B storage rows, with the shared consumer-facing row contracts taking shape at `L2+`.
 
 For chat-oriented pipelines, the most important families are:
 
@@ -77,14 +77,14 @@ For chat-oriented pipelines, the most important families are:
   - `ClarificationRecord`
   - `TaskRecord`
   - `RuntimeStatusRecord`
-- semantic spine where applicable:
-  - `SourceRecord`
-  - `SanitizedRecord`
-  - `ViewRecord`
-  - `InsightRecord`
-  - `PredictionRecord`
-  - `PrescriptionRecord`
-  - `OutcomeRecord`
+- level-prefixed semantic extensions where applicable:
+  - `L0_SourceRecord`
+  - `L1_SanitizedRecord`
+  - `L2_ViewRecord`
+  - `L3_InsightRecord`
+  - `L4_PredictionRecord`
+  - `L5_PrescriptionRecord`
+  - `L6_OutcomeRecord`
 - representation/index:
   - `AsIsRepresentationRecord`
   - `ChunkRecord`
@@ -96,20 +96,20 @@ For chat-oriented pipelines, the most important families are:
   - `ReplayCheckpointRecord`
 
 That is the key architectural move: chat is not treated as a one-off widget. It
-becomes a canonical multi-family state model that multiple apps can inspect.
+becomes shared A/B storage rows, with shared `L2+` row contracts and downstream `C:L2` SQL views enabling multiple apps to inspect the same facts.
 
-### Derivation Layer
+### C:L2 Presentation View Layer
 
-This layer shapes canonical records into view models for reusable UI.
+This layer defines SQL views / materialized views over A/B storage rows for reusable UI.
 
-Expected view models:
+Expected `C:L2` query views:
 
-- `TranscriptVm`
-- `ComposerVm`
-- `ArtifactShelfVm`
-- `RunStatusVm`
-- `TaskProgressVm`
-- `ThreadHeaderVm`
+- transcript query view
+- composer query view
+- artifact shelf query view
+- run status query view
+- task progress query view
+- thread header query view
 
 ### Read-Model Layer
 
@@ -145,7 +145,7 @@ With the layers above, `deer_gui` can compose the full research-chat flow:
 - left or center panel for transcript and composer
 - right panel for artifacts and inspectors
 - status rail for subtask progress and tool activity
-- top-level world view that reacts to the same canonical thread state
+- top-level world view that reacts to the same backing A/B thread state through `C:L2` views
 
 That means the user can:
 
@@ -176,7 +176,7 @@ The architecture supports DeerFlow-style chat correctly only if a proof app can:
 - render clarification interrupts as interactive pauses
 - list and open persisted artifacts
 - preview in-flight file outputs when available
-- expose the same canonical thread state to other reusable views
+- expose the same A/B storage thread state to other reusable views
 
 ## Stress-Test Conclusion
 

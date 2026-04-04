@@ -3,7 +3,7 @@
 **Date:** 2026-03-31
 **Status:** Approved
 
-## World Object Families
+## World Projection Object Families
 
 - `WorldConversationAnchor`
 - `WorldTaskBeacon`
@@ -15,9 +15,11 @@
 
 ## Rule
 
-Every world object must retain backlinks to:
+Every world projection object derived from `C:L2` views must retain backlinks to:
 
-- source record IDs
+- backing `C:L2` view IDs
+
+- source A/B storage row IDs
 - level/plane metadata
 - discovery object kind
 - drill-down panel targets

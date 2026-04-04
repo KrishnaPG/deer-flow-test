@@ -20,7 +20,7 @@ This creates a required bridge:
 
 The bridge happens through a dedicated world-projection layer.
 
-It consumes canonical records such as:
+It is lineage-backed by A/B storage-family rows and consumes `C:L2` view inputs derived from them, such as:
 
 - carrier/orchestration records such as:
   - `SessionRecord`
@@ -31,25 +31,25 @@ It consumes canonical records such as:
   - `ArtifactRecord`
   - `ClarificationRecord`
   - `RuntimeStatusRecord`
-- semantic spine records where applicable:
-  - `ViewRecord`
-  - `InsightRecord`
-  - `PredictionRecord`
-  - `PrescriptionRecord`
-  - `OutcomeRecord`
+- level-prefixed semantic extension records where applicable:
+  - `L2_ViewRecord`
+  - `L3_InsightRecord`
+  - `L4_PredictionRecord`
+  - `L5_PrescriptionRecord`
+  - `L6_OutcomeRecord`
 - representation and structural records when relevant for drill-down and
   context
 
-It produces `deer_gui`-facing world objects and view models.
+It produces `deer_gui`-facing world projection objects and app-facing view models.
 
 The reusable chat toolkit does not know these world objects exist.
 
 ## Layer Placement
 
-The bridge sits after canonical domain, before app-specific scene and HUD
+The bridge sits after A/B storage normalizers, before app-specific scene and HUD
 composition:
 
-`raw -> normalizer -> canonical domain -> world projection -> scene/hud VMs -> deer_gui`
+`raw -> normalizer -> A/B storage rows -> C:L2 SQL views -> world projection objects -> scene/hud VMs -> deer_gui`
 
 This is not a bypass of the architecture.
 
@@ -100,7 +100,7 @@ The bridge must not:
 
 ## Mapping Examples
 
-| Canonical Record | World Projection | Macro Use | Micro Use |
+| A/B Storage Row Family | World Projection Object Family | Macro Use | Micro Use |
 | --- | --- | --- | --- |
 | `SessionRecord` | `WorldConversationAnchor` | command channel node | dialogue scene entry |
 | `TaskRecord` | `WorldTaskBeacon` | fleet activity/status | squad action beat |
@@ -115,8 +115,8 @@ The bridge must not:
 The bridge should support this loop:
 
 1. user submits a research chat
-2. canonical chat/task/artifact state updates from DeerFlow streams
-3. world projection emits updated world objects
+2. A/B storage rows update from DeerFlow streams and refresh backing `C:L2` views
+3. backing `C:L2` views refresh and the world projection emits updated world objects
 4. macro HUD and scene react with alerts, unit states, and markers
 5. user drills into a world object
 6. app orchestrator opens transcript, artifact, or intervention detail using the
@@ -130,8 +130,8 @@ The bridge is app-specific, but it still follows contract-first testing.
 
 Required tests:
 
-- projection fixtures: canonical thread/task/artifact state -> projected world state
-- linkage tests: world object IDs map back to source records
+- projection fixtures: backing `C:L2` views over A/B thread/task/artifact rows -> projected world state
+- linkage tests: world object IDs map back to source A/B storage rows
 - drill-down tests: selecting projected objects opens the correct generic detail
 - consequence tests: clarification/artifact outcomes update the right macro state
 

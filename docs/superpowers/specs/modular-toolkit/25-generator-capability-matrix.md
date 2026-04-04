@@ -3,9 +3,9 @@
 **Date:** 2026-03-31
 **Status:** Approved
 
-## Capability Matrix
+## A/B Storage Family Capability Matrix
 
-| Generator | Runs/Sessions | Tasks | Messages | Tools | Artifacts | Graph | Knowledge | Delivery | Runtime Status |
+| Generator | `RunRecord` / `SessionRecord` | `TaskRecord` | `MessageRecord` | `ToolCallRecord` | `ArtifactRecord` | `GraphNodeRecord` / `GraphEdgeRecord` | `KnowledgeEntityRecord` / `KnowledgeRelationRecord` | `DeliveryRecord` | `RuntimeStatusRecord` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DeerFlow | rich | rich | rich | rich | rich | medium | low | low | medium |
 | PocketFlow | medium | rich | low | medium | low | rich | low | low | medium |
@@ -14,8 +14,10 @@
 
 ## Generator-Agnostic Rule
 
-Each canonical family should show:
+Each A/B storage row family should show:
 
 - at least one DeerFlow mapping
 - at least one non-DeerFlow mapping or an explicit current gap
-- which fields are canonical vs generator-specific
+- which fields are A/B storage-shared vs generator-specific
+
+Use `36-view-contract-support-model.md` to evaluate how that A/B family coverage translates into `C:L2` consumer support.

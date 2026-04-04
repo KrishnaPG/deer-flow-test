@@ -7,7 +7,7 @@
 
 The toolkit must support multiple data generators, not only DeerFlow.
 
-So the canonical model must be generator-agnostic.
+So the A/B storage families must be generator-agnostic.
 
 ## Supported Generator Families
 
@@ -63,14 +63,15 @@ Natural fit:
 
 - carrier/orchestration-heavy flows with delivery, scheduling, and runtime state
 
-## Canonical Model Rule
+## Canonical Mapping Rule
 
-The canonical model should be centered on four ontology families:
+The shared generator contract should be centered on generator-agnostic A/B storage families plus downstream `C:L2` view support:
 
-- semantic spine
-- carrier/orchestration
-- representation/index
-- governance/operational
+- mandatory carrier/orchestration families
+- level-prefixed semantic extension families
+- representation/index families
+- governance/operational families
+- structural/knowledge families where the generator supports them
 
 Graph structure should be supported, but not required as the only source truth.
 
@@ -82,7 +83,7 @@ Each generator family should eventually have a mapping spec that answers:
 - what storage levels and planes it naturally populates
 - what ontology families it can populate richly
 - what ontology families it can only populate sparsely
-- what view tiers it supports directly vs indirectly
+- what `C:L2` view contracts or world-projection surfaces it supports directly vs indirectly
 
 ## Anti-Drift Rule
 

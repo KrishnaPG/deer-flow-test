@@ -22,9 +22,9 @@ The generic trajectory is:
 
 `source capture -> sanitation -> view shaping -> insight discovery -> prediction -> prescription -> outcome`
 
-## Stage Model
+## Phase Model
 
-### Stage A - Source Capture
+### Phase 1 - Source Capture
 
 Typically L0 / As-Is.
 
@@ -36,7 +36,7 @@ Examples:
 - media payloads
 - user intents
 
-### Stage B - Sanitation
+### Phase 2 - Sanitation
 
 Typically L1.
 
@@ -47,17 +47,17 @@ Examples:
 - file conversion
 - de-duplication metadata
 
-### Stage C - View Shaping
+### Phase 3 - Storage And Semantic Shaping
 
 Typically L2.
 
 Examples:
 
-- canonical domain records
-- reusable derived views
-- domain joins and projections
+- shared A/B storage rows at `L2+`
+- reusable semantic/storage projections
+- joins and projections that later back `C:L2` SQL views
 
-### Stage D - Insight Discovery
+### Phase 4 - Insight Discovery
 
 Typically L3.
 
@@ -68,7 +68,7 @@ Examples:
 - extracted entities/relations
 - operational findings
 
-### Stage E - Prediction
+### Phase 5 - Prediction
 
 Typically L4.
 
@@ -79,7 +79,7 @@ Examples:
 - projected outcomes
 - counterfactual scenarios
 
-### Stage F - Prescription
+### Phase 6 - Prescription
 
 Typically L5.
 
@@ -90,7 +90,7 @@ Examples:
 - interventions
 - operator recommendations
 
-### Stage G - Outcome
+### Phase 7 - Outcome
 
 Typically L6.
 
@@ -133,7 +133,7 @@ Examples:
 
 ## World Implication
 
-World projection should distinguish:
+World projection surfaces backed by `C:L2` views should distinguish:
 
 - observed current world state
 - insight overlays
