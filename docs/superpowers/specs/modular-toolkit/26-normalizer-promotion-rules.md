@@ -6,19 +6,20 @@
 ## Promotion Path
 
 - L0 source capture -> L1 sanitation
-- L1 sanitation -> L2 canonical/view shaping
-- L2 view shaping -> L3 insights
+- L1 sanitation -> A/B `L2` storage-row shaping
+- A/B `L2` storage-row shaping -> L3 insights
 - L2/L3 -> L4 predictions
 - L4 -> L5 prescriptions
 - later observed evidence plus prior L4/L5 chains -> L6 outcomes
 
-## Rule
+## Normalizer Rule
 
-Normalizers do not invent arbitrary future-state semantics.
+Normalizers produce shared A/B L2+ storage rows that C:L2 SQL views query.
+They do not invent arbitrary future-state semantics.
 
-They promote records according to explicit rules and declared producers.
+They transform raw L0/L1 evidence into A/B storage rows according to explicit rules and declared producers.
 
-Governance and operational records such as `TransformRecord`, `IntentRecord`,
+Governance and operational rows such as `TransformRecord`, `IntentRecord`,
 `ExclusionRecord`, `ConflictRecord`, `ResolutionRecord`, `DedupRecord`,
 `BatchRecord`, `ReplayCheckpointRecord`, and `WriteOperationRecord` may be
-emitted alongside promotion, rather than being forced into the semantic spine.
+emitted alongside A/B storage row production, rather than being forced into the level-prefixed semantic extension families.

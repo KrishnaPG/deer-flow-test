@@ -8,11 +8,11 @@
 | Path | Purpose |
 | --- | --- |
 | `crates/foundation/contracts` | shared traits, DTOs, commands, events |
-| `crates/foundation/domain` | canonical domain model |
+| `crates/foundation/domain` | shared A/B storage-row models for execution truth plus typed semantic, representation, governance, and knowledge extensions |
 | `crates/foundation/replay` | replay model, fixture loading, event history |
 | `crates/pipeline/raw_sources` | backend, file, and replay source adapters |
-| `crates/pipeline/normalizers` | raw schema to canonical domain transforms |
-| `crates/pipeline/derivations` | canonical domain to typed view models |
+| `crates/pipeline/normalizers` | raw schema to shared A/B L2+ storage row transforms |
+| `crates/pipeline/derivations` | A/B storage rows to C:L2 SQL view definitions |
 | `crates/runtime/read_models` | transient client-side state |
 | `crates/runtime/world_projection` | generic projection host for app/world mappings |
 | `crates/views/scene3d` | generic 3D scene host and actor primitives |
@@ -66,7 +66,7 @@ Examples for the chat pipeline:
 
 Purpose:
 
-- convert raw backend schema into canonical domain objects and events
+- convert raw backend schema into shared A/B storage-row families, with normalizers responsible for the shared `L2+` rows that downstream `C:L2` views query
 
 Owns:
 
@@ -74,7 +74,7 @@ Owns:
 - version normalization
 - semantic conversion
 - validation and coercion
-- translation of stream events into canonical run, message, task, and artifact events
+- translation of stream events into shared run, message, task, artifact, and governance rows
 
 Must not know:
 
@@ -82,11 +82,14 @@ Must not know:
 - view widgets
 - camera or layout state
 
-### Canonical Domain
+### A/B Storage Row Families
 
 Purpose:
 
-- represent stable internal truth used by all apps
+- represent stable storage truth used by all apps
+- A hierarchy: observed execution/orchestration truth such as lifecycle, metrics, decisions, tool calls, status pings, intents, exclusions, replay checkpoints, and backpressure
+- B hierarchy: content, semantic, representation, governance, and knowledge-bearing rows linked to that truth across the relevant levels
+- physically exists in storage across L0-L6, with the shared consumer-facing A/B row contracts taking shape at `L2+`
 
 Owns:
 
@@ -95,7 +98,7 @@ Owns:
 - histories
 - invariants
 
-Chat-oriented canonical records should include at least:
+Chat-oriented A/B storage rows should include at least:
 
 - thread/session record
 - message record
@@ -111,33 +114,36 @@ Must not know:
 - animation state
 - specific app workflows
 
-### Derivations
+### C:L2 Presentation Views
 
 Purpose:
 
-- transform canonical domain state into typed view models
+- define `C:L2` SQL views and materialized views over shared A/B storage rows that consumers query
 
 Owns:
 
+- SQL view definitions / materialized views over A:L2/L3/L4/L5/L6 and B:L2/L3/L4/L5/L6
 - aggregation
 - grouping
 - filtering
 - metric shaping
 - semantic decoration for views
 
-Chat-oriented view models should include at least:
+Chat-oriented `C:L2` SQL views should include at least:
 
-- `TranscriptVm`
-- `ComposerVm`
-- `ArtifactShelfVm`
-- `RunStatusVm`
-- `TaskProgressVm`
+- transcript query view
+- composer state query view
+- artifact shelf query view
+- run status query view
+- task progress query view
 
 Must not know:
 
 - raw backend schema
 - egui details
 - renderer internals
+
+Key rule: consumers (apps/tools/games) NEVER query L0/L1 directly. They query C:L2 views only.
 
 ### Read Models
 
@@ -163,16 +169,17 @@ Authority rule:
 - backend owns persisted truth
 - client owns transient experience state
 
-### World Projection
+### World Projection Layer
 
 Purpose:
 
-- map canonical domain state into composition-specific world semantics without
+- map backing `C:L2` view state into composition-specific world semantics without
   polluting reusable chat or view modules
+- world projection is a downstream C-side consumer layer, not a separate truth layer
 
 Owns:
 
-- projection rules from generic records into world objects
+- projection rules from backing `C:L2` views into world objects
 - stable IDs linking transcript state, artifacts, alerts, and world markers
 - app-facing semantic grouping for macro and micro views
 
@@ -187,6 +194,7 @@ Rule:
 
 - reusable modules stay generic
 - world metaphor mapping lives in projection rules at the runtime/app boundary
+- each shell/app defines its own required C:L2 views within the same presentation hierarchy
 
 ## Layering Rule
 
@@ -200,5 +208,5 @@ Bad:
 
 Good:
 
-- raw source -> normalizer -> domain -> derivation -> view -> panel -> app
-- raw source -> normalizer -> domain -> world projection -> scene/hud derivation -> app
+- raw source -> A/B storage normalizer -> C:L2 SQL views -> panel -> app
+- raw source -> A/B storage normalizer -> C:L2 SQL views -> world projection objects -> scene/hud derivation -> app

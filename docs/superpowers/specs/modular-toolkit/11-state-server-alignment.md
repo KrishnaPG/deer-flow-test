@@ -71,7 +71,7 @@ They should be modeled as commands that:
 
 The client/runtime layering must be read as:
 
-`generator -> storage truth -> mediated source -> normalizer -> canonical orchestration/domain -> derivation/world projection -> reusable views -> app`
+`generator -> storage truth -> mediated source -> normalizer -> A/B storage rows -> C:L2 SQL views -> reusable hosted views / world projection objects -> app`
 
 This is the correct storage-aware interpretation of the earlier toolkit layer
 model.
@@ -80,7 +80,7 @@ model.
 
 The toolkit must not assume:
 
-- raw backend payloads are the canonical truth model
+- raw backend payloads are the same thing as shared A/B storage truth
 - direct artifact paths are safe for UI access
 - DB/search/index records are the only source of truth
 - a final assistant message is more important than the storage and lineage chain

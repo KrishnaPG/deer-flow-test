@@ -21,14 +21,14 @@ downward.
 
 So support is evaluated as:
 
-`backend -> canonical mappings -> view support -> panel support -> layout support`
+`backend -> A/B storage row mappings -> C:L2 SQL view contract support -> panel support / world-projection support -> layout support`
 
 ## View Contract Schema
 
-Every view contract must define:
+Every C:L2 view contract must define:
 
-- `required canonical records`
-- `optional canonical records`
+- `required A/B storage rows`
+- `optional A/B storage rows`
 - `required metadata`
 - `interaction requirements`
 - `cross-view participation requirements`, where the view can drive or receive
@@ -36,15 +36,15 @@ Every view contract must define:
 - `output events/commands`
 - `degradation behavior`
 - `unsupported conditions`
-- `view tiers` where relevant (`thumbnail`, `tooltip`, `panel`, `world`)
+- `view tiers` where relevant (`thumbnail`, `tooltip`, `panel`, `world-projection`)
 
 ## Support Definitions
 
 ### View-Supported
 
-A backend supports a view when it can provide:
+A backend supports a `C:L2` view contract when it can provide:
 
-- all required canonical mappings
+- all required A/B storage row mappings
 - all required metadata
 - all required interaction prerequisites
 
@@ -56,6 +56,13 @@ Optional hosted views may degrade gracefully.
 
 Panels may also expose shared selection, filter, focus, and correlation surfaces
 for layout-level composition.
+
+### World-Projection-Supported
+
+A world-projection surface is supported when:
+
+- its backing `C:L2` view contracts are supported
+- the world-projection linkage and backlink requirements from `29-world-projection-object-contract.md` are satisfied
 
 ### Layout-Supported
 

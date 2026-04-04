@@ -1,4 +1,4 @@
-# Design: Modular Toolkit - Shared Base, Mandatory Modules, And Profile-Driven Modules Contract
+# Design: Modular Toolkit - Shared Base, Mandatory Carrier/Orchestration Rows, And Typed Extension Modules Contract
 
 **Date:** 2026-03-31
 **Status:** Approved
@@ -33,7 +33,7 @@ The default integration and UI-facing mandatory module is:
 - `RuntimeStatusRecord`
 - `DeliveryRecord`
 
-All canonical records share this base metadata:
+All A/B storage rows share this base metadata:
 
 - `IdentityMeta`
 - `CorrelationMeta`
@@ -98,8 +98,8 @@ Mandatory-module identity is the primary anchor for everyday integration.
 Profile-driven module records may either:
 
 - carry their own IDs with mandatory backlinks to carrier IDs, or
-- be derived views over carrier-linked truth where no standalone identity is
-  needed
+- reuse mandatory-module identity as keyed extension rows where no standalone
+  external identity is needed
 
 Backlinks are mandatory either way.
 
