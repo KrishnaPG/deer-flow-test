@@ -1,344 +1,128 @@
-## Task 0: Define The Shared Generator Storage Contract And Promotion Policy Before Any Adapter Work
+## Task 0: Define The Shared A/B Storage Contract And C:L2 SQL View Contract Before Any Adapter Work
 
 **Files:**
-- Create: `crates/pipeline/raw_sources/src/source_catalog.rs`
+- Create: `crates/pipeline/raw_sources/src/storage_contract.rs`
+- Create: `crates/pipeline/raw_sources/src/c_query_contract.rs`
 - Modify: `crates/pipeline/raw_sources/src/lib.rs`
-- Test: `crates/pipeline/raw_sources/tests/generator_source_catalog.rs`
-- Create: `crates/pipeline/normalizers/src/promotion_policy.rs`
+- Test: `crates/pipeline/raw_sources/tests/storage_contract.rs`
+- Create: `crates/pipeline/normalizers/src/c_view_catalog.rs`
 - Modify: `crates/pipeline/normalizers/src/lib.rs`
-- Test: `crates/pipeline/normalizers/tests/generator_promotion_policy.rs`
+- Test: `crates/pipeline/normalizers/tests/c_view_catalog.rs`
 
-**Milestone unlock:** every backend generator storage object can bind to a shared immutable source contract, and every level/plane transition from `L0` through `L2` is governed by named promotion rules instead of ad hoc generator-specific normalization logic
+**Milestone unlock:** every backend generator object binds to an explicit A/B storage family, every consumer shell declares the exact `C:L2` views it requires, and presentation canon is defined as a storage-native SQL view catalog rather than a generic promotion story.
 
-**Forbidden shortcuts:** do not infer storage classes only from runtime code paths; do not let normalizers guess record families without a source catalog entry; do not introduce game-facing projections before the storage/promotion matrix is explicit; do not encode level/plane policy only in prose
+**Forbidden shortcuts:** do not let consumers query raw `L0/L1`; do not invent DeerFlow-only family ids; do not define a `C:L2` view without join keys, row grain, source families, output columns, ABAC/exclusion behavior, and refresh policy; do not split shell-specific views into separate architectures.
 
-- [ ] **Step 1: Write the failing source catalog and promotion policy tests**
+### Required contract decisions in this task
 
-```rust
-// crates/pipeline/raw_sources/tests/generator_source_catalog.rs
-use deer_pipeline_raw_sources::{
-    bind_generator_source_kind, GeneratorProfile, GeneratorSourceKind, SourcePlanePolicy,
-    SourceStorageClass,
-};
+| Concern | Required contract |
+| --- | --- |
+| Physical storage | Hierarchies A and B physically exist across `L0`-`L6` |
+| Presentation hierarchy | Hierarchy C is query-only and starts at `C:L2` |
+| Minimum query surface | consumers query `C:L2` only |
+| Allowed `C:L2` inputs | `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6` only |
+| Presentation canon | named SQL views/materialized views plus refresh metadata |
+| Shell ownership | each shell declares required `C:L2` view ids explicitly |
 
-#[test]
-fn shared_source_catalog_classifies_generator_agnostic_source_kinds() {
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "thread_snapshot"),
-        Some(GeneratorSourceKind::SessionSnapshot)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "live_message"),
-        Some(GeneratorSourceKind::MessageEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "task_progress"),
-        Some(GeneratorSourceKind::TaskEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "artifact_presented"),
-        Some(GeneratorSourceKind::ArtifactEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "runtime_status"),
-        Some(GeneratorSourceKind::RuntimeEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "operator_intent"),
-        Some(GeneratorSourceKind::IntentEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "exclusion_intent"),
-        Some(GeneratorSourceKind::ExclusionEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "storage_backpressure"),
-        Some(GeneratorSourceKind::BackpressureEvent)
-    );
-    assert_eq!(
-        bind_generator_source_kind(GeneratorProfile::DeerFlow, "replay_checkpoint"),
-        Some(GeneratorSourceKind::ReplayCheckpointEvent)
-    );
-}
+### Shared A/B family ids that must exist after this task
 
-#[test]
-fn shared_source_catalog_exposes_storage_and_plane_policy() {
-    let artifact = GeneratorSourceKind::ArtifactEvent.spec();
-    assert_eq!(artifact.storage_class, SourceStorageClass::StorageNative);
-    assert_eq!(artifact.default_plane, SourcePlanePolicy::AsIsRequired);
-    assert!(artifact.requires_as_is_hash);
+| Family id | Hierarchy | Primary purpose | Minimum immutable keys |
+| --- | --- | --- | --- |
+| `a_session_snapshot` | A | observed session/thread snapshot | `generator_key`, `session_key`, `thread_key` |
+| `a_message_event` | A | observed message/activity event | `generator_key`, `message_key`, `thread_key`, `agent_key` |
+| `a_task_event` | A | observed task/progress event | `generator_key`, `task_key`, `thread_key`, `run_key` |
+| `a_artifact_event` | A | observed artifact lifecycle event | `generator_key`, `artifact_key`, `task_key`, `run_key` |
+| `a_runtime_event` | A | observed runtime/status event | `generator_key`, `run_key`, `agent_key` |
+| `a_intent_event` | A | observed human/system intent | `generator_key`, `intent_key`, `thread_key`, `actor_key` |
+| `a_exclusion_event` | A | observed exclusion/redaction event | `generator_key`, `exclusion_key`, `target_key` |
+| `a_replay_checkpoint` | A | observed replay boundary event | `generator_key`, `checkpoint_key`, `run_key` |
+| `a_backpressure_event` | A | observed storage/backpressure event | `generator_key`, `backpressure_key`, `run_key` |
+| `b_session` | B | normalized session row | `session_key`, `thread_key` |
+| `b_message` | B | normalized message row | `message_key`, `thread_key`, `agent_key` |
+| `b_task` | B | normalized task row | `task_key`, `thread_key`, `run_key` |
+| `b_artifact` | B | normalized artifact row | `artifact_key`, `task_key`, `run_key` |
+| `b_artifact_access` | B | normalized artifact access row | `artifact_key`, `access_key` |
+| `b_runtime_status` | B | normalized runtime status row | `run_key`, `agent_key` |
+| `b_intent` | B | normalized intent row | `intent_key`, `thread_key`, `actor_key` |
+| `b_exclusion` | B | normalized exclusion row | `exclusion_key`, `target_key` |
+| `b_conflict` | B | normalized conflict row | `conflict_key`, `target_key` |
+| `b_replay_window` | B | normalized replay window row | `thread_key`, `window_key` |
+| `b_replay_checkpoint` | B | normalized replay checkpoint row | `checkpoint_key`, `run_key` |
+| `b_backpressure` | B | normalized storage pressure row | `backpressure_key`, `run_key` |
+| `b_transform` | B | normalized lineage/transform row | `transform_key`, `target_key` |
 
-    let backpressure = GeneratorSourceKind::BackpressureEvent.spec();
-    assert_eq!(backpressure.storage_class, SourceStorageClass::OperationalLog);
-    assert_eq!(backpressure.default_plane, SourcePlanePolicy::AsIsRequired);
-}
-```
+### DeerFlow first-shell `C:L2` view ids that must be registered in this task
 
-```rust
-// crates/pipeline/normalizers/tests/generator_promotion_policy.rs
-use deer_foundation_contracts::{CanonicalLevel, CanonicalPlane, RecordFamily, StorageDisposition};
-use deer_pipeline_normalizers::{promotion_rule_for, PromotionStage};
-use deer_pipeline_raw_sources::{GeneratorProfile, GeneratorSourceKind};
+| View id | Grain | Required A/B inputs |
+| --- | --- | --- |
+| `c_l2_commander_sessions_v` | one row per session | `a_session_snapshot`, `b_session`, `b_runtime_status` |
+| `c_l2_commander_tasks_v` | one row per task | `a_task_event`, `b_task`, `b_runtime_status`, `b_exclusion` |
+| `c_l2_researcher_artifacts_v` | one row per artifact | `a_artifact_event`, `b_artifact`, `b_exclusion` |
+| `c_l2_thread_timeline_v` | one row per timeline event | `a_message_event`, `a_task_event`, `a_artifact_event`, `b_message`, `b_task`, `b_intent` |
+| `c_l2_shell_governance_v` | one row per governance event | `a_exclusion_event`, `a_replay_checkpoint`, `a_backpressure_event`, `b_exclusion`, `b_conflict`, `b_replay_checkpoint`, `b_transform` |
 
-#[test]
-fn promotion_policy_explicitly_maps_generator_source_kinds_to_canonical_targets() {
-    let artifact_rule = promotion_rule_for(GeneratorProfile::DeerFlow, GeneratorSourceKind::ArtifactEvent).unwrap();
-    assert_eq!(artifact_rule.stage, PromotionStage::Canonical);
-    assert_eq!(artifact_rule.target_family, RecordFamily::Artifact);
-    assert_eq!(artifact_rule.level, CanonicalLevel::L2);
-    assert_eq!(artifact_rule.plane, CanonicalPlane::AsIs);
-    assert_eq!(artifact_rule.storage, StorageDisposition::StorageNative);
+Every `C:L2` view definition must declare:
 
-    let exclusion_rule = promotion_rule_for(GeneratorProfile::DeerFlow, GeneratorSourceKind::ExclusionEvent).unwrap();
-    assert_eq!(exclusion_rule.target_family, RecordFamily::Exclusion);
-    assert_eq!(exclusion_rule.level, CanonicalLevel::L2);
+- `consumer_shell`
+- `view_id`
+- `sql_name`
+- `view_kind` (`VIEW` or `MATERIALIZED VIEW`)
+- `row_grain`
+- `required_join_keys`
+- `source_families`
+- `allowed_source_levels`
+- `projected_columns`
+- `abac_scope`
+- `exclusion_behavior`
+- `refresh_mode`, `refresh_watermark`, and `refresh_dependencies`
 
-    let checkpoint_rule = promotion_rule_for(GeneratorProfile::DeerFlow, GeneratorSourceKind::ReplayCheckpointEvent).unwrap();
-    assert_eq!(checkpoint_rule.target_family, RecordFamily::ReplayCheckpoint);
-    assert_eq!(checkpoint_rule.level, CanonicalLevel::L2);
-}
+- [ ] **Step 1: Write the failing storage-contract and view-catalog tests**
 
-#[test]
-fn promotion_policy_requires_l0_and_l1_before_l2_for_observed_objects() {
-    let task_progress_rule = promotion_rule_for(GeneratorProfile::DeerFlow, GeneratorSourceKind::TaskEvent).unwrap();
-    assert!(task_progress_rule.requires_l0_capture);
-    assert!(task_progress_rule.requires_l1_sanitization);
-    assert_eq!(task_progress_rule.level, CanonicalLevel::L2);
-}
-```
+Create tests that prove all of the following before any implementation exists:
 
-- [ ] **Step 2: Run the source catalog and promotion policy tests and confirm they fail**
+- the shared registry names the A and B families above and attaches each family to explicit allowed levels
+- consumer-facing access helpers reject direct reads from raw `L0/L1` families
+- DeerFlow binds to shared family ids instead of introducing DeerFlow-only families
+- each `C:L2` view listed above is registered with complete metadata
+- each registered `C:L2` contract depends only on `A:L2/L3/L4/L5/L6` and `B:L2/L3/L4/L5/L6`
 
-Run: `cargo test -p deer-pipeline-raw-sources --test generator_source_catalog -v && cargo test -p deer-pipeline-normalizers --test generator_promotion_policy -v`
+- [ ] **Step 2: Run the targeted tests and confirm they fail**
 
-Expected: FAIL with missing shared source catalog APIs, missing generator profiles/source kinds, and missing promotion policy exports.
+Run the raw-source contract test target and the `C:L2` view-catalog test target.
 
-- [ ] **Step 3: Implement the source catalog**
+Expected: failure because the A/B registry, consumer query guards, DeerFlow bindings, and `C:L2` SQL catalog do not exist yet.
 
-```rust
-// crates/pipeline/raw_sources/src/source_catalog.rs
-use serde::{Deserialize, Serialize};
+- [ ] **Step 3: Implement the shared A/B storage contract**
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GeneratorProfile {
-    DeerFlow,
-}
+Add `storage_contract.rs` with:
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GeneratorSourceKind {
-    SessionSnapshot,
-    MessageEvent,
-    TaskEvent,
-    ArtifactEvent,
-    RuntimeEvent,
-    IntentEvent,
-    ExclusionEvent,
-    BackpressureEvent,
-    ReplayCheckpointEvent,
-}
+- explicit family ids for the A/B registry above
+- hierarchy and allowed-level metadata for each family id
+- immutable keys, row grain, lineage anchors, and storage kind for each family id
+- DeerFlow-first binding hooks that map DeerFlow source shapes into the shared family ids without changing the registry surface
+- helpers that mark families as consumer-visible only through registered `C:L2` views
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SourceStorageClass {
-    StorageNative,
-    OperationalLog,
-    MediatedReadModel,
-}
+- [ ] **Step 4: Implement the shared C query contract and SQL catalog**
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SourcePlanePolicy {
-    AsIsRequired,
-    ChunksAllowed,
-    EmbeddingsAllowed,
-}
+Add `c_query_contract.rs` and `c_view_catalog.rs` with:
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GeneratorSourceSpec {
-    pub storage_class: SourceStorageClass,
-    pub default_plane: SourcePlanePolicy,
-    pub requires_as_is_hash: bool,
-}
+- a shell registry naming which `C:L2` view ids each shell requires
+- a `CViewContract` type carrying the full projection metadata listed above
+- explicit SQL text or SQL-builder output for each DeerFlow `C:L2` view listed in this task
+- validation that every view declares join keys, columns, ABAC/exclusion behavior, and refresh metadata
+- validation that every view reads only from allowed A/B levels and never from raw `L0/L1`
 
-impl GeneratorSourceKind {
-    pub fn spec(self) -> GeneratorSourceSpec {
-        match self {
-            Self::SessionSnapshot => GeneratorSourceSpec {
-                storage_class: SourceStorageClass::MediatedReadModel,
-                default_plane: SourcePlanePolicy::AsIsRequired,
-                requires_as_is_hash: false,
-            },
-            Self::MessageEvent | Self::TaskEvent | Self::ArtifactEvent => GeneratorSourceSpec {
-                storage_class: SourceStorageClass::StorageNative,
-                default_plane: SourcePlanePolicy::AsIsRequired,
-                requires_as_is_hash: true,
-            },
-            Self::RuntimeEvent | Self::BackpressureEvent | Self::ReplayCheckpointEvent => GeneratorSourceSpec {
-                storage_class: SourceStorageClass::OperationalLog,
-                default_plane: SourcePlanePolicy::AsIsRequired,
-                requires_as_is_hash: false,
-            },
-            Self::IntentEvent | Self::ExclusionEvent => GeneratorSourceSpec {
-                storage_class: SourceStorageClass::StorageNative,
-                default_plane: SourcePlanePolicy::AsIsRequired,
-                requires_as_is_hash: true,
-            },
-        }
-    }
-}
+- [ ] **Step 5: Re-run the targeted tests**
 
-pub fn bind_generator_source_kind(
-    profile: GeneratorProfile,
-    shape: &str,
-) -> Option<GeneratorSourceKind> {
-    match (profile, shape) {
-        (GeneratorProfile::DeerFlow, "thread_snapshot") => Some(GeneratorSourceKind::SessionSnapshot),
-        (GeneratorProfile::DeerFlow, "live_message") => Some(GeneratorSourceKind::MessageEvent),
-        (GeneratorProfile::DeerFlow, "task_progress") => Some(GeneratorSourceKind::TaskEvent),
-        (GeneratorProfile::DeerFlow, "artifact_presented") => Some(GeneratorSourceKind::ArtifactEvent),
-        (GeneratorProfile::DeerFlow, "runtime_status") => Some(GeneratorSourceKind::RuntimeEvent),
-        (GeneratorProfile::DeerFlow, "operator_intent") => Some(GeneratorSourceKind::IntentEvent),
-        (GeneratorProfile::DeerFlow, "exclusion_intent") => Some(GeneratorSourceKind::ExclusionEvent),
-        (GeneratorProfile::DeerFlow, "storage_backpressure") => Some(GeneratorSourceKind::BackpressureEvent),
-        (GeneratorProfile::DeerFlow, "replay_checkpoint") => Some(GeneratorSourceKind::ReplayCheckpointEvent),
-        _ => None,
-    }
-}
-```
+Re-run the raw-source contract and `C:L2` view-catalog tests.
 
-```rust
-// crates/pipeline/raw_sources/src/lib.rs
-pub mod source_catalog;
+Expected: pass with explicit A/B family definitions, consumer query restrictions, DeerFlow first-binding coverage, and a complete `C:L2` SQL contract catalog.
 
-pub use source_catalog::{
-    bind_generator_source_kind, GeneratorProfile, GeneratorSourceKind, GeneratorSourceSpec,
-    SourcePlanePolicy, SourceStorageClass,
-};
-```
+- [ ] **Step 6: Review the contract tables against the architecture invariants**
 
-- [ ] **Step 4: Implement the promotion policy**
+Verify all of the following are now true:
 
-```rust
-// crates/pipeline/normalizers/src/promotion_policy.rs
-use deer_foundation_contracts::{CanonicalLevel, CanonicalPlane, RecordFamily, StorageDisposition};
-use deer_pipeline_raw_sources::{GeneratorProfile, GeneratorSourceKind};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PromotionStage {
-    Capture,
-    Sanitization,
-    Canonical,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PromotionRule {
-    pub stage: PromotionStage,
-    pub target_family: RecordFamily,
-    pub level: CanonicalLevel,
-    pub plane: CanonicalPlane,
-    pub storage: StorageDisposition,
-    pub requires_l0_capture: bool,
-    pub requires_l1_sanitization: bool,
-}
-
-pub fn promotion_rule_for(
-    profile: GeneratorProfile,
-    source_kind: GeneratorSourceKind,
-) -> Option<PromotionRule> {
-    let rule = match (profile, source_kind) {
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::SessionSnapshot) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::Session,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::StorageNative,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::MessageEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::Message,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::StorageNative,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::TaskEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::Task,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::StorageNative,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::ArtifactEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::Artifact,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::StorageNative,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::RuntimeEvent)
-        | (GeneratorProfile::DeerFlow, GeneratorSourceKind::BackpressureEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::RuntimeStatus,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::IndexProjection,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::IntentEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::Intent,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::StorageNative,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::ExclusionEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::Exclusion,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::StorageNative,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-        (GeneratorProfile::DeerFlow, GeneratorSourceKind::ReplayCheckpointEvent) => PromotionRule {
-            stage: PromotionStage::Canonical,
-            target_family: RecordFamily::ReplayCheckpoint,
-            level: CanonicalLevel::L2,
-            plane: CanonicalPlane::AsIs,
-            storage: StorageDisposition::IndexProjection,
-            requires_l0_capture: true,
-            requires_l1_sanitization: true,
-        },
-    };
-
-    Some(rule)
-}
-```
-
-```rust
-// crates/pipeline/normalizers/src/lib.rs
-pub mod promotion_policy;
-
-pub use promotion_policy::{promotion_rule_for, PromotionRule, PromotionStage};
-```
-
-- [ ] **Step 5: Re-run the source catalog and promotion policy tests**
-
-Run: `cargo test -p deer-pipeline-raw-sources --test generator_source_catalog -v && cargo test -p deer-pipeline-normalizers --test generator_promotion_policy -v`
-
-Expected: PASS with explicit shared source classifications and named promotion rules covering the shared generator contract plus DeerFlow's first binding.
-
-- [ ] **Step 6: Commit the storage contract and promotion policy**
-
-```bash
-git add crates/pipeline/raw_sources/src/source_catalog.rs crates/pipeline/raw_sources/src/lib.rs crates/pipeline/raw_sources/tests/generator_source_catalog.rs crates/pipeline/normalizers/src/promotion_policy.rs crates/pipeline/normalizers/src/lib.rs crates/pipeline/normalizers/tests/generator_promotion_policy.rs
-git commit -m "feat: define shared generator storage contract"
-```
+- A and B are the only physical storage hierarchies in the contract
+- C exists only as registered `C:L2` SQL view contracts in this slice
+- no consumer shell depends on raw `L0/L1`
+- DeerFlow is only a binding layer on top of the shared contract
