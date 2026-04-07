@@ -9,7 +9,7 @@ The current `deer-storage-core` crate implements an ingestion protocol: it valid
 
 The existing `deer-storage-core` crate will be preserved as the ingestion protocol layer. Three new crates layer on top: `berg10-storage-catalog`, `berg10-storage-vfs`, and `berg10-warm-cache`.
 
-The platform uses `base_dir` as the root for all subsystems. The warm cache lives at `base_dir/checkouts/`. The catalog defaults to SQLite at `base_dir/catalog/iceberg.sqlite`. Content blobs are cached locally at `base_dir/content/`.
+The platform uses a user-configurable `base_dir` as the root for all subsystems. The warm cache lives at `base_dir/checkouts/`. The catalog defaults to SQLite at `base_dir/catalog/iceberg.sqlite`. Content blobs are cached locally at `base_dir/content/`.
 
 ## Goals / Non-Goals
 
@@ -89,15 +89,15 @@ The platform uses `base_dir` as the root for all subsystems. The warm cache live
 
 ## Risks / Trade-offs
 
-| Risk | Mitigation |
-|------|-----------|
-| Iceberg Rust 0.9.0 is pre-1.0; API changes possible | Pin exact versions; Iceberg spec is stable, so migration should be straightforward |
-| Symlinks not followed by some tools | Document limitation; add hardlink mode as future option for tools that need real files |
-| OpenDAL LakeFS backend is read-only | For writes, use LakeFS REST API directly via `lakefs-client-rust` crate |
-| SQLite catalog doesn't support concurrent writers | Use WAL mode; for multi-writer scenarios, use REST catalog with Lakekeeper |
-| Content cache can grow unbounded | Implement LRU eviction policy based on available disk space (future task) |
-| base58 encoding is slower than base64 | Negligible for hash encoding (32 bytes); correctness and readability matter more |
-| Iceberg tables require Arrow/Parquet dependencies | Acceptable — Arrow is already widely used in the data ecosystem |
+| Risk                                                | Mitigation                                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Iceberg Rust 0.9.0 is pre-1.0; API changes possible | Pin exact versions; Iceberg spec is stable, so migration should be straightforward     |
+| Symlinks not followed by some tools                 | Document limitation; add hardlink mode as future option for tools that need real files |
+| OpenDAL LakeFS backend is read-only                 | For writes, use LakeFS REST API directly via `lakefs-client-rust` crate                |
+| SQLite catalog doesn't support concurrent writers   | Use WAL mode; for multi-writer scenarios, use REST catalog with Lakekeeper             |
+| Content cache can grow unbounded                    | Implement LRU eviction policy based on available disk space (future task)              |
+| base58 encoding is slower than base64               | Negligible for hash encoding (32 bytes); correctness and readability matter more       |
+| Iceberg tables require Arrow/Parquet dependencies   | Acceptable — Arrow is already widely used in the data ecosystem                        |
 
 ## Migration Plan
 
