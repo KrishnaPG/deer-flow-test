@@ -5,10 +5,7 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn end_to_end_file_registration_and_query() {
     let tmp = TempDir::new().unwrap();
-    let config = CatalogConfig {
-        warehouse_path: tmp.path().to_string_lossy().to_string(),
-        ..Default::default()
-    };
+    let config = CatalogConfig::with_base_dir(tmp.path().to_str().unwrap());
 
     let catalog = Berg10Catalog::new(&config).await.unwrap();
 
@@ -38,10 +35,7 @@ async fn end_to_end_file_registration_and_query() {
 #[tokio::test]
 async fn end_to_end_virtual_folder_hierarchy_management() {
     let tmp = TempDir::new().unwrap();
-    let config = CatalogConfig {
-        warehouse_path: tmp.path().to_string_lossy().to_string(),
-        ..Default::default()
-    };
+    let config = CatalogConfig::with_base_dir(tmp.path().to_str().unwrap());
 
     let catalog = Berg10Catalog::new(&config).await.unwrap();
 

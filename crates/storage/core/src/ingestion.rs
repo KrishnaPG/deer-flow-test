@@ -1,5 +1,5 @@
 use berg10_storage_catalog::{Berg10Catalog, FileRecord};
-use berg10_storage_vfs::{hash_content, StorageBackend};
+use berg10_storage_vfs::StorageBackend;
 use chrono::Utc;
 use deer_foundation_contracts::{AppendDataRequest, CanonicalPlane, FileSaved};
 
@@ -25,13 +25,10 @@ impl IngestionBridge {
             }
         };
 
-        // Hash the content
-        let content_hash = hash_content(&payload_bytes);
-        let hash_str = content_hash.as_str().to_string();
-
-        // Write to VFS with hash-based key
-        self.vfs.write(&hash_str, payload_bytes.clone()).await
+        // Store content in VFS using content-addressed blob storage.
+        let content_hash = self.vfs.put_blob(payload_bytes.clone()).await
             .map_err(|e| format!("VFS write failed: {:?}", e))?;
+        let hash_str = content_hash.as_str().to_string();
 
         // Build virtual-folder-hierarchy-relative path
         let relative_path = build_relative_path(

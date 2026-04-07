@@ -3,6 +3,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::lakefs::LakeFsClient;
+use crate::content_addressing::{ContentHash, hash_content};
 
 #[derive(Error, Debug)]
 pub enum StorageError {
@@ -16,6 +17,8 @@ pub enum StorageError {
     LakeFsApi(String),
     #[error("content not found: {0}")]
     NotFound(String),
+    #[error("content hash already exists with immutable storage key: {0}")]
+    AlreadyExists(String),
 }
 
 #[derive(Debug, Clone)]
@@ -203,9 +206,22 @@ impl StorageBackend {
         Ok(op)
     }
 
+    /// Store content as an immutable blob keyed by its content hash.
+    #[instrument(skip(self, data), ret)]
+    pub async fn put_blob(&self, data: impl Into<Vec<u8>>) -> Result<ContentHash, StorageError> {
+        let data = data.into();
+        let hash = hash_content(&data);
+        self.write(hash.as_str(), data).await?;
+        Ok(hash)
+    }
+
     /// Write content to storage with the given key.
     #[instrument(skip(self, data), fields(key = key), ret)]
     pub async fn write(&self, key: &str, data: impl Into<Vec<u8>>) -> Result<(), StorageError> {
+        if self.exists(key).await? {
+            return Ok(());
+        }
+
         match &self.backend_type {
             BackendType::LakeFs => {
                 let client = self.lakefs_client.as_ref()
@@ -313,6 +329,28 @@ mod tests {
         let result = backend.read("nonexistent").await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), StorageError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn put_blob_returns_hash_and_stores_content() {
+        let config = StorageConfig::memory();
+        let backend = StorageBackend::new(&config).unwrap();
+
+        let hash = backend.put_blob(b"hello blob").await.unwrap();
+        let data = backend.read(hash.as_str()).await.unwrap();
+        assert_eq!(data, b"hello blob");
+    }
+
+    #[tokio::test]
+    async fn write_is_immutable_for_existing_key() {
+        let config = StorageConfig::memory();
+        let backend = StorageBackend::new(&config).unwrap();
+
+        backend.write("same-key", b"first").await.unwrap();
+        backend.write("same-key", b"second").await.unwrap();
+
+        let data = backend.read("same-key").await.unwrap();
+        assert_eq!(data, b"first");
     }
 
     #[test]
