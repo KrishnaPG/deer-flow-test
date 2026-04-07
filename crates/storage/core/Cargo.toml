@@ -7,4 +7,9 @@ edition = "2021"
 deer-foundation-contracts = { path = "../../foundation/contracts" }
 berg10-storage-catalog = { path = "../../berg10/storage-catalog" }
 berg10-storage-vfs = { path = "../../berg10/storage-vfs" }
+berg10-warm-cache = { path = "../../berg10/warm-cache" }
 chrono = { version = "0.4.44", features = ["clock", "serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

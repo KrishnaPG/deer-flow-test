@@ -85,4 +85,9 @@ impl IngestionBridge {
             hash_str,
         ))
     }
+
+    /// Deconstruct the bridge to recover catalog and VFS for downstream use.
+    pub fn into_parts(self) -> (Berg10Catalog, StorageBackend) {
+        (self.catalog, self.vfs)
+    }
 }
