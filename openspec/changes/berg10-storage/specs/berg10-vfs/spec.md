@@ -15,15 +15,15 @@ The VFS layer SHALL use OpenDAL (0.55.0) as the unified storage backend interfac
 - **WHEN** the storage backend configuration is changed from `s3` to `gcs`
 - **THEN** the VFS reinitializes with a GCS Operator without requiring code changes
 
-### Requirement: Content-addressed write
-The VFS SHALL store content using the content hash as the object key. When writing a file, the system SHALL compute `base58(blake3(payload))` and use the resulting string as the storage key.
+### Requirement: Content-addressed blob storage
+The VFS SHALL expose a `put_blob(bytes) -> ContentHash` API that computes `base58(blake3(payload))`, stores the content under that hash as the object key, and returns the `ContentHash`. Writes for an existing key SHALL be no-ops, enforcing immutability.
 
-#### Scenario: Write content and retrieve by hash
-- **WHEN** content is written to the VFS
+#### Scenario: Store blob and retrieve by returned hash
+- **WHEN** content is stored via `put_blob`
 - **THEN** it is stored at key `<b58_hash>` and can be retrieved using the same hash
 
 #### Scenario: Deduplicate identical content
-- **WHEN** the same content is written twice
+- **WHEN** the same content is stored twice via `put_blob`
 - **THEN** only one physical object exists in storage (identified by the same content hash)
 
 #### Scenario: Changed payload creates a new blob
@@ -39,14 +39,14 @@ The VFS SHALL support retrieving content by its base58-encoded blake3 hash. The 
 
 #### Scenario: Handle missing content
 - **WHEN** a retrieval request is made for a hash that does not exist in storage
-- **THEN** the VFS returns a not-found error
+- **THEN** the VFS returns a `NotFound` error
 
 #### Scenario: Retrieval does not require physical location
 - **WHEN** a caller needs to retrieve a blob
 - **THEN** the caller supplies `content_hash` directly and the VFS resolves the backend object without needing any external physical location metadata
 
 ### Requirement: OpenDAL middleware layers
-The VFS SHALL apply OpenDAL middleware layers for retry logic and tracing on storage operations.
+The VFS SHALL apply OpenDAL middleware layers for retry logic on storage operations. Tracing SHALL be applied via Rust `#[instrument]` attributes on the VFS API methods.
 
 #### Scenario: Automatic retry on transient failure
 - **WHEN** a storage operation fails with a transient error
@@ -54,10 +54,10 @@ The VFS SHALL apply OpenDAL middleware layers for retry logic and tracing on sto
 
 #### Scenario: Tracing on storage operations
 - **WHEN** a storage operation is executed
-- **THEN** the TracingLayer records OpenTelemetry spans for the operation
+- **THEN** the operation is traced via `#[instrument]` attributes
 
-### Requirement: LakeFS write support
-When LakeFS is the storage backend, the VFS SHALL use the LakeFS REST API for write operations that are not supported through the S3-compatible interface. Reads MAY continue to use the S3-compatible path where appropriate.
+### Requirement: LakeFS write support (deferred)
+When LakeFS is the storage backend, the VFS SHALL use the LakeFS REST API for write operations. Reads MAY continue to use the S3-compatible path where appropriate.
 
 #### Scenario: Write to LakeFS branch
 - **WHEN** content is written with LakeFS as the backend

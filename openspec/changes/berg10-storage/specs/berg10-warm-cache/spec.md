@@ -16,15 +16,15 @@ The warm cache SHALL materialize a virtual folder hierarchy as a symlink tree un
 - **THEN** both symlink trees exist under `base_dir/checkouts/` and reference the same underlying blobs in the warm-cache content store
 
 ### Requirement: Virtual folder hierarchy filter application
-When materializing a virtual folder hierarchy, the warm cache SHALL apply that hierarchy's filter expression to select which files from `berg10.files` are included in the checkout.
+When materializing a virtual folder hierarchy, the warm cache SHALL apply that hierarchy's filter expression to select which blobs from the catalog are included in the checkout.
 
 #### Scenario: Filter by payload_kind
 - **WHEN** a hierarchy with filter `payload_kind = 'mp3'` is checked out
-- **THEN** only files with `payload_kind = 'mp3'` are included in the symlink tree
+- **THEN** only blobs with `payload_kind = 'mp3'` are included in the symlink tree
 
 #### Scenario: Filter by routing tags
 - **WHEN** a hierarchy with filter `routing_tags['mission_id'] = 'mission_7'` is checked out
-- **THEN** only files tagged with that mission_id are included
+- **THEN** only blobs tagged with that mission_id are included
 
 ### Requirement: Virtual folder hierarchy lifecycle management
 The warm cache SHALL support listing, activating, deactivating, and removing virtual folder hierarchy checkouts. The UI SHALL be able to manage currently active checkouts through the warm cache API.
@@ -47,7 +47,7 @@ The warm cache SHALL ensure that content blobs exist in `base_dir/content/` befo
 The local warm-cache blob path SHALL be sharded by hash as `base_dir/content/<hash[0..2]>/<hash[2..4]>/<hash[4..]>.blob`.
 
 #### Scenario: Lazy content fetch on checkout
-- **WHEN** a hierarchy is checked out and a file's content blob is not in the local content cache
+- **WHEN** a hierarchy is checked out and a blob's content is not in the local content cache
 - **THEN** the blob is fetched from cold storage via the VFS using `content_hash` and stored at `base_dir/content/<hash[0..2]>/<hash[2..4]>/<hash[4..]>.blob` before the symlink is created
 
 #### Scenario: Reuse cached content
@@ -66,11 +66,11 @@ The leaf filename exposed in a checked out virtual folder hierarchy SHALL be a u
 - **THEN** the symlink path exposed to the user ends in `song1.mp3` while the symlink target points to `base_dir/content/<hash[0..2]>/<hash[2..4]>/<hash[4..]>.blob`
 
 ### Requirement: Virtual folder hierarchies are optional user convenience
-Virtual folder hierarchies SHALL exist for direct human access and interoperability with filesystem-oriented tools. Tools and apps SHALL be able to work directly with Iceberg metadata or `content_hash` without requiring any hierarchy checkout.
+Virtual folder hierarchies SHALL exist for direct human access and interoperability with filesystem-oriented tools. Tools and apps SHALL be able to work directly with catalog metadata or `content_hash` without requiring any hierarchy checkout.
 
 #### Scenario: Programmatic access bypasses hierarchy checkout
 - **WHEN** an application needs to work with stored content programmatically
-- **THEN** it MAY query the Iceberg catalog or fetch blobs directly by `content_hash` without creating any virtual folder hierarchy checkout
+- **THEN** it MAY query the catalog or fetch blobs directly by `content_hash` without creating any virtual folder hierarchy checkout
 
 ### Requirement: Third-party tool compatibility
 The warm cache checkout directories SHALL be readable by third-party tools (DuckDB, ClickHouse, etc.) as regular filesystem directories. Symlinks SHALL be followed by default by these tools.
