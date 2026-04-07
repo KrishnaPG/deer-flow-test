@@ -100,6 +100,7 @@ impl StorageConfig {
 }
 
 /// Pluggable storage backend wrapping OpenDAL Operator.
+#[derive(Clone)]
 pub struct StorageBackend {
     operator: Operator,
     backend_type: BackendType,

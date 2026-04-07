@@ -10,6 +10,7 @@ use crate::config::{CatalogBackendConfig, CatalogConfig};
 use crate::types::FileRecord;
 use crate::types::VirtualFolderHierarchy;
 
+#[derive(Clone)]
 pub struct Berg10Catalog {
     pool: Pool<Sqlite>,
 }
