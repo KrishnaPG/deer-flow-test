@@ -67,9 +67,9 @@ fn records_to_batch(records: &[FileRecord]) -> (SchemaRef, RecordBatch) {
     let mut payload_kind_builder = StringBuilder::new();
     let mut payload_format_builder = StringBuilder::new();
     let mut payload_size_builder = Int64Builder::new();
-    let mut physical_location_builder = StringBuilder::new();
     let mut written_at_builder = TimestampMillisecondBuilder::new();
     let mut writer_identity_builder = StringBuilder::new();
+    let mut logical_filename_builder = StringBuilder::new();
 
     for r in records {
         content_hash_builder.append_value(&r.content_hash);
@@ -79,9 +79,9 @@ fn records_to_batch(records: &[FileRecord]) -> (SchemaRef, RecordBatch) {
         payload_kind_builder.append_value(&r.payload_kind);
         payload_format_builder.append_value(&r.payload_format);
         payload_size_builder.append_value(r.payload_size_bytes as i64);
-        physical_location_builder.append_value(&r.physical_location);
         written_at_builder.append_value(r.written_at.timestamp_millis());
         writer_identity_builder.append_value(r.writer_identity.as_deref().unwrap_or(""));
+        logical_filename_builder.append_value(r.logical_filename.as_deref().unwrap_or(""));
     }
 
     let schema = arrow_schema::SchemaRef::new(arrow_schema::Schema::new(vec![
@@ -92,9 +92,9 @@ fn records_to_batch(records: &[FileRecord]) -> (SchemaRef, RecordBatch) {
         arrow_schema::Field::new("payload_kind", arrow_schema::DataType::Utf8, false),
         arrow_schema::Field::new("payload_format", arrow_schema::DataType::Utf8, false),
         arrow_schema::Field::new("payload_size_bytes", arrow_schema::DataType::Int64, false),
-        arrow_schema::Field::new("physical_location", arrow_schema::DataType::Utf8, false),
         arrow_schema::Field::new("written_at", arrow_schema::DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None), false),
         arrow_schema::Field::new("writer_identity", arrow_schema::DataType::Utf8, false),
+        arrow_schema::Field::new("logical_filename", arrow_schema::DataType::Utf8, false),
     ]));
 
     let batch = RecordBatch::try_new(
@@ -107,9 +107,9 @@ fn records_to_batch(records: &[FileRecord]) -> (SchemaRef, RecordBatch) {
             Arc::new(payload_kind_builder.finish()),
             Arc::new(payload_format_builder.finish()),
             Arc::new(payload_size_builder.finish()),
-            Arc::new(physical_location_builder.finish()),
             Arc::new(written_at_builder.finish()),
             Arc::new(writer_identity_builder.finish()),
+            Arc::new(logical_filename_builder.finish()),
         ],
     ).unwrap();
 
@@ -128,9 +128,9 @@ fn batches_to_records(batches: &[RecordBatch]) -> DfResult<Vec<FileRecord>> {
         let payload_kind = batch.column(4).as_string::<i32>();
         let payload_format = batch.column(5).as_string::<i32>();
         let payload_size = batch.column(6).as_primitive::<arrow_array::types::Int64Type>();
-        let physical_location = batch.column(7).as_string::<i32>();
-        let written_at = batch.column(8).as_primitive::<arrow_array::types::TimestampMillisecondType>();
-        let writer_identity = batch.column(9).as_string::<i32>();
+        let written_at = batch.column(7).as_primitive::<arrow_array::types::TimestampMillisecondType>();
+        let writer_identity = batch.column(8).as_string::<i32>();
+        let logical_filename = batch.column(9).as_string::<i32>();
 
         for i in 0..num_rows {
             let written_at_ts = chrono::DateTime::from_timestamp_millis(
@@ -145,7 +145,6 @@ fn batches_to_records(batches: &[RecordBatch]) -> DfResult<Vec<FileRecord>> {
                 payload_kind: payload_kind.value(i).to_string(),
                 payload_format: payload_format.value(i).to_string(),
                 payload_size_bytes: payload_size.value(i) as u64,
-                physical_location: physical_location.value(i).to_string(),
                 correlation_ids: Vec::new(),
                 lineage_refs: Vec::new(),
                 routing_tags: Vec::new(),
@@ -156,6 +155,14 @@ fn batches_to_records(batches: &[RecordBatch]) -> DfResult<Vec<FileRecord>> {
                         None
                     } else {
                         Some(wi.to_string())
+                    }
+                },
+                logical_filename: {
+                    let name = logical_filename.value(i);
+                    if name.is_empty() {
+                        None
+                    } else {
+                        Some(name.to_string())
                     }
                 },
             });
@@ -181,12 +188,12 @@ mod tests {
                 payload_kind: "mp3".to_string(),
                 payload_format: "mp3".to_string(),
                 payload_size_bytes: 100,
-                physical_location: "s3://bucket/hash1".to_string(),
                 correlation_ids: vec![("k1".to_string(), "v1".to_string())],
                 lineage_refs: vec![],
                 routing_tags: vec![],
                 written_at: chrono::Utc::now(),
                 writer_identity: None,
+                logical_filename: Some("hash1.mp3".to_string()),
             },
             FileRecord {
                 content_hash: "hash2".to_string(),
@@ -196,12 +203,12 @@ mod tests {
                 payload_kind: "mp3".to_string(),
                 payload_format: "mp3".to_string(),
                 payload_size_bytes: 200,
-                physical_location: "s3://bucket/hash2".to_string(),
                 correlation_ids: vec![],
                 lineage_refs: vec!["parent1".to_string()],
                 routing_tags: vec![("singer".to_string(), "Adele".to_string())],
                 written_at: chrono::Utc::now(),
                 writer_identity: Some("writer1".to_string()),
+                logical_filename: Some("hash2.mp3".to_string()),
             },
         ];
 

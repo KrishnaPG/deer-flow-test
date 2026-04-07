@@ -112,9 +112,7 @@ impl WarmCache {
             return Ok(());
         }
 
-        let key = Self::extract_key_from_location(&file.physical_location);
-
-        let data = self.vfs.read(&key).await?;
+        let data = self.vfs.read(&file.content_hash).await?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -122,31 +120,6 @@ impl WarmCache {
         tracing::debug!(content_hash = %file.content_hash, "Fetched content from cold storage");
 
         Ok(())
-    }
-
-    /// Extract storage key from physical location URI.
-    fn extract_key_from_location(location: &str) -> String {
-        match location.split_once("://") {
-            Some(("s3" | "s3a" | "s3n", rest)) => {
-                let parts: Vec<&str> = rest.splitn(2, '/').collect();
-                if parts.len() == 2 {
-                    parts[1].to_string()
-                } else {
-                    rest.to_string()
-                }
-            }
-            Some(("file", rest)) => rest.to_string(),
-            Some(("lakefs", rest)) => {
-                let parts: Vec<&str> = rest.splitn(3, '/').collect();
-                if parts.len() >= 3 {
-                    format!("{}/{}", parts[1], parts[2])
-                } else {
-                    rest.to_string()
-                }
-            }
-            Some((_scheme, rest)) => rest.to_string(),
-            None => location.to_string(),
-        }
     }
 
     /// Build the symlink path within the checkout directory based on hierarchy order.
@@ -175,8 +148,11 @@ impl WarmCache {
             }
         }
 
-        // Add filename
-        parts.push(format!("{}.{}", file.content_hash, file.payload_format));
+        let filename = file
+            .logical_filename
+            .clone()
+            .unwrap_or_else(|| format!("{}.{}", file.content_hash, file.payload_format));
+        parts.push(filename);
 
         parts.join("/")
     }
@@ -270,18 +246,10 @@ mod tests {
     }
 
     #[test]
-    fn extract_key_from_location_handles_schemes() {
-        assert_eq!(WarmCache::extract_key_from_location("s3://berg10-storage/abc123"), "abc123");
-        assert_eq!(WarmCache::extract_key_from_location("file:///data/abc123"), "/data/abc123");
-        assert_eq!(WarmCache::extract_key_from_location("lakefs://repo/main/abc123"), "main/abc123");
-        assert_eq!(WarmCache::extract_key_from_location("s3://bucket/nested/path/file.dat"), "nested/path/file.dat");
-    }
-
-    #[test]
     fn config_paths_are_correct() {
         let config = WarmCacheConfig::with_base_dir("/base");
         assert_eq!(config.checkout_path("my-view"), "/base/checkouts/my-view");
-        assert_eq!(config.content_path("abc123"), "/base/content/abc123");
+        assert_eq!(config.content_path("abc123"), "/base/content/ab/c1/23.blob");
     }
 
     #[test]
@@ -294,24 +262,24 @@ mod tests {
             payload_kind: "mp3".to_string(),
             payload_format: "mp3".to_string(),
             payload_size_bytes: 1000,
-            physical_location: "s3://test/abc123".to_string(),
             correlation_ids: vec![],
             lineage_refs: vec![],
             routing_tags: vec![("year".to_string(), "2024".to_string()), ("singer".to_string(), "Adele".to_string())],
             written_at: Utc::now(),
             writer_identity: Some("test".to_string()),
+            logical_filename: Some("song1.mp3".to_string()),
         };
 
         // Test year-first hierarchy
         let path = WarmCache::build_view_path(&file, &["year".to_string(), "singer".to_string()]);
-        assert_eq!(path, "2024/adele/abc123.mp3");
+        assert_eq!(path, "2024/adele/song1.mp3");
 
         // Test singer-first hierarchy
         let path = WarmCache::build_view_path(&file, &["singer".to_string(), "year".to_string()]);
-        assert_eq!(path, "adele/2024/abc123.mp3");
+        assert_eq!(path, "adele/2024/song1.mp3");
 
         // Test with standard hierarchy
         let path = WarmCache::build_view_path(&file, &["hierarchy".to_string(), "level".to_string(), "plane".to_string()]);
-        assert_eq!(path, "a/l0/as-is/abc123.mp3");
+        assert_eq!(path, "a/l0/as-is/song1.mp3");
     }
 }

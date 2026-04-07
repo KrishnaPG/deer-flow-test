@@ -31,6 +31,24 @@ impl WarmCacheConfig {
     }
 
     pub fn content_path(&self, content_hash: &str) -> String {
-        format!("{}/{}", self.content_dir, content_hash)
+        let first = &content_hash[0..content_hash.len().min(2)];
+        let second = if content_hash.len() > 2 {
+            &content_hash[2..content_hash.len().min(4)]
+        } else {
+            ""
+        };
+        let rest = if content_hash.len() > 4 {
+            &content_hash[4..]
+        } else {
+            ""
+        };
+
+        if second.is_empty() {
+            format!("{}/{}.blob", self.content_dir, first)
+        } else if rest.is_empty() {
+            format!("{}/{}/{}.blob", self.content_dir, first, second)
+        } else {
+            format!("{}/{}/{}/{}.blob", self.content_dir, first, second, rest)
+        }
     }
 }

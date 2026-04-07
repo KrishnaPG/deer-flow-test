@@ -9,7 +9,6 @@ fn manifest_trigger_uses_manifest_target_not_partial_members() {
         vec!["parent_1".into()],
         vec![("date".into(), "2026-04-04".into())],
         "7bWpKq9xR3mNvHf2Tc8Yd".to_string(),
-        "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd".to_string(),
     );
     assert_eq!(
         trigger.relative_target,

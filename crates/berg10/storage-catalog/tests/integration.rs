@@ -20,19 +20,19 @@ async fn end_to_end_file_registration_and_query() {
         payload_kind: "chat-note".to_string(),
         payload_format: "jsonl".to_string(),
         payload_size_bytes: 42,
-        physical_location: "s3://berg10-storage/test_hash_e2e".to_string(),
         correlation_ids: vec![("mission_id".to_string(), "m1".to_string())],
         lineage_refs: vec!["parent_1".to_string()],
         routing_tags: vec![("env".to_string(), "test".to_string())],
         written_at: Utc::now(),
         writer_identity: Some("integration-test".to_string()),
+        logical_filename: Some("note.jsonl".to_string()),
     };
 
     catalog.register_file(&record).await.unwrap();
     let retrieved = catalog.get_file("test_hash_e2e").await.unwrap().unwrap();
     assert_eq!(retrieved.content_hash, "test_hash_e2e");
     assert_eq!(retrieved.payload_kind, "chat-note");
-    assert_eq!(retrieved.physical_location, "s3://berg10-storage/test_hash_e2e");
+    assert_eq!(retrieved.logical_filename.as_deref(), Some("note.jsonl"));
 }
 
 #[tokio::test]
