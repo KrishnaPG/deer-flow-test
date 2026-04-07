@@ -103,10 +103,6 @@ impl WarmCache {
         })
     }
 
-    pub async fn checkout(&self, hierarchy_name: &str) -> Result<HierarchyCheckoutReceipt> {
-        self.checkout_hierarchy(hierarchy_name).await
-    }
-
     /// Ensure content blob exists in local cache, fetching from cold storage if needed.
     async fn ensure_content_cached(&self, file: &FileRecord) -> Result<()> {
         let content_path = self.config.content_path(&file.content_hash);
