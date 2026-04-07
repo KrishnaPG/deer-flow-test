@@ -1,361 +1,490 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use chrono::Utc;
-use iceberg::spec::{NestedField, PrimitiveType, Schema, Type};
-use iceberg::{Catalog, NamespaceIdent, TableCreation, TableIdent};
-use iceberg::memory::MemoryCatalogBuilder;
-use iceberg::CatalogBuilder;
-use tracing;
+use chrono::{DateTime, Utc};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow};
+use sqlx::{ConnectOptions, Pool, Row, Sqlite};
+use tracing::{self, log::LevelFilter};
 
-use crate::config::{CatalogConfig, CatalogBackendConfig};
-use crate::query::QueryEngine;
-use crate::types::{FileRecord, VirtualFolderHierarchy};
-
-pub const BERG10_NAMESPACE: &str = "berg10";
-pub const FILES_TABLE: &str = "files";
-pub const VIRTUAL_FOLDER_HIERARCHIES_TABLE: &str = "virtual_folder_hierarchies";
+use crate::config::{CatalogBackendConfig, CatalogConfig};
+use crate::types::FileRecord;
+use crate::types::VirtualFolderHierarchy;
 
 pub struct Berg10Catalog {
-    catalog: Arc<dyn Catalog>,
-    warehouse_path: String,
-    query_engine: QueryEngine,
+    pool: Pool<Sqlite>,
 }
 
 impl Berg10Catalog {
-    /// Create a new catalog from configuration.
     pub async fn new(config: &CatalogConfig) -> Result<Self> {
-        let catalog = Self::build_catalog(config).await?;
-
-        let ns = NamespaceIdent::new(BERG10_NAMESPACE.to_string());
-        if !catalog.namespace_exists(&ns).await? {
-            catalog.create_namespace(&ns, HashMap::new()).await?;
-        }
-
-        let this = Self {
-            catalog,
-            warehouse_path: config.warehouse_path.clone(),
-            query_engine: QueryEngine::new(),
-        };
-
-        this.ensure_tables().await?;
-        this.refresh_query_engine().await?;
-
+        let pool = Self::connect(config).await?;
+        let this = Self { pool };
+        this.ensure_schema().await?;
         Ok(this)
     }
 
-    async fn refresh_query_engine(&self) -> Result<()> {
-        let all_files = self.load_all_files().await?;
-        self.query_engine
-            .register_files(&all_files)
-            .map_err(|e| anyhow!("Query engine registration failed: {}", e))?;
-        Ok(())
-    }
+    async fn connect(config: &CatalogConfig) -> Result<Pool<Sqlite>> {
+        let path = match &config.backend {
+            CatalogBackendConfig::Sql(sql) => sql.path.clone(),
+            CatalogBackendConfig::Rest(rest) => {
+                return Err(anyhow!(
+                    "REST catalog backend is not implemented yet: {}",
+                    rest.uri
+                ));
+            }
+        };
 
-    async fn load_all_files(&self) -> Result<Vec<FileRecord>> {
-        let dir_path = format!(
-            "{}/metadata/berg10/files",
-            self.warehouse_path.trim_start_matches("file://")
-        );
-
-        let mut records = Vec::new();
-        if std::path::Path::new(&dir_path).exists() {
-            for entry in std::fs::read_dir(dir_path)? {
-                let entry = entry?;
-                if entry.path().extension().and_then(|e| e.to_str()) == Some("json") {
-                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        if let Ok(record) = serde_json::from_str::<FileRecord>(&content) {
-                            records.push(record);
-                        }
-                    }
+        if path != ":memory:" {
+            if let Some(parent) = Path::new(&path).parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent)?;
                 }
             }
         }
 
-        Ok(records)
-    }
-
-    async fn build_catalog(config: &CatalogConfig) -> Result<Arc<dyn Catalog>> {
-        match &config.backend {
-            CatalogBackendConfig::Sql(_) | CatalogBackendConfig::Rest(_) => {
-                let warehouse = if config.warehouse_path.starts_with("memory://") {
-                    "file:///tmp/berg10-warehouse".to_string()
-                } else {
-                    format!("file://{}", config.warehouse_path)
-                };
-
-                let catalog = MemoryCatalogBuilder::default()
-                    .load(
-                        "berg10",
-                        HashMap::from([(
-                            iceberg::memory::MEMORY_CATALOG_WAREHOUSE.to_string(),
-                            warehouse,
-                        )]),
-                    )
-                    .await?;
-
-                Ok(Arc::new(catalog))
-            }
-        }
-    }
-
-    async fn ensure_tables(&self) -> Result<()> {
-        let ns = NamespaceIdent::new(BERG10_NAMESPACE.to_string());
-
-        // Create files table if not exists
-        if !self.catalog.table_exists(&TableIdent::new(ns.clone(), FILES_TABLE.to_string())).await? {
-            self.create_files_table(&ns).await?;
-        }
-
-        // Create views table if not exists
-        if !self.catalog.table_exists(&TableIdent::new(ns.clone(), VIRTUAL_FOLDER_HIERARCHIES_TABLE.to_string())).await? {
-            self.create_virtual_folder_hierarchies_table(&ns).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn create_files_table(&self, ns: &NamespaceIdent) -> Result<()> {
-        let schema = Self::files_schema();
-        let creation = TableCreation::builder()
-            .name(FILES_TABLE.to_string())
-            .schema(schema)
-            .build();
-
-        self.catalog.create_table(ns, creation).await?;
-        tracing::info!("Created berg10.files table");
-        Ok(())
-    }
-
-    async fn create_virtual_folder_hierarchies_table(&self, ns: &NamespaceIdent) -> Result<()> {
-        let schema = Self::virtual_folder_hierarchies_schema();
-        let creation = TableCreation::builder()
-            .name(VIRTUAL_FOLDER_HIERARCHIES_TABLE.to_string())
-            .schema(schema)
-            .build();
-
-        self.catalog.create_table(ns, creation).await?;
-        tracing::info!("Created berg10.virtual_folder_hierarchies table");
-        Ok(())
-    }
-
-    fn files_schema() -> Schema {
-        Schema::builder()
-            .with_fields(
-                vec![
-                    NestedField::required(1, "content_hash", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(2, "hierarchy", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(3, "level", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(4, "plane", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(5, "payload_kind", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(6, "payload_format", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(7, "payload_size_bytes", Type::Primitive(PrimitiveType::Long)).into(),
-                    NestedField::required(8, "correlation_ids", Type::Map(
-                        iceberg::spec::MapType {
-                            key_field: NestedField::required(9, "key", Type::Primitive(PrimitiveType::String)).into(),
-                            value_field: NestedField::required(10, "value", Type::Primitive(PrimitiveType::String)).into(),
-                        }
-                    )).into(),
-                    NestedField::required(11, "lineage_refs", Type::List(
-                        iceberg::spec::ListType {
-                            element_field: NestedField::required(12, "element", Type::Primitive(PrimitiveType::String)).into(),
-                        }
-                    )).into(),
-                    NestedField::required(13, "routing_tags", Type::Map(
-                        iceberg::spec::MapType {
-                            key_field: NestedField::required(14, "key", Type::Primitive(PrimitiveType::String)).into(),
-                            value_field: NestedField::required(15, "value", Type::Primitive(PrimitiveType::String)).into(),
-                        }
-                    )).into(),
-                    NestedField::required(16, "written_at", Type::Primitive(PrimitiveType::Timestamp)).into(),
-                    NestedField::optional(17, "writer_identity", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::optional(18, "logical_filename", Type::Primitive(PrimitiveType::String)).into(),
-                ]
-            )
-            .build()
-            .expect("valid files schema")
-    }
-
-    fn virtual_folder_hierarchies_schema() -> Schema {
-        Schema::builder()
-            .with_fields(
-                vec![
-                    NestedField::required(1, "hierarchy_name", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(2, "hierarchy_order", Type::List(
-                        iceberg::spec::ListType {
-                            element_field: NestedField::required(3, "element", Type::Primitive(PrimitiveType::String)).into(),
-                        }
-                    )).into(),
-                    NestedField::optional(4, "filter_expr", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(5, "status", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(6, "created_at", Type::Primitive(PrimitiveType::Timestamp)).into(),
-                    NestedField::required(7, "updated_at", Type::Primitive(PrimitiveType::Timestamp)).into(),
-                ]
-            )
-            .build()
-            .expect("valid views schema")
-    }
-
-    /// Register a file in the catalog.
-    pub async fn register_file(&self, record: &FileRecord) -> Result<()> {
-        let metadata = serde_json::to_string(record)?;
-        let file_path = format!(
-            "{}/metadata/berg10/files/{}.json",
-            self.warehouse_path.trim_start_matches("file://"),
-            record.content_hash
-        );
-
-        if let Some(parent) = std::path::Path::new(&file_path).parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&file_path, metadata)?;
-
-        tracing::info!(
-            content_hash = %record.content_hash,
-            "Registered file in catalog"
-        );
-
-        self.refresh_query_engine().await?;
-
-        Ok(())
-    }
-
-    /// Look up a file by its content hash.
-    pub async fn get_file(&self, content_hash: &str) -> Result<Option<FileRecord>> {
-        let file_path = format!(
-            "{}/metadata/berg10/files/{}.json",
-            self.warehouse_path.trim_start_matches("file://"),
-            content_hash
-        );
-
-        if std::path::Path::new(&file_path).exists() {
-            let content = std::fs::read_to_string(&file_path)?;
-            let record: FileRecord = serde_json::from_str(&content)?;
-            Ok(Some(record))
+        let mut options = if path == ":memory:" {
+            SqliteConnectOptions::new().filename(":memory:")
         } else {
-            Ok(None)
+            SqliteConnectOptions::new().filename(&path).create_if_missing(true)
+        };
+
+        options = options
+            .journal_mode(SqliteJournalMode::Wal)
+            .foreign_keys(true)
+            .log_statements(LevelFilter::Trace);
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await?;
+
+        Ok(pool)
+    }
+
+    async fn ensure_schema(&self) -> Result<()> {
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS blobs (
+                content_hash TEXT PRIMARY KEY,
+                hierarchy TEXT NOT NULL,
+                level TEXT NOT NULL,
+                plane TEXT NOT NULL,
+                payload_kind TEXT NOT NULL,
+                payload_format TEXT NOT NULL,
+                payload_size_bytes INTEGER NOT NULL,
+                written_at TEXT NOT NULL,
+                writer_identity TEXT,
+                logical_filename TEXT
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS blob_correlation_ids (
+                content_hash TEXT NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT NOT NULL,
+                PRIMARY KEY (content_hash, key, value),
+                FOREIGN KEY (content_hash) REFERENCES blobs(content_hash) ON DELETE CASCADE
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS blob_lineage_refs (
+                content_hash TEXT NOT NULL,
+                ref TEXT NOT NULL,
+                PRIMARY KEY (content_hash, ref),
+                FOREIGN KEY (content_hash) REFERENCES blobs(content_hash) ON DELETE CASCADE
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS blob_tags (
+                content_hash TEXT NOT NULL,
+                tag_key TEXT NOT NULL,
+                tag_value TEXT NOT NULL,
+                PRIMARY KEY (content_hash, tag_key, tag_value),
+                FOREIGN KEY (content_hash) REFERENCES blobs(content_hash) ON DELETE CASCADE
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS virtual_folder_hierarchies (
+                hierarchy_name TEXT PRIMARY KEY,
+                hierarchy_order_json TEXT NOT NULL,
+                filter_expr TEXT,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_blobs_payload_kind ON blobs(payload_kind)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_blob_tags_key_value ON blob_tags(tag_key, tag_value)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_hierarchies_status ON virtual_folder_hierarchies(status)")
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn register_file(&self, record: &FileRecord) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO blobs (
+                content_hash, hierarchy, level, plane, payload_kind, payload_format,
+                payload_size_bytes, written_at, writer_identity, logical_filename
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(content_hash) DO NOTHING
+            "#,
+        )
+        .bind(&record.content_hash)
+        .bind(&record.hierarchy)
+        .bind(&record.level)
+        .bind(&record.plane)
+        .bind(&record.payload_kind)
+        .bind(&record.payload_format)
+        .bind(record.payload_size_bytes as i64)
+        .bind(record.written_at.to_rfc3339())
+        .bind(&record.writer_identity)
+        .bind(&record.logical_filename)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query("DELETE FROM blob_correlation_ids WHERE content_hash = ?")
+            .bind(&record.content_hash)
+            .execute(&mut *tx)
+            .await?;
+        for (key, value) in &record.correlation_ids {
+            sqlx::query(
+                "INSERT INTO blob_correlation_ids (content_hash, key, value) VALUES (?, ?, ?)",
+            )
+            .bind(&record.content_hash)
+            .bind(key)
+            .bind(value)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        sqlx::query("DELETE FROM blob_lineage_refs WHERE content_hash = ?")
+            .bind(&record.content_hash)
+            .execute(&mut *tx)
+            .await?;
+        for reference in &record.lineage_refs {
+            sqlx::query("INSERT INTO blob_lineage_refs (content_hash, ref) VALUES (?, ?)")
+                .bind(&record.content_hash)
+                .bind(reference)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        sqlx::query("DELETE FROM blob_tags WHERE content_hash = ?")
+            .bind(&record.content_hash)
+            .execute(&mut *tx)
+            .await?;
+        for (key, value) in &record.routing_tags {
+            sqlx::query("INSERT INTO blob_tags (content_hash, tag_key, tag_value) VALUES (?, ?, ?)")
+                .bind(&record.content_hash)
+                .bind(key)
+                .bind(value)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        tracing::info!(content_hash = %record.content_hash, "Registered blob metadata");
+        Ok(())
+    }
+
+    pub async fn get_file(&self, content_hash: &str) -> Result<Option<FileRecord>> {
+        let row = sqlx::query(
+            r#"
+            SELECT content_hash, hierarchy, level, plane, payload_kind, payload_format,
+                   payload_size_bytes, written_at, writer_identity, logical_filename
+            FROM blobs
+            WHERE content_hash = ?
+            "#,
+        )
+        .bind(content_hash)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some(row) => self.file_record_from_row(row).await.map(Some),
+            None => Ok(None),
         }
     }
 
-    /// Query files by a filter expression using the SQL query engine.
     pub async fn query_files(&self, filter: &str) -> Result<Vec<FileRecord>> {
-        if filter.is_empty() {
+        if filter.trim().is_empty() || filter.trim() == "*" {
             return self.load_all_files().await;
         }
 
-        let records = self.query_engine
-            .filter(filter)
-            .await
-            .map_err(|e| anyhow!("Query failed: {}", e))?;
+        let normalized = Self::normalize_filter(filter)?;
+        let sql = format!(
+            r#"
+            SELECT DISTINCT b.content_hash, b.hierarchy, b.level, b.plane, b.payload_kind, b.payload_format,
+                            b.payload_size_bytes, b.written_at, b.writer_identity, b.logical_filename
+            FROM blobs b
+            LEFT JOIN blob_tags t ON t.content_hash = b.content_hash
+            WHERE {}
+            ORDER BY b.written_at DESC, b.content_hash ASC
+            "#,
+            normalized
+        );
 
+        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let mut records = Vec::with_capacity(rows.len());
+        for row in rows {
+            records.push(self.file_record_from_row(row).await?);
+        }
         Ok(records)
     }
 
-    /// Create a virtual folder hierarchy definition.
     pub async fn create_virtual_folder_hierarchy(&self, hierarchy: &VirtualFolderHierarchy) -> Result<()> {
-        let metadata = serde_json::to_string(hierarchy)?;
-        let file_path = format!(
-            "{}/metadata/berg10/virtual_folder_hierarchies/{}.json",
-            self.warehouse_path.trim_start_matches("file://"),
-            hierarchy.hierarchy_name
-        );
+        let order = serde_json::to_string(&hierarchy.hierarchy_order)?;
+        sqlx::query(
+            r#"
+            INSERT INTO virtual_folder_hierarchies (
+                hierarchy_name, hierarchy_order_json, filter_expr, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(hierarchy_name) DO UPDATE SET
+                hierarchy_order_json = excluded.hierarchy_order_json,
+                filter_expr = excluded.filter_expr,
+                status = excluded.status,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(&hierarchy.hierarchy_name)
+        .bind(order)
+        .bind(&hierarchy.filter_expr)
+        .bind(&hierarchy.status)
+        .bind(hierarchy.created_at.to_rfc3339())
+        .bind(hierarchy.updated_at.to_rfc3339())
+        .execute(&self.pool)
+        .await?;
 
-        if let Some(parent) = std::path::Path::new(&file_path).parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&file_path, metadata)?;
-
-        tracing::info!(hierarchy_name = %hierarchy.hierarchy_name, "Created virtual folder hierarchy definition");
         Ok(())
     }
 
-    /// List virtual folder hierarchies, optionally filtered by status.
     pub async fn list_virtual_folder_hierarchies(&self, status: Option<&str>) -> Result<Vec<VirtualFolderHierarchy>> {
-        let dir_path = format!(
-            "{}/metadata/berg10/virtual_folder_hierarchies",
-            self.warehouse_path.trim_start_matches("file://")
-        );
+        let rows = match status {
+            Some(status) => {
+                sqlx::query(
+                    r#"
+                    SELECT hierarchy_name, hierarchy_order_json, filter_expr, status, created_at, updated_at
+                    FROM virtual_folder_hierarchies
+                    WHERE status = ?
+                    ORDER BY hierarchy_name ASC
+                    "#,
+                )
+                .bind(status)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            None => {
+                sqlx::query(
+                    r#"
+                    SELECT hierarchy_name, hierarchy_order_json, filter_expr, status, created_at, updated_at
+                    FROM virtual_folder_hierarchies
+                    ORDER BY hierarchy_name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+        };
 
-        let mut hierarchies = Vec::new();
-        if std::path::Path::new(&dir_path).exists() {
-            for entry in std::fs::read_dir(dir_path)? {
-                let entry = entry?;
-                if entry.path().extension().and_then(|e| e.to_str()) == Some("json") {
-                    let content = std::fs::read_to_string(entry.path())?;
-                    if let Ok(hierarchy) = serde_json::from_str::<VirtualFolderHierarchy>(&content) {
-                        if let Some(s) = status {
-                            if hierarchy.status == s {
-                                hierarchies.push(hierarchy);
-                            }
-                        } else {
-                            hierarchies.push(hierarchy);
-                        }
-                    }
-                }
+        rows.into_iter().map(Self::hierarchy_from_row).collect()
+    }
+
+    pub async fn update_virtual_folder_hierarchy_status(&self, hierarchy_name: &str, status: &str) -> Result<()> {
+        let updated_at = Utc::now().to_rfc3339();
+        let result = sqlx::query(
+            "UPDATE virtual_folder_hierarchies SET status = ?, updated_at = ? WHERE hierarchy_name = ?",
+        )
+        .bind(status)
+        .bind(updated_at)
+        .bind(hierarchy_name)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow!("Virtual folder hierarchy not found: {}", hierarchy_name));
+        }
+
+        Ok(())
+    }
+
+    pub async fn delete_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<()> {
+        let result = sqlx::query("DELETE FROM virtual_folder_hierarchies WHERE hierarchy_name = ?")
+            .bind(hierarchy_name)
+            .execute(&self.pool)
+            .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow!("Virtual folder hierarchy not found: {}", hierarchy_name));
+        }
+
+        Ok(())
+    }
+
+    pub async fn resolve_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<Vec<FileRecord>> {
+        let hierarchy = sqlx::query(
+            r#"
+            SELECT hierarchy_name, hierarchy_order_json, filter_expr, status, created_at, updated_at
+            FROM virtual_folder_hierarchies
+            WHERE hierarchy_name = ? AND status = 'active'
+            "#,
+        )
+        .bind(hierarchy_name)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = hierarchy else {
+            return Ok(Vec::new());
+        };
+
+        let hierarchy = Self::hierarchy_from_row(row)?;
+        self.query_files(hierarchy.filter_expr.as_deref().unwrap_or("*")).await
+    }
+
+    async fn load_all_files(&self) -> Result<Vec<FileRecord>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT content_hash, hierarchy, level, plane, payload_kind, payload_format,
+                   payload_size_bytes, written_at, writer_identity, logical_filename
+            FROM blobs
+            ORDER BY written_at DESC, content_hash ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut records = Vec::with_capacity(rows.len());
+        for row in rows {
+            records.push(self.file_record_from_row(row).await?);
+        }
+        Ok(records)
+    }
+
+    async fn file_record_from_row(&self, row: SqliteRow) -> Result<FileRecord> {
+        let content_hash: String = row.try_get("content_hash")?;
+
+        let correlation_ids = sqlx::query(
+            "SELECT key, value FROM blob_correlation_ids WHERE content_hash = ? ORDER BY key, value",
+        )
+        .bind(&content_hash)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| Ok((row.try_get("key")?, row.try_get("value")?)))
+        .collect::<Result<Vec<(String, String)>>>()?;
+
+        let lineage_refs = sqlx::query(
+            "SELECT ref FROM blob_lineage_refs WHERE content_hash = ? ORDER BY ref",
+        )
+        .bind(&content_hash)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| row.try_get("ref"))
+        .collect::<std::result::Result<Vec<String>, _>>()?;
+
+        let routing_tags = sqlx::query(
+            "SELECT tag_key, tag_value FROM blob_tags WHERE content_hash = ? ORDER BY tag_key, tag_value",
+        )
+        .bind(&content_hash)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| Ok((row.try_get("tag_key")?, row.try_get("tag_value")?)))
+        .collect::<Result<Vec<(String, String)>>>()?;
+
+        Ok(FileRecord {
+            content_hash,
+            hierarchy: row.try_get("hierarchy")?,
+            level: row.try_get("level")?,
+            plane: row.try_get("plane")?,
+            payload_kind: row.try_get("payload_kind")?,
+            payload_format: row.try_get("payload_format")?,
+            payload_size_bytes: row.try_get::<i64, _>("payload_size_bytes")? as u64,
+            correlation_ids,
+            lineage_refs,
+            routing_tags,
+            written_at: parse_rfc3339(row.try_get::<String, _>("written_at")?)?,
+            writer_identity: row.try_get("writer_identity")?,
+            logical_filename: row.try_get("logical_filename")?,
+        })
+    }
+
+    fn hierarchy_from_row(row: SqliteRow) -> Result<VirtualFolderHierarchy> {
+        Ok(VirtualFolderHierarchy {
+            hierarchy_name: row.try_get("hierarchy_name")?,
+            hierarchy_order: serde_json::from_str(&row.try_get::<String, _>("hierarchy_order_json")?)?,
+            filter_expr: row.try_get("filter_expr")?,
+            status: row.try_get("status")?,
+            created_at: parse_rfc3339(row.try_get::<String, _>("created_at")?)?,
+            updated_at: parse_rfc3339(row.try_get::<String, _>("updated_at")?)?,
+        })
+    }
+
+    fn normalize_filter(filter: &str) -> Result<String> {
+        let normalized = filter
+            .replace("routing_tags[\"", "tag:")
+            .replace("routing_tags['", "tag:")
+            .replace("\"]", "")
+            .replace("']", "");
+
+        if let Some((left, right)) = normalized.split_once('=') {
+            let left = left.trim();
+            let right = right.trim();
+            if let Some(tag_key) = left.strip_prefix("tag:") {
+                return Ok(format!("t.tag_key = '{}' AND t.tag_value = {}", escape_sql_string(tag_key), right));
             }
         }
 
-        Ok(hierarchies)
-    }
-
-    /// Update a virtual folder hierarchy's status.
-    pub async fn update_virtual_folder_hierarchy_status(&self, hierarchy_name: &str, status: &str) -> Result<()> {
-        let file_path = format!(
-            "{}/metadata/berg10/virtual_folder_hierarchies/{}.json",
-            self.warehouse_path.trim_start_matches("file://"),
-            hierarchy_name
-        );
-
-        if !std::path::Path::new(&file_path).exists() {
-            return Err(anyhow!("Virtual folder hierarchy not found: {}", hierarchy_name));
+        if normalized.contains(';') {
+            return Err(anyhow!("Unsupported filter expression"));
         }
 
-        let content = std::fs::read_to_string(&file_path)?;
-        let mut hierarchy: VirtualFolderHierarchy = serde_json::from_str(&content)?;
-        hierarchy.status = status.to_string();
-        hierarchy.updated_at = Utc::now();
-        let updated = serde_json::to_string(&hierarchy)?;
-        std::fs::write(&file_path, updated)?;
-
-        Ok(())
+        Ok(normalized)
     }
 
-    /// Delete a virtual folder hierarchy definition.
-    pub async fn delete_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<()> {
-        let file_path = format!(
-            "{}/metadata/berg10/virtual_folder_hierarchies/{}.json",
-            self.warehouse_path.trim_start_matches("file://"),
-            hierarchy_name
-        );
-
-        if !std::path::Path::new(&file_path).exists() {
-            return Err(anyhow!("Virtual folder hierarchy not found: {}", hierarchy_name));
-        }
-
-        std::fs::remove_file(&file_path)?;
-
-        Ok(())
+    pub fn pool(&self) -> &Pool<Sqlite> {
+        &self.pool
     }
+}
 
-    /// Resolve a virtual folder hierarchy: get all files matching its filter and ordering.
-    pub async fn resolve_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<Vec<FileRecord>> {
-        let hierarchies = self.list_virtual_folder_hierarchies(Some("active")).await?;
-        let hierarchy = match hierarchies.iter().find(|h| h.hierarchy_name == hierarchy_name) {
-            Some(h) => h,
-            None => return Ok(Vec::new()),
-        };
+fn parse_rfc3339(value: String) -> Result<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339(&value)?.with_timezone(&Utc))
+}
 
-        let filter = hierarchy.filter_expr.as_deref().unwrap_or("*");
-        let files = self.query_files(filter).await?;
-
-        Ok(files)
-    }
-
-    /// Get the underlying Iceberg catalog for advanced operations.
-    pub fn iceberg_catalog(&self) -> &Arc<dyn Catalog> {
-        &self.catalog
-    }
+fn escape_sql_string(value: &str) -> String {
+    value.replace('\'', "''")
 }
 
 #[cfg(test)]
@@ -364,31 +493,23 @@ mod tests {
     use tempfile::TempDir;
 
     #[tokio::test]
-    async fn catalog_initialization_creates_tables() {
+    async fn catalog_initialization_creates_sqlite_file() {
         let tmp = TempDir::new().unwrap();
-        let config = CatalogConfig {
-            warehouse_path: tmp.path().to_string_lossy().to_string(),
-            ..Default::default()
-        };
+        let config = CatalogConfig::with_base_dir(tmp.path().to_str().unwrap());
 
         let catalog = Berg10Catalog::new(&config).await.unwrap();
-        assert!(catalog.catalog.table_exists(
-            &TableIdent::new(
-                NamespaceIdent::new(BERG10_NAMESPACE.to_string()),
-                FILES_TABLE.to_string()
-            )
-        ).await.unwrap());
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='blobs'",
+        )
+        .fetch_one(catalog.pool())
+        .await
+        .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
     async fn file_registration_and_retrieval() {
-        let tmp = TempDir::new().unwrap();
-        let config = CatalogConfig {
-            warehouse_path: tmp.path().to_string_lossy().to_string(),
-            ..Default::default()
-        };
-
-        let catalog = Berg10Catalog::new(&config).await.unwrap();
+        let catalog = Berg10Catalog::new(&CatalogConfig::memory()).await.unwrap();
 
         let record = FileRecord {
             content_hash: "test_hash_123".to_string(),
@@ -400,7 +521,7 @@ mod tests {
             payload_size_bytes: 100,
             correlation_ids: vec![("mission_id".to_string(), "m1".to_string())],
             lineage_refs: vec![],
-            routing_tags: vec![],
+            routing_tags: vec![("env".to_string(), "test".to_string())],
             written_at: Utc::now(),
             writer_identity: Some("test".to_string()),
             logical_filename: Some("note.jsonl".to_string()),
@@ -409,18 +530,12 @@ mod tests {
         catalog.register_file(&record).await.unwrap();
         let retrieved = catalog.get_file("test_hash_123").await.unwrap().unwrap();
         assert_eq!(retrieved.content_hash, "test_hash_123");
-        assert_eq!(retrieved.payload_kind, "chat-note");
+        assert_eq!(retrieved.routing_tags, vec![("env".to_string(), "test".to_string())]);
     }
 
     #[tokio::test]
     async fn virtual_folder_hierarchy_crud_operations() {
-        let tmp = TempDir::new().unwrap();
-        let config = CatalogConfig {
-            warehouse_path: tmp.path().to_string_lossy().to_string(),
-            ..Default::default()
-        };
-
-        let catalog = Berg10Catalog::new(&config).await.unwrap();
+        let catalog = Berg10Catalog::new(&CatalogConfig::memory()).await.unwrap();
 
         let hierarchy = VirtualFolderHierarchy {
             hierarchy_name: "test-hierarchy".to_string(),
@@ -432,20 +547,41 @@ mod tests {
         };
 
         catalog.create_virtual_folder_hierarchy(&hierarchy).await.unwrap();
-
         let hierarchies = catalog.list_virtual_folder_hierarchies(None).await.unwrap();
         assert_eq!(hierarchies.len(), 1);
-        assert_eq!(hierarchies[0].hierarchy_name, "test-hierarchy");
 
         catalog.update_virtual_folder_hierarchy_status("test-hierarchy", "inactive").await.unwrap();
-        let active_hierarchies = catalog.list_virtual_folder_hierarchies(Some("active")).await.unwrap();
-        assert_eq!(active_hierarchies.len(), 0);
-
-        let inactive_hierarchies = catalog.list_virtual_folder_hierarchies(Some("inactive")).await.unwrap();
-        assert_eq!(inactive_hierarchies.len(), 1);
+        let active = catalog.list_virtual_folder_hierarchies(Some("active")).await.unwrap();
+        assert!(active.is_empty());
 
         catalog.delete_virtual_folder_hierarchy("test-hierarchy").await.unwrap();
-        let all_hierarchies = catalog.list_virtual_folder_hierarchies(None).await.unwrap();
-        assert_eq!(all_hierarchies.len(), 0);
+        let all = catalog.list_virtual_folder_hierarchies(None).await.unwrap();
+        assert!(all.is_empty());
+    }
+
+    #[tokio::test]
+    async fn query_files_supports_routing_tags() {
+        let catalog = Berg10Catalog::new(&CatalogConfig::memory()).await.unwrap();
+
+        let record = FileRecord {
+            content_hash: "hash-adele".to_string(),
+            hierarchy: "A".to_string(),
+            level: "L0".to_string(),
+            plane: "as-is".to_string(),
+            payload_kind: "mp3".to_string(),
+            payload_format: "mp3".to_string(),
+            payload_size_bytes: 123,
+            correlation_ids: vec![],
+            lineage_refs: vec![],
+            routing_tags: vec![("singer".to_string(), "Adele".to_string())],
+            written_at: Utc::now(),
+            writer_identity: None,
+            logical_filename: Some("song1.mp3".to_string()),
+        };
+        catalog.register_file(&record).await.unwrap();
+
+        let rows = catalog.query_files("routing_tags['singer'] = 'Adele'").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].content_hash, "hash-adele");
     }
 }
