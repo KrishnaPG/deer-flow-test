@@ -251,9 +251,9 @@ fn validate_layout(layout: &StorageLayout) -> Result<(), &'static str> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileSavedTarget {
-    SingleFile {
-        relative_path: String,
-    },
+    /// View-relative path for warm cache materialization (not physical storage path).
+    SingleFile { relative_path: String },
+    /// Multi-file commit manifest. The manifest_path is view-relative.
     CommitManifest {
         manifest_path: String,
         member_count: usize,
@@ -280,6 +280,10 @@ pub struct FileSaved {
     pub correlation_ids: StorageCorrelationIds,
     pub lineage_refs: StorageLineageRefs,
     pub routing_tags: Vec<StorageTag>,
+    /// Base58-encoded blake3 content hash. This is the file's unique identity.
+    pub content_hash: String,
+    /// Physical storage location (e.g., s3://berg10-storage/<hash>, lakefs://...).
+    pub physical_location: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -294,6 +298,8 @@ pub struct DerivationTrigger {
     pub correlation_ids: StorageCorrelationIds,
     pub lineage_refs: StorageLineageRefs,
     pub routing_tags: Vec<StorageTag>,
+    pub content_hash: String,
+    pub physical_location: String,
 }
 
 fn validate_metadata(metadata: &StorageRequestMetadata) -> Result<(), &'static str> {

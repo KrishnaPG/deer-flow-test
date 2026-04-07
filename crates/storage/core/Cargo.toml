@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 deer-foundation-contracts = { path = "../../foundation/contracts" }
+berg10-storage-catalog = { path = "../../berg10/storage-catalog" }
+berg10-storage-vfs = { path = "../../berg10/storage-vfs" }
