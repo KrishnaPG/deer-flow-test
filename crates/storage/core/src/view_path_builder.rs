@@ -125,7 +125,7 @@ mod tests {
             "abc123",
         );
 
-        assert_eq!(path, "B/L4/as-is/thumbnail/size=64x64/abc123.png");
+        assert_eq!(path, "b/L4/as-is/thumbnail/size=64x64/abc123.png");
     }
 
     #[test]

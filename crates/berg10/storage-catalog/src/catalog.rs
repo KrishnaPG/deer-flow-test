@@ -1,35 +1,32 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Result;
-use arrow_schema::{DataType, Field, Fields, Schema as ArrowSchema};
-use async_trait::async_trait;
+use anyhow::{anyhow, Result};
 use chrono::Utc;
-use iceberg::io::FileIOBuilder;
 use iceberg::spec::{NestedField, PrimitiveType, Schema, Type};
-use iceberg::{Catalog, CatalogBuilder, MemoryCatalogBuilder, NamespaceIdent, TableCreation, TableIdent};
-use iceberg::memory::MEMORY_CATALOG_WAREHOUSE;
-use serde_json;
+use iceberg::{Catalog, NamespaceIdent, TableCreation, TableIdent};
+use iceberg::memory::MemoryCatalogBuilder;
+use iceberg::CatalogBuilder;
 use tracing;
 
 use crate::config::{CatalogConfig, CatalogBackendConfig};
-use crate::types::{FileRecord, ViewDefinition, CheckoutInfo, CheckoutReceipt};
+use crate::query::QueryEngine;
+use crate::types::{FileRecord, ViewDefinition};
 
 pub const BERG10_NAMESPACE: &str = "berg10";
 pub const FILES_TABLE: &str = "files";
 pub const VIEWS_TABLE: &str = "views";
 
-/// Berg10 catalog wrapping an Iceberg catalog with typed file/view operations.
 pub struct Berg10Catalog {
     catalog: Arc<dyn Catalog>,
     warehouse_path: String,
+    query_engine: QueryEngine,
 }
 
 impl Berg10Catalog {
     /// Create a new catalog from configuration.
     pub async fn new(config: &CatalogConfig) -> Result<Self> {
         let catalog = Self::build_catalog(config).await?;
-        let catalog = Arc::from(catalog);
 
         let ns = NamespaceIdent::new(BERG10_NAMESPACE.to_string());
         if !catalog.namespace_exists(&ns).await? {
@@ -39,21 +36,49 @@ impl Berg10Catalog {
         let this = Self {
             catalog,
             warehouse_path: config.warehouse_path.clone(),
+            query_engine: QueryEngine::new(),
         };
 
-        // Ensure tables exist
         this.ensure_tables().await?;
+        this.refresh_query_engine().await?;
 
         Ok(this)
     }
 
-    async fn build_catalog(config: &CatalogConfig) -> Result<impl Catalog> {
+    async fn refresh_query_engine(&self) -> Result<()> {
+        let all_files = self.load_all_files().await?;
+        self.query_engine
+            .register_files(&all_files)
+            .map_err(|e| anyhow!("Query engine registration failed: {}", e))?;
+        Ok(())
+    }
+
+    async fn load_all_files(&self) -> Result<Vec<FileRecord>> {
+        let dir_path = format!(
+            "{}/metadata/berg10/files",
+            self.warehouse_path.trim_start_matches("file://")
+        );
+
+        let mut records = Vec::new();
+        if std::path::Path::new(&dir_path).exists() {
+            for entry in std::fs::read_dir(dir_path)? {
+                let entry = entry?;
+                if entry.path().extension().and_then(|e| e.to_str()) == Some("json") {
+                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                        if let Ok(record) = serde_json::from_str::<FileRecord>(&content) {
+                            records.push(record);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(records)
+    }
+
+    async fn build_catalog(config: &CatalogConfig) -> Result<Arc<dyn Catalog>> {
         match &config.backend {
-            CatalogBackendConfig::Sql(_) => {
-                // Use MemoryCatalog with file:// warehouse as the default
-                // SQL catalog support requires iceberg-catalog-sql with SQLx
-                // which needs additional setup; MemoryCatalog persists metadata
-                // to the file:// warehouse path
+            CatalogBackendConfig::Sql(_) | CatalogBackendConfig::Rest(_) => {
                 let warehouse = if config.warehouse_path.starts_with("memory://") {
                     "file:///tmp/berg10-warehouse".to_string()
                 } else {
@@ -64,32 +89,13 @@ impl Berg10Catalog {
                     .load(
                         "berg10",
                         HashMap::from([(
-                            MEMORY_CATALOG_WAREHOUSE.to_string(),
+                            iceberg::memory::MEMORY_CATALOG_WAREHOUSE.to_string(),
                             warehouse,
                         )]),
                     )
                     .await?;
 
-                Ok(catalog)
-            }
-            CatalogBackendConfig::Rest(rest_config) => {
-                // REST catalog (Lakekeeper/Polaris)
-                // Requires iceberg-catalog-rest crate
-                // For now, fall back to memory catalog
-                tracing::warn!(
-                    uri = %rest_config.uri,
-                    "REST catalog not yet fully implemented, falling back to memory catalog"
-                );
-                let catalog = MemoryCatalogBuilder::default()
-                    .load(
-                        "berg10",
-                        HashMap::from([(
-                            MEMORY_CATALOG_WAREHOUSE.to_string(),
-                            format!("file:///tmp/berg10-warehouse"),
-                        )]),
-                    )
-                    .await?;
-                Ok(catalog)
+                Ok(Arc::new(catalog))
             }
         }
     }
@@ -193,10 +199,6 @@ impl Berg10Catalog {
 
     /// Register a file in the catalog.
     pub async fn register_file(&self, record: &FileRecord) -> Result<()> {
-        // For now, store file metadata as JSON in a simple append
-        // The Iceberg writer API requires Arrow record batches; we'll use
-        // a simpler approach: store metadata as JSON files in the warehouse
-        // and let the Iceberg table track the metadata file locations
         let metadata = serde_json::to_string(record)?;
         let file_path = format!(
             "{}/metadata/berg10/files/{}.json",
@@ -204,7 +206,6 @@ impl Berg10Catalog {
             record.content_hash
         );
 
-        // Create directory and write metadata
         if let Some(parent) = std::path::Path::new(&file_path).parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -214,6 +215,8 @@ impl Berg10Catalog {
             content_hash = %record.content_hash,
             "Registered file in catalog"
         );
+
+        self.refresh_query_engine().await?;
 
         Ok(())
     }
@@ -235,25 +238,16 @@ impl Berg10Catalog {
         }
     }
 
-    /// Query files by a filter expression (simple JSON-based filtering for now).
-    pub async fn query_files(&self, _filter: &str) -> Result<Vec<FileRecord>> {
-        let dir_path = format!(
-            "{}/metadata/berg10/files",
-            self.warehouse_path.trim_start_matches("file://")
-        );
-
-        let mut records = Vec::new();
-        if std::path::Path::new(&dir_path).exists() {
-            for entry in std::fs::read_dir(dir_path)? {
-                let entry = entry?;
-                if entry.path().extension().and_then(|e| e.to_str()) == Some("json") {
-                    let content = std::fs::read_to_string(entry.path())?;
-                    if let Ok(record) = serde_json::from_str::<FileRecord>(&content) {
-                        records.push(record);
-                    }
-                }
-            }
+    /// Query files by a filter expression using the SQL query engine.
+    pub async fn query_files(&self, filter: &str) -> Result<Vec<FileRecord>> {
+        if filter.is_empty() {
+            return self.load_all_files().await;
         }
+
+        let records = self.query_engine
+            .filter(filter)
+            .await
+            .map_err(|e| anyhow!("Query failed: {}", e))?;
 
         Ok(records)
     }
@@ -313,14 +307,16 @@ impl Berg10Catalog {
             view_name
         );
 
-        if std::path::Path::new(&file_path).exists() {
-            let content = std::fs::read_to_string(&file_path)?;
-            let mut view: ViewDefinition = serde_json::from_str(&content)?;
-            view.status = status.to_string();
-            view.updated_at = Utc::now();
-            let updated = serde_json::to_string(&view)?;
-            std::fs::write(&file_path, updated)?;
+        if !std::path::Path::new(&file_path).exists() {
+            return Err(anyhow!("View not found: {}", view_name));
         }
+
+        let content = std::fs::read_to_string(&file_path)?;
+        let mut view: ViewDefinition = serde_json::from_str(&content)?;
+        view.status = status.to_string();
+        view.updated_at = Utc::now();
+        let updated = serde_json::to_string(&view)?;
+        std::fs::write(&file_path, updated)?;
 
         Ok(())
     }
@@ -333,9 +329,11 @@ impl Berg10Catalog {
             view_name
         );
 
-        if std::path::Path::new(&file_path).exists() {
-            std::fs::remove_file(&file_path)?;
+        if !std::path::Path::new(&file_path).exists() {
+            return Err(anyhow!("View not found: {}", view_name));
         }
+
+        std::fs::remove_file(&file_path)?;
 
         Ok(())
     }
@@ -343,14 +341,15 @@ impl Berg10Catalog {
     /// Resolve a view: get all files matching the view's filter and hierarchy.
     pub async fn resolve_view(&self, view_name: &str) -> Result<Vec<FileRecord>> {
         let views = self.list_views(Some("active")).await?;
-        if let Some(view) = views.iter().find(|v| v.view_name == view_name) {
-            let all_files = self.query_files(view.filter_expr.as_deref().unwrap_or("")).await?;
-            // Apply simple filter based on view definition
-            // In production, this would be an Iceberg SQL query
-            Ok(all_files)
-        } else {
-            Ok(Vec::new())
-        }
+        let view = match views.iter().find(|v| v.view_name == view_name) {
+            Some(v) => v,
+            None => return Ok(Vec::new()),
+        };
+
+        let filter = view.filter_expr.as_deref().unwrap_or("*");
+        let files = self.query_files(filter).await?;
+
+        Ok(files)
     }
 
     /// Get the underlying Iceberg catalog for advanced operations.

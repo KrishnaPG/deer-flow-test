@@ -1,4 +1,4 @@
-use opendal::{Operator, Scheme, services};
+use opendal::{Operator, services};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -211,7 +211,7 @@ impl StorageBackend {
     }
 
     /// Write content to storage with the given key.
-    pub async fn write(&self, key: &str, data: &[u8]) -> Result<(), StorageError> {
+    pub async fn write(&self, key: &str, data: Vec<u8>) -> Result<(), StorageError> {
         self.operator.write(key, data).await?;
         Ok(())
     }

@@ -4,8 +4,8 @@ use anyhow::Result;
 use chrono::Utc;
 use tracing;
 
-use berg10_storage_catalog::{Berg10Catalog, FileRecord, ViewDefinition, CheckoutInfo, CheckoutReceipt};
-use berg10_storage_vfs::{StorageBackend, StorageError};
+use berg10_storage_catalog::{Berg10Catalog, FileRecord, CheckoutInfo, CheckoutReceipt};
+use berg10_storage_vfs::StorageBackend;
 
 use crate::config::WarmCacheConfig;
 
@@ -64,7 +64,14 @@ impl WarmCache {
             let content_path = Path::new(&content_path);
 
             // Compute relative path from symlink location to content
-            let relative_target = pathdiff::diff_paths(content_path, full_symlink_path.parent().unwrap())
+            let symlink_parent = match full_symlink_path.parent() {
+                Some(p) => p,
+                None => {
+                    tracing::error!(view_name = %view_name, "Symlink path has no parent directory");
+                    continue;
+                }
+            };
+            let relative_target = pathdiff::diff_paths(content_path, symlink_parent)
                 .unwrap_or_else(|| content_path.to_path_buf());
 
             // Remove existing symlink if present
@@ -105,39 +112,41 @@ impl WarmCache {
             return Ok(());
         }
 
-        // Extract key from physical location
         let key = Self::extract_key_from_location(&file.physical_location);
 
-        // Fetch from cold storage via VFS
-        match self.vfs.read(&key).await {
-            Ok(data) => {
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::write(path, data)?;
-                tracing::debug!(content_hash = %file.content_hash, "Fetched content from cold storage");
-            }
-            Err(StorageError::NotFound(_)) => {
-                tracing::warn!(content_hash = %file.content_hash, "Content not found in cold storage");
-            }
-            Err(e) => return Err(e.into()),
+        let data = self.vfs.read(&key).await?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
         }
+        std::fs::write(path, data)?;
+        tracing::debug!(content_hash = %file.content_hash, "Fetched content from cold storage");
 
         Ok(())
     }
 
     /// Extract storage key from physical location URI.
     fn extract_key_from_location(location: &str) -> String {
-        // Handle various URI schemes: s3://bucket/key, file:///path, lakefs://repo/branch/key
-        if let Some(rest) = location.split("://").nth(1) {
-            // Skip bucket/repo prefix for s3/lakefs
-            let parts: Vec<&str> = rest.splitn(2, '/').collect();
-            if parts.len() == 2 {
-                return parts[1].to_string();
+        match location.split_once("://") {
+            Some(("s3" | "s3a" | "s3n", rest)) => {
+                let parts: Vec<&str> = rest.splitn(2, '/').collect();
+                if parts.len() == 2 {
+                    parts[1].to_string()
+                } else {
+                    rest.to_string()
+                }
             }
-            return rest.to_string();
+            Some(("file", rest)) => rest.to_string(),
+            Some(("lakefs", rest)) => {
+                let parts: Vec<&str> = rest.splitn(3, '/').collect();
+                if parts.len() >= 3 {
+                    format!("{}/{}", parts[1], parts[2])
+                } else {
+                    rest.to_string()
+                }
+            }
+            Some((_scheme, rest)) => rest.to_string(),
+            None => location.to_string(),
         }
-        location.to_string()
     }
 
     /// Build the symlink path within the checkout directory based on hierarchy order.
@@ -261,10 +270,11 @@ mod tests {
     }
 
     #[test]
-    fn extract_key_from_s3_location() {
+    fn extract_key_from_location_handles_schemes() {
         assert_eq!(WarmCache::extract_key_from_location("s3://berg10-storage/abc123"), "abc123");
-        assert_eq!(WarmCache::extract_key_from_location("file:///data/abc123"), "data/abc123");
+        assert_eq!(WarmCache::extract_key_from_location("file:///data/abc123"), "/data/abc123");
         assert_eq!(WarmCache::extract_key_from_location("lakefs://repo/main/abc123"), "main/abc123");
+        assert_eq!(WarmCache::extract_key_from_location("s3://bucket/nested/path/file.dat"), "nested/path/file.dat");
     }
 
     #[test]

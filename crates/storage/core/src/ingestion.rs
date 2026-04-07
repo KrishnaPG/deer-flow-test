@@ -1,7 +1,7 @@
 use berg10_storage_catalog::{Berg10Catalog, FileRecord};
 use berg10_storage_vfs::{hash_content, StorageBackend};
 use chrono::Utc;
-use deer_foundation_contracts::{AppendDataRequest, CanonicalLevel, CanonicalPlane, FileSaved};
+use deer_foundation_contracts::{AppendDataRequest, CanonicalPlane, FileSaved};
 
 use crate::downstream_handoff::make_file_saved;
 use crate::view_path_builder::build_relative_path;
@@ -30,7 +30,7 @@ impl IngestionBridge {
         let hash_str = content_hash.as_str().to_string();
 
         // Write to VFS with hash-based key
-        self.vfs.write(&hash_str, &payload_bytes).await
+        self.vfs.write(&hash_str, payload_bytes.clone()).await
             .map_err(|e| format!("VFS write failed: {:?}", e))?;
 
         // Build view-relative path
