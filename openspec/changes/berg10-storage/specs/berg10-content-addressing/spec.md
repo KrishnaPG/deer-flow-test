@@ -39,4 +39,25 @@ All content addresses throughout the system SHALL use the base58-encoded blake3 
 
 #### Scenario: Content key in warm cache
 - **WHEN** a content blob is cached locally
-- **THEN** the filename is the base58-encoded blake3 hash
+- **THEN** the local warm-cache blob path is derived from the base58-encoded blake3 hash
+
+### Requirement: Content hash is the source of truth
+The base58-encoded blake3 hash SHALL be the canonical identity for a blob across ingestion, storage, catalog lookup, warm-cache fetch, and programmatic retrieval.
+
+#### Scenario: Programmatic retrieval by content hash
+- **WHEN** a tool or application needs to retrieve content directly
+- **THEN** it uses `content_hash` as the authoritative lookup key without requiring any virtual folder hierarchy or physical storage path
+
+### Requirement: Immutable content addressing
+Stored content SHALL be immutable. The same `content_hash` always refers to the same bytes, and any changed payload SHALL produce a new `content_hash`.
+
+#### Scenario: Immutable blob identity
+- **WHEN** a blob has content hash `abc123...`
+- **THEN** that hash always resolves to the same bytes and is never overwritten with different bytes
+
+### Requirement: Sharded warm-cache blob path
+The local warm-cache content store SHALL shard blob paths using the content hash as `base_dir/content/<hash[0..2]>/<hash[2..4]>/<hash[4..]>.blob`.
+
+#### Scenario: Shard local blob path by content hash
+- **WHEN** content with hash `7bWpKq9xR3mNvHf2Tc8Yd...` is cached locally
+- **THEN** the blob is written under `base_dir/content/7b/Wp/Kq9xR3mNvHf2Tc8Yd....blob`

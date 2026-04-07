@@ -1,16 +1,22 @@
 ## MODIFIED Requirements
 
-### Requirement: FileSaved event carries content identity and location
-The `FileSaved` event SHALL include a `content_hash` field containing the base58-encoded blake3 hash of the file payload, and a `physical_location` field containing the URI of the stored content. The `target.relative_path` field SHALL represent the view-relative path (for warm cache materialization), not the physical storage path.
+### Requirement: FileSaved event carries content identity and virtual target
+The `FileSaved` event SHALL include a `content_hash` field containing the base58-encoded blake3 hash of the file payload. The `target.relative_path` field SHALL represent the virtual-folder-hierarchy-relative path used for warm-cache materialization, not any physical storage path.
 
-#### Scenario: FileSaved includes content hash and location
+`physical_location`, if retained, SHALL be treated as optional implementation metadata and SHALL NOT be required by programmatic consumers for retrieval.
+
+#### Scenario: FileSaved includes content hash and virtual target
 - **WHEN** a file is successfully stored and registered in the catalog
-- **THEN** the `FileSaved` event contains `content_hash` (base58 blake3), `physical_location` (e.g., `s3://berg10-storage/<b58hash>`), and `target` with the view-relative path
+- **THEN** the `FileSaved` event contains `content_hash` (base58 blake3) and `target` with the virtual-folder-hierarchy-relative path
 
 #### Scenario: FileSaved supports single-file targets
 - **WHEN** a single file is saved
-- **THEN** `FileSaved.target` is `SingleFile { relative_path }` with the view-relative path
+- **THEN** `FileSaved.target` is `SingleFile { relative_path }` with the virtual-folder-hierarchy-relative path
 
 #### Scenario: FileSaved supports manifest targets
 - **WHEN** a multi-file commit is saved
-- **THEN** `FileSaved.target` is `CommitManifest { manifest_path, member_count }` with the manifest's view-relative path
+- **THEN** `FileSaved.target` is `CommitManifest { manifest_path, member_count }` with the manifest's virtual-folder-hierarchy-relative path
+
+#### Scenario: Retrieval does not depend on physical location
+- **WHEN** a downstream consumer needs to work with the saved content
+- **THEN** it uses `content_hash` as the retrieval key and does not require `physical_location`

@@ -26,6 +26,10 @@ The VFS SHALL store content using the content hash as the object key. When writi
 - **WHEN** the same content is written twice
 - **THEN** only one physical object exists in storage (identified by the same content hash)
 
+#### Scenario: Changed payload creates a new blob
+- **WHEN** a payload changes
+- **THEN** a new content hash is produced and the VFS stores the changed payload as a new blob rather than overwriting the previous blob
+
 ### Requirement: Content retrieval by hash
 The VFS SHALL support retrieving content by its base58-encoded blake3 hash. The system SHALL return the raw bytes of the stored object.
 
@@ -37,8 +41,12 @@ The VFS SHALL support retrieving content by its base58-encoded blake3 hash. The 
 - **WHEN** a retrieval request is made for a hash that does not exist in storage
 - **THEN** the VFS returns a not-found error
 
+#### Scenario: Retrieval does not require physical location
+- **WHEN** a caller needs to retrieve a blob
+- **THEN** the caller supplies `content_hash` directly and the VFS resolves the backend object without needing any external physical location metadata
+
 ### Requirement: OpenDAL middleware layers
-The VFS SHALL apply OpenDAL middleware layers for retry logic, tracing, and content caching on all storage operations.
+The VFS SHALL apply OpenDAL middleware layers for retry logic and tracing on storage operations.
 
 #### Scenario: Automatic retry on transient failure
 - **WHEN** a storage operation fails with a transient error
@@ -49,8 +57,15 @@ The VFS SHALL apply OpenDAL middleware layers for retry logic, tracing, and cont
 - **THEN** the TracingLayer records OpenTelemetry spans for the operation
 
 ### Requirement: LakeFS write support
-When LakeFS is the storage backend, the VFS SHALL use the LakeFS REST API for write operations (since the OpenDAL LakeFS service is read-only). Writes SHALL be performed to the current LakeFS branch.
+When LakeFS is the storage backend, the VFS SHALL use the LakeFS REST API for write operations that are not supported through the S3-compatible interface. Reads MAY continue to use the S3-compatible path where appropriate.
 
 #### Scenario: Write to LakeFS branch
 - **WHEN** content is written with LakeFS as the backend
 - **THEN** the VFS uses the LakeFS REST API to upload the object to the current branch
+
+### Requirement: Backend storage remains an implementation detail
+The VFS SHALL expose a blob-oriented API keyed by `content_hash`. Backend-specific object paths or URIs SHALL be treated as implementation details and SHALL NOT be required by higher-level programmatic consumers.
+
+#### Scenario: Catalog and warm cache use content_hash
+- **WHEN** the catalog or warm cache needs to retrieve content
+- **THEN** they use `content_hash` as the retrieval key instead of parsing backend-specific storage paths
