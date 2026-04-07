@@ -2,7 +2,7 @@ use deer_foundation_contracts::{
     CanonicalLevel, CanonicalPlane, StorageHierarchyTag, StoragePayloadFormat, StoragePayloadKind,
 };
 
-use crate::path_builder::build_relative_path;
+use crate::view_path_builder::build_relative_path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalRefCommitRequest {

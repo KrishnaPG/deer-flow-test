@@ -24,6 +24,14 @@ fn full_lineage() -> StorageLineageRefs {
     }
 }
 
+fn test_content_hash() -> String {
+    "7bWpKq9xR3mNvHf2Tc8Yd".to_string()
+}
+
+fn test_physical_location() -> String {
+    "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd".to_string()
+}
+
 #[test]
 fn file_accepted_represents_durable_intent_handoff() {
     let accepted = FileAccepted {
@@ -51,6 +59,8 @@ fn file_saved_requires_full_downstream_handoff_metadata() {
         correlation_ids: full_correlation(),
         lineage_refs: full_lineage(),
         routing_tags: vec![("size".into(), "64x64".into())],
+        content_hash: test_content_hash(),
+        physical_location: test_physical_location(),
     };
 
     match saved.target {
@@ -64,6 +74,35 @@ fn file_saved_requires_full_downstream_handoff_metadata() {
         saved.correlation_ids.mission_id.as_ref().unwrap().as_str(),
         "mission_7"
     );
+
+    assert_eq!(saved.content_hash, "7bWpKq9xR3mNvHf2Tc8Yd");
+    assert_eq!(saved.physical_location, "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd");
+}
+
+#[test]
+fn file_saved_carries_content_identity_and_location() {
+    let saved = FileSaved {
+        logical_write_id: LogicalWriteId::new("write_789"),
+        target: FileSavedTarget::SingleFile {
+            relative_path: "view/path/file.mp3".into(),
+        },
+        hierarchy: StorageHierarchyTag::new("A"),
+        level: CanonicalLevel::L0,
+        plane: CanonicalPlane::AsIs,
+        payload_kind: StoragePayloadKind::new("mp3"),
+        format: StoragePayloadFormat::new("mp3"),
+        correlation_ids: full_correlation(),
+        lineage_refs: full_lineage(),
+        routing_tags: vec![],
+        content_hash: test_content_hash(),
+        physical_location: test_physical_location(),
+    };
+
+    assert_eq!(saved.content_hash, "7bWpKq9xR3mNvHf2Tc8Yd");
+    assert_eq!(saved.physical_location, "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd");
+    assert_eq!(saved.target, FileSavedTarget::SingleFile {
+        relative_path: "view/path/file.mp3".into(),
+    });
 }
 
 #[test]
@@ -161,12 +200,15 @@ fn derivation_trigger_reuses_full_saved_context() {
         correlation_ids: full_correlation(),
         lineage_refs: full_lineage(),
         routing_tags: vec![("date".into(), "2026-04-04".into())],
+        content_hash: test_content_hash(),
+        physical_location: test_physical_location(),
     };
 
     assert_eq!(
         trigger.relative_target,
         "B/L3/chunks/transcript/date/hash.parquet"
     );
+    assert_eq!(trigger.content_hash, "7bWpKq9xR3mNvHf2Tc8Yd");
 }
 
 #[test]
@@ -185,6 +227,8 @@ fn file_saved_supports_manifest_targets_for_multi_file_commits() {
         correlation_ids: full_correlation(),
         lineage_refs: full_lineage(),
         routing_tags: vec![("date".into(), "2026-04-04".into())],
+        content_hash: test_content_hash(),
+        physical_location: test_physical_location(),
     };
 
     match saved.target {

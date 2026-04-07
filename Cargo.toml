@@ -18,5 +18,8 @@ members = [
     "crates/views/telemetry_view",
     "crates/ui/layout_runtime",
     "crates/ui/panel_shells",
+    "crates/berg10/storage-catalog",
+    "crates/berg10/storage-vfs",
+    "crates/berg10/warm-cache",
 ]
 resolver = "2"

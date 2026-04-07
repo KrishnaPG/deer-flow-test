@@ -8,6 +8,8 @@ fn manifest_trigger_uses_manifest_target_not_partial_members() {
         vec![("mission_id".into(), "mission_1".into())],
         vec!["parent_1".into()],
         vec![("date".into(), "2026-04-04".into())],
+        "7bWpKq9xR3mNvHf2Tc8Yd".to_string(),
+        "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd".to_string(),
     );
     assert_eq!(
         trigger.relative_target,
@@ -17,4 +19,5 @@ fn manifest_trigger_uses_manifest_target_not_partial_members() {
         trigger.correlation_ids.mission_id.unwrap().to_string(),
         "mission_1"
     );
+    assert_eq!(trigger.content_hash, "7bWpKq9xR3mNvHf2Tc8Yd");
 }

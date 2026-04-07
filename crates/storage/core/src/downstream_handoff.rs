@@ -16,6 +16,8 @@ pub fn make_file_saved(
     correlation_ids: Vec<(String, String)>,
     lineage_refs: Vec<String>,
     routing_tags: Vec<(String, String)>,
+    content_hash: String,
+    physical_location: String,
 ) -> FileSaved {
     FileSaved {
         logical_write_id,
@@ -30,6 +32,8 @@ pub fn make_file_saved(
         correlation_ids: StorageCorrelationIds::from_tuples(correlation_ids),
         lineage_refs: StorageLineageRefs::from_parent_refs(lineage_refs),
         routing_tags,
+        content_hash,
+        physical_location,
     }
 }
 
@@ -40,6 +44,8 @@ pub fn derive_trigger_from_manifest(
     correlation_ids: Vec<(String, String)>,
     lineage_refs: Vec<String>,
     routing_tags: Vec<(String, String)>,
+    content_hash: String,
+    physical_location: String,
 ) -> DerivationTrigger {
     DerivationTrigger {
         logical_write_id: LogicalWriteId::new(logical_write_id),
@@ -52,5 +58,7 @@ pub fn derive_trigger_from_manifest(
         correlation_ids: StorageCorrelationIds::from_tuples(correlation_ids),
         lineage_refs: StorageLineageRefs::from_parent_refs(lineage_refs),
         routing_tags,
+        content_hash,
+        physical_location,
     }
 }
