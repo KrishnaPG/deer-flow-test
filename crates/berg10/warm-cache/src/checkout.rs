@@ -4,12 +4,12 @@ use anyhow::Result;
 use chrono::Utc;
 use tracing;
 
-use berg10_storage_catalog::{Berg10Catalog, FileRecord, CheckoutInfo, CheckoutReceipt};
+use berg10_storage_catalog::{Berg10Catalog, FileRecord, HierarchyCheckoutInfo, HierarchyCheckoutReceipt};
 use berg10_storage_vfs::StorageBackend;
 
 use crate::config::WarmCacheConfig;
 
-/// Manages local filesystem view materialization as symlink trees.
+/// Manages local filesystem virtual folder hierarchy materialization as symlink trees.
 pub struct WarmCache {
     config: WarmCacheConfig,
     catalog: Berg10Catalog,
@@ -21,18 +21,18 @@ impl WarmCache {
         Self { config, catalog, vfs }
     }
 
-    /// Materialize a view as a symlink tree under base_dir/checkouts/<view_name>/.
-    pub async fn checkout(&self, view_name: &str) -> Result<CheckoutReceipt> {
-        let files = self.catalog.resolve_view(view_name).await?;
-        let views = self.catalog.list_views(Some("active")).await?;
-        let view = views.iter().find(|v| v.view_name == view_name);
+    /// Materialize a virtual folder hierarchy as a symlink tree under base_dir/checkouts/<hierarchy_name>/.
+    pub async fn checkout_hierarchy(&self, hierarchy_name: &str) -> Result<HierarchyCheckoutReceipt> {
+        let files = self.catalog.resolve_virtual_folder_hierarchy(hierarchy_name).await?;
+        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some("active")).await?;
+        let hierarchy = hierarchies.iter().find(|h| h.hierarchy_name == hierarchy_name);
 
-        let hierarchy_order = match view {
+        let hierarchy_order = match hierarchy {
             Some(v) => v.hierarchy_order.clone(),
             None => vec!["hierarchy".to_string(), "level".to_string(), "plane".to_string()],
         };
 
-        let checkout_path = self.config.checkout_path(view_name);
+        let checkout_path = self.config.checkout_path(hierarchy_name);
         let checkout_dir = Path::new(&checkout_path);
 
         // Clean existing checkout
@@ -51,7 +51,7 @@ impl WarmCache {
             self.ensure_content_cached(file).await?;
 
             // Build symlink path from hierarchy order
-            let symlink_path = Self::build_view_path(file, &hierarchy_order);
+            let symlink_path = Self::build_hierarchy_path(file, &hierarchy_order);
             let full_symlink_path = checkout_dir.join(&symlink_path);
 
             // Create parent directories
@@ -67,7 +67,7 @@ impl WarmCache {
             let symlink_parent = match full_symlink_path.parent() {
                 Some(p) => p,
                 None => {
-                    tracing::error!(view_name = %view_name, "Symlink path has no parent directory");
+                    tracing::error!(hierarchy_name = %hierarchy_name, "Symlink path has no parent directory");
                     continue;
                 }
             };
@@ -89,18 +89,22 @@ impl WarmCache {
         }
 
         tracing::info!(
-            view_name = %view_name,
+            hierarchy_name = %hierarchy_name,
             file_count = file_count,
             checkout_path = %checkout_path,
-            "View checkout complete"
+            "Virtual folder hierarchy checkout complete"
         );
 
-        Ok(CheckoutReceipt {
-            view_name: view_name.to_string(),
+        Ok(HierarchyCheckoutReceipt {
+            hierarchy_name: hierarchy_name.to_string(),
             checkout_path,
             file_count,
             created_at: Utc::now(),
         })
+    }
+
+    pub async fn checkout(&self, hierarchy_name: &str) -> Result<HierarchyCheckoutReceipt> {
+        self.checkout_hierarchy(hierarchy_name).await
     }
 
     /// Ensure content blob exists in local cache, fetching from cold storage if needed.
@@ -123,7 +127,7 @@ impl WarmCache {
     }
 
     /// Build the symlink path within the checkout directory based on hierarchy order.
-    pub fn build_view_path(file: &FileRecord, hierarchy_order: &[String]) -> String {
+    pub fn build_hierarchy_path(file: &FileRecord, hierarchy_order: &[String]) -> String {
         let mut parts = Vec::new();
 
         for attr in hierarchy_order {
@@ -157,43 +161,43 @@ impl WarmCache {
         parts.join("/")
     }
 
-    /// List all active checkouts.
-    pub async fn list_checkouts(&self) -> Result<Vec<CheckoutInfo>> {
-        let views = self.catalog.list_views(Some("active")).await?;
+    /// List all active hierarchy checkouts.
+    pub async fn list_checkouts(&self) -> Result<Vec<HierarchyCheckoutInfo>> {
+        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some("active")).await?;
         let mut infos = Vec::new();
 
-        for view in &views {
-            let checkout_path = self.config.checkout_path(&view.view_name);
+        for hierarchy in &hierarchies {
+            let checkout_path = self.config.checkout_path(&hierarchy.hierarchy_name);
             let file_count = count_files_in_dir(&checkout_path).unwrap_or(0);
 
-            infos.push(CheckoutInfo {
-                view_name: view.view_name.clone(),
+            infos.push(HierarchyCheckoutInfo {
+                hierarchy_name: hierarchy.hierarchy_name.clone(),
                 checkout_path,
                 file_count,
-                status: view.status.clone(),
+                status: hierarchy.status.clone(),
             });
         }
 
         Ok(infos)
     }
 
-    /// Deactivate a checkout: remove symlink tree and update view status.
-    pub async fn deactivate_checkout(&self, view_name: &str) -> Result<()> {
-        let checkout_path = self.config.checkout_path(view_name);
+    /// Deactivate a hierarchy checkout: remove symlink tree and update hierarchy status.
+    pub async fn deactivate_checkout(&self, hierarchy_name: &str) -> Result<()> {
+        let checkout_path = self.config.checkout_path(hierarchy_name);
         if Path::new(&checkout_path).exists() {
             std::fs::remove_dir_all(&checkout_path)?;
         }
 
-        self.catalog.update_view_status(view_name, "inactive").await?;
-        tracing::info!(view_name = %view_name, "Checkout deactivated");
+        self.catalog.update_virtual_folder_hierarchy_status(hierarchy_name, "inactive").await?;
+        tracing::info!(hierarchy_name = %hierarchy_name, "Hierarchy checkout deactivated");
         Ok(())
     }
 
-    /// Remove a checkout: delete symlink tree and remove view definition.
-    pub async fn remove_checkout(&self, view_name: &str) -> Result<()> {
-        self.deactivate_checkout(view_name).await?;
-        self.catalog.delete_view(view_name).await?;
-        tracing::info!(view_name = %view_name, "Checkout removed");
+    /// Remove a hierarchy checkout: delete symlink tree and remove hierarchy definition.
+    pub async fn remove_checkout(&self, hierarchy_name: &str) -> Result<()> {
+        self.deactivate_checkout(hierarchy_name).await?;
+        self.catalog.delete_virtual_folder_hierarchy(hierarchy_name).await?;
+        tracing::info!(hierarchy_name = %hierarchy_name, "Hierarchy checkout removed");
         Ok(())
     }
 }
@@ -248,12 +252,12 @@ mod tests {
     #[test]
     fn config_paths_are_correct() {
         let config = WarmCacheConfig::with_base_dir("/base");
-        assert_eq!(config.checkout_path("my-view"), "/base/checkouts/my-view");
+        assert_eq!(config.checkout_path("music-by-year"), "/base/checkouts/music-by-year");
         assert_eq!(config.content_path("abc123"), "/base/content/ab/c1/23.blob");
     }
 
     #[test]
-    fn build_view_path_with_hierarchy() {
+    fn build_hierarchy_path_with_hierarchy() {
         let file = FileRecord {
             content_hash: "abc123".to_string(),
             hierarchy: "A".to_string(),
@@ -271,15 +275,15 @@ mod tests {
         };
 
         // Test year-first hierarchy
-        let path = WarmCache::build_view_path(&file, &["year".to_string(), "singer".to_string()]);
+        let path = WarmCache::build_hierarchy_path(&file, &["year".to_string(), "singer".to_string()]);
         assert_eq!(path, "2024/adele/song1.mp3");
 
         // Test singer-first hierarchy
-        let path = WarmCache::build_view_path(&file, &["singer".to_string(), "year".to_string()]);
+        let path = WarmCache::build_hierarchy_path(&file, &["singer".to_string(), "year".to_string()]);
         assert_eq!(path, "adele/2024/song1.mp3");
 
         // Test with standard hierarchy
-        let path = WarmCache::build_view_path(&file, &["hierarchy".to_string(), "level".to_string(), "plane".to_string()]);
+        let path = WarmCache::build_hierarchy_path(&file, &["hierarchy".to_string(), "level".to_string(), "plane".to_string()]);
         assert_eq!(path, "a/l0/as-is/song1.mp3");
     }
 }

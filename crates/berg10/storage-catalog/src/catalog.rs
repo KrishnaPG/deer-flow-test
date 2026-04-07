@@ -11,11 +11,11 @@ use tracing;
 
 use crate::config::{CatalogConfig, CatalogBackendConfig};
 use crate::query::QueryEngine;
-use crate::types::{FileRecord, ViewDefinition};
+use crate::types::{FileRecord, VirtualFolderHierarchy};
 
 pub const BERG10_NAMESPACE: &str = "berg10";
 pub const FILES_TABLE: &str = "files";
-pub const VIEWS_TABLE: &str = "views";
+pub const VIRTUAL_FOLDER_HIERARCHIES_TABLE: &str = "virtual_folder_hierarchies";
 
 pub struct Berg10Catalog {
     catalog: Arc<dyn Catalog>,
@@ -109,8 +109,8 @@ impl Berg10Catalog {
         }
 
         // Create views table if not exists
-        if !self.catalog.table_exists(&TableIdent::new(ns.clone(), VIEWS_TABLE.to_string())).await? {
-            self.create_views_table(&ns).await?;
+        if !self.catalog.table_exists(&TableIdent::new(ns.clone(), VIRTUAL_FOLDER_HIERARCHIES_TABLE.to_string())).await? {
+            self.create_virtual_folder_hierarchies_table(&ns).await?;
         }
 
         Ok(())
@@ -128,15 +128,15 @@ impl Berg10Catalog {
         Ok(())
     }
 
-    async fn create_views_table(&self, ns: &NamespaceIdent) -> Result<()> {
-        let schema = Self::views_schema();
+    async fn create_virtual_folder_hierarchies_table(&self, ns: &NamespaceIdent) -> Result<()> {
+        let schema = Self::virtual_folder_hierarchies_schema();
         let creation = TableCreation::builder()
-            .name(VIEWS_TABLE.to_string())
+            .name(VIRTUAL_FOLDER_HIERARCHIES_TABLE.to_string())
             .schema(schema)
             .build();
 
         self.catalog.create_table(ns, creation).await?;
-        tracing::info!("Created berg10.views table");
+        tracing::info!("Created berg10.virtual_folder_hierarchies table");
         Ok(())
     }
 
@@ -177,11 +177,11 @@ impl Berg10Catalog {
             .expect("valid files schema")
     }
 
-    fn views_schema() -> Schema {
+    fn virtual_folder_hierarchies_schema() -> Schema {
         Schema::builder()
             .with_fields(
                 vec![
-                    NestedField::required(1, "view_name", Type::Primitive(PrimitiveType::String)).into(),
+                    NestedField::required(1, "hierarchy_name", Type::Primitive(PrimitiveType::String)).into(),
                     NestedField::required(2, "hierarchy_order", Type::List(
                         iceberg::spec::ListType {
                             element_field: NestedField::required(3, "element", Type::Primitive(PrimitiveType::String)).into(),
@@ -252,13 +252,13 @@ impl Berg10Catalog {
         Ok(records)
     }
 
-    /// Create a view definition.
-    pub async fn create_view(&self, view: &ViewDefinition) -> Result<()> {
-        let metadata = serde_json::to_string(view)?;
+    /// Create a virtual folder hierarchy definition.
+    pub async fn create_virtual_folder_hierarchy(&self, hierarchy: &VirtualFolderHierarchy) -> Result<()> {
+        let metadata = serde_json::to_string(hierarchy)?;
         let file_path = format!(
-            "{}/metadata/berg10/views/{}.json",
+            "{}/metadata/berg10/virtual_folder_hierarchies/{}.json",
             self.warehouse_path.trim_start_matches("file://"),
-            view.view_name
+            hierarchy.hierarchy_name
         );
 
         if let Some(parent) = std::path::Path::new(&file_path).parent() {
@@ -266,71 +266,71 @@ impl Berg10Catalog {
         }
         std::fs::write(&file_path, metadata)?;
 
-        tracing::info!(view_name = %view.view_name, "Created view definition");
+        tracing::info!(hierarchy_name = %hierarchy.hierarchy_name, "Created virtual folder hierarchy definition");
         Ok(())
     }
 
-    /// List views, optionally filtered by status.
-    pub async fn list_views(&self, status: Option<&str>) -> Result<Vec<ViewDefinition>> {
+    /// List virtual folder hierarchies, optionally filtered by status.
+    pub async fn list_virtual_folder_hierarchies(&self, status: Option<&str>) -> Result<Vec<VirtualFolderHierarchy>> {
         let dir_path = format!(
-            "{}/metadata/berg10/views",
+            "{}/metadata/berg10/virtual_folder_hierarchies",
             self.warehouse_path.trim_start_matches("file://")
         );
 
-        let mut views = Vec::new();
+        let mut hierarchies = Vec::new();
         if std::path::Path::new(&dir_path).exists() {
             for entry in std::fs::read_dir(dir_path)? {
                 let entry = entry?;
                 if entry.path().extension().and_then(|e| e.to_str()) == Some("json") {
                     let content = std::fs::read_to_string(entry.path())?;
-                    if let Ok(view) = serde_json::from_str::<ViewDefinition>(&content) {
+                    if let Ok(hierarchy) = serde_json::from_str::<VirtualFolderHierarchy>(&content) {
                         if let Some(s) = status {
-                            if view.status == s {
-                                views.push(view);
+                            if hierarchy.status == s {
+                                hierarchies.push(hierarchy);
                             }
                         } else {
-                            views.push(view);
+                            hierarchies.push(hierarchy);
                         }
                     }
                 }
             }
         }
 
-        Ok(views)
+        Ok(hierarchies)
     }
 
-    /// Update a view's status.
-    pub async fn update_view_status(&self, view_name: &str, status: &str) -> Result<()> {
+    /// Update a virtual folder hierarchy's status.
+    pub async fn update_virtual_folder_hierarchy_status(&self, hierarchy_name: &str, status: &str) -> Result<()> {
         let file_path = format!(
-            "{}/metadata/berg10/views/{}.json",
+            "{}/metadata/berg10/virtual_folder_hierarchies/{}.json",
             self.warehouse_path.trim_start_matches("file://"),
-            view_name
+            hierarchy_name
         );
 
         if !std::path::Path::new(&file_path).exists() {
-            return Err(anyhow!("View not found: {}", view_name));
+            return Err(anyhow!("Virtual folder hierarchy not found: {}", hierarchy_name));
         }
 
         let content = std::fs::read_to_string(&file_path)?;
-        let mut view: ViewDefinition = serde_json::from_str(&content)?;
-        view.status = status.to_string();
-        view.updated_at = Utc::now();
-        let updated = serde_json::to_string(&view)?;
+        let mut hierarchy: VirtualFolderHierarchy = serde_json::from_str(&content)?;
+        hierarchy.status = status.to_string();
+        hierarchy.updated_at = Utc::now();
+        let updated = serde_json::to_string(&hierarchy)?;
         std::fs::write(&file_path, updated)?;
 
         Ok(())
     }
 
-    /// Delete a view definition.
-    pub async fn delete_view(&self, view_name: &str) -> Result<()> {
+    /// Delete a virtual folder hierarchy definition.
+    pub async fn delete_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<()> {
         let file_path = format!(
-            "{}/metadata/berg10/views/{}.json",
+            "{}/metadata/berg10/virtual_folder_hierarchies/{}.json",
             self.warehouse_path.trim_start_matches("file://"),
-            view_name
+            hierarchy_name
         );
 
         if !std::path::Path::new(&file_path).exists() {
-            return Err(anyhow!("View not found: {}", view_name));
+            return Err(anyhow!("Virtual folder hierarchy not found: {}", hierarchy_name));
         }
 
         std::fs::remove_file(&file_path)?;
@@ -338,15 +338,15 @@ impl Berg10Catalog {
         Ok(())
     }
 
-    /// Resolve a view: get all files matching the view's filter and hierarchy.
-    pub async fn resolve_view(&self, view_name: &str) -> Result<Vec<FileRecord>> {
-        let views = self.list_views(Some("active")).await?;
-        let view = match views.iter().find(|v| v.view_name == view_name) {
-            Some(v) => v,
+    /// Resolve a virtual folder hierarchy: get all files matching its filter and ordering.
+    pub async fn resolve_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<Vec<FileRecord>> {
+        let hierarchies = self.list_virtual_folder_hierarchies(Some("active")).await?;
+        let hierarchy = match hierarchies.iter().find(|h| h.hierarchy_name == hierarchy_name) {
+            Some(h) => h,
             None => return Ok(Vec::new()),
         };
 
-        let filter = view.filter_expr.as_deref().unwrap_or("*");
+        let filter = hierarchy.filter_expr.as_deref().unwrap_or("*");
         let files = self.query_files(filter).await?;
 
         Ok(files)
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn view_crud_operations() {
+    async fn virtual_folder_hierarchy_crud_operations() {
         let tmp = TempDir::new().unwrap();
         let config = CatalogConfig {
             warehouse_path: tmp.path().to_string_lossy().to_string(),
@@ -422,8 +422,8 @@ mod tests {
 
         let catalog = Berg10Catalog::new(&config).await.unwrap();
 
-        let view = ViewDefinition {
-            view_name: "test-view".to_string(),
+        let hierarchy = VirtualFolderHierarchy {
+            hierarchy_name: "test-hierarchy".to_string(),
             hierarchy_order: vec!["year".to_string(), "singer".to_string()],
             filter_expr: Some("payload_kind = 'mp3'".to_string()),
             status: "active".to_string(),
@@ -431,21 +431,21 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        catalog.create_view(&view).await.unwrap();
+        catalog.create_virtual_folder_hierarchy(&hierarchy).await.unwrap();
 
-        let views = catalog.list_views(None).await.unwrap();
-        assert_eq!(views.len(), 1);
-        assert_eq!(views[0].view_name, "test-view");
+        let hierarchies = catalog.list_virtual_folder_hierarchies(None).await.unwrap();
+        assert_eq!(hierarchies.len(), 1);
+        assert_eq!(hierarchies[0].hierarchy_name, "test-hierarchy");
 
-        catalog.update_view_status("test-view", "inactive").await.unwrap();
-        let active_views = catalog.list_views(Some("active")).await.unwrap();
-        assert_eq!(active_views.len(), 0);
+        catalog.update_virtual_folder_hierarchy_status("test-hierarchy", "inactive").await.unwrap();
+        let active_hierarchies = catalog.list_virtual_folder_hierarchies(Some("active")).await.unwrap();
+        assert_eq!(active_hierarchies.len(), 0);
 
-        let inactive_views = catalog.list_views(Some("inactive")).await.unwrap();
-        assert_eq!(inactive_views.len(), 1);
+        let inactive_hierarchies = catalog.list_virtual_folder_hierarchies(Some("inactive")).await.unwrap();
+        assert_eq!(inactive_hierarchies.len(), 1);
 
-        catalog.delete_view("test-view").await.unwrap();
-        let all_views = catalog.list_views(None).await.unwrap();
-        assert_eq!(all_views.len(), 0);
+        catalog.delete_virtual_folder_hierarchy("test-hierarchy").await.unwrap();
+        let all_hierarchies = catalog.list_virtual_folder_hierarchies(None).await.unwrap();
+        assert_eq!(all_hierarchies.len(), 0);
     }
 }

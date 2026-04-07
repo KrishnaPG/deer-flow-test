@@ -6,13 +6,6 @@ use deer_foundation_contracts::{AppendDataRequest, CanonicalPlane, FileSaved};
 use crate::downstream_handoff::make_file_saved;
 use crate::view_path_builder::build_relative_path;
 
-fn logical_filename_from_annotations(annotations: &[(String, String)]) -> Option<String> {
-    annotations
-        .iter()
-        .find(|(key, _)| key == "logical_filename")
-        .map(|(_, value)| value.clone())
-}
-
 /// Bridge: AppendDataRequest -> VFS write -> catalog registration -> FileSaved emission.
 pub struct IngestionBridge {
     catalog: Berg10Catalog,
@@ -51,7 +44,7 @@ impl IngestionBridge {
             &hash_str,
         );
 
-        let logical_filename = logical_filename_from_annotations(&request.metadata.opaque_annotations);
+        let logical_filename = request.metadata.logical_filename.clone();
 
         // Register in catalog
         let record = FileRecord {
