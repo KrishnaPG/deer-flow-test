@@ -41,10 +41,10 @@ fn path_segments_are_sanitized_against_path_shaping() {
 }
 
 #[test]
-fn view_path_with_custom_hierarchy() {
-    use deer_storage_core::view_path_builder::build_view_path;
+fn virtual_folder_hierarchy_path_with_custom_ordering() {
+    use deer_storage_core::view_path_builder::build_virtual_folder_hierarchy_path;
 
-    let path = build_view_path(
+    let path = build_virtual_folder_hierarchy_path(
         &["year".to_string(), "singer".to_string()],
         "A",
         "L0",
@@ -62,10 +62,10 @@ fn view_path_with_custom_hierarchy() {
 }
 
 #[test]
-fn view_path_with_reversed_hierarchy() {
-    use deer_storage_core::view_path_builder::build_view_path;
+fn virtual_folder_hierarchy_path_with_reversed_ordering() {
+    use deer_storage_core::view_path_builder::build_virtual_folder_hierarchy_path;
 
-    let path = build_view_path(
+    let path = build_virtual_folder_hierarchy_path(
         &["singer".to_string(), "year".to_string()],
         "A",
         "L0",

@@ -67,12 +67,12 @@ pub fn build_relative_path(
     path
 }
 
-/// Build a view-relative path from a custom hierarchy ordering and file attributes.
-/// This is used for warm cache materialization where the view defines its own hierarchy.
+/// Build a virtual-folder-hierarchy-relative path from a custom hierarchy ordering and file attributes.
+/// This is used for warm cache materialization where the hierarchy defines its own ordering.
 ///
 /// Supported attribute names: "hierarchy", "level", "plane", "payload_kind", "payload_format",
 /// and any key found in routing_tags.
-pub fn build_view_path(
+pub fn build_virtual_folder_hierarchy_path(
     hierarchy_order: &[String],
     hierarchy: &str,
     level: &str,
@@ -144,8 +144,8 @@ mod tests {
     }
 
     #[test]
-    fn view_path_with_custom_hierarchy() {
-        let path = build_view_path(
+    fn virtual_folder_hierarchy_path_with_custom_ordering() {
+        let path = build_virtual_folder_hierarchy_path(
             &["year".to_string(), "singer".to_string()],
             "A",
             "L0",
@@ -163,8 +163,8 @@ mod tests {
     }
 
     #[test]
-    fn view_path_with_reversed_hierarchy() {
-        let path = build_view_path(
+    fn virtual_folder_hierarchy_path_with_reversed_ordering() {
+        let path = build_virtual_folder_hierarchy_path(
             &["singer".to_string(), "year".to_string()],
             "A",
             "L0",

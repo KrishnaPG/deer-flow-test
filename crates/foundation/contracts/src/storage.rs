@@ -116,9 +116,9 @@ pub struct StorageRequestMetadata {
     pub idempotency_key: Option<IdempotencyKey>,
     pub writer_identity: Option<WriterId>,
     pub known_content_hash: Option<String>,
+    pub logical_filename: Option<String>,
     pub correlation: StorageCorrelationIds,
     pub lineage: StorageLineageRefs,
-    pub opaque_annotations: Vec<StorageTag>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -26,8 +26,8 @@ impl WarmCacheConfig {
         }
     }
 
-    pub fn checkout_path(&self, view_name: &str) -> String {
-        format!("{}/{}", self.checkouts_dir, view_name)
+    pub fn checkout_path(&self, hierarchy_name: &str) -> String {
+        format!("{}/{}", self.checkouts_dir, hierarchy_name)
     }
 
     pub fn content_path(&self, content_hash: &str) -> String {

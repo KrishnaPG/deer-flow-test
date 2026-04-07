@@ -1,4 +1,4 @@
-use berg10_storage_catalog::{Berg10Catalog, CatalogConfig, FileRecord, ViewDefinition};
+use berg10_storage_catalog::{Berg10Catalog, CatalogConfig, FileRecord, VirtualFolderHierarchy};
 use chrono::Utc;
 use tempfile::TempDir;
 
@@ -36,7 +36,7 @@ async fn end_to_end_file_registration_and_query() {
 }
 
 #[tokio::test]
-async fn end_to_end_view_management() {
+async fn end_to_end_virtual_folder_hierarchy_management() {
     let tmp = TempDir::new().unwrap();
     let config = CatalogConfig {
         warehouse_path: tmp.path().to_string_lossy().to_string(),
@@ -45,8 +45,8 @@ async fn end_to_end_view_management() {
 
     let catalog = Berg10Catalog::new(&config).await.unwrap();
 
-    let view = ViewDefinition {
-        view_name: "integration-test-view".to_string(),
+    let hierarchy = VirtualFolderHierarchy {
+        hierarchy_name: "integration-test-hierarchy".to_string(),
         hierarchy_order: vec!["level".to_string(), "payload_kind".to_string()],
         filter_expr: Some("payload_kind = 'chat-note'".to_string()),
         status: "active".to_string(),
@@ -54,14 +54,14 @@ async fn end_to_end_view_management() {
         updated_at: Utc::now(),
     };
 
-    catalog.create_view(&view).await.unwrap();
+    catalog.create_virtual_folder_hierarchy(&hierarchy).await.unwrap();
 
-    let views = catalog.list_views(Some("active")).await.unwrap();
-    assert_eq!(views.len(), 1);
-    assert_eq!(views[0].view_name, "integration-test-view");
-    assert_eq!(views[0].hierarchy_order, vec!["level", "payload_kind"]);
+    let hierarchies = catalog.list_virtual_folder_hierarchies(Some("active")).await.unwrap();
+    assert_eq!(hierarchies.len(), 1);
+    assert_eq!(hierarchies[0].hierarchy_name, "integration-test-hierarchy");
+    assert_eq!(hierarchies[0].hierarchy_order, vec!["level", "payload_kind"]);
 
-    catalog.update_view_status("integration-test-view", "inactive").await.unwrap();
-    let active = catalog.list_views(Some("active")).await.unwrap();
+    catalog.update_virtual_folder_hierarchy_status("integration-test-hierarchy", "inactive").await.unwrap();
+    let active = catalog.list_virtual_folder_hierarchies(Some("active")).await.unwrap();
     assert_eq!(active.len(), 0);
 }

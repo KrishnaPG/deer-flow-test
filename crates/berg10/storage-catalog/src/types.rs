@@ -19,8 +19,8 @@ pub struct FileRecord {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ViewDefinition {
-    pub view_name: String,
+pub struct VirtualFolderHierarchy {
+    pub hierarchy_name: String,
     pub hierarchy_order: Vec<String>,
     pub filter_expr: Option<String>,
     pub status: String,
@@ -29,16 +29,16 @@ pub struct ViewDefinition {
 }
 
 #[derive(Clone, Debug)]
-pub struct CheckoutReceipt {
-    pub view_name: String,
+pub struct HierarchyCheckoutReceipt {
+    pub hierarchy_name: String,
     pub checkout_path: String,
     pub file_count: usize,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug)]
-pub struct CheckoutInfo {
-    pub view_name: String,
+pub struct HierarchyCheckoutInfo {
+    pub hierarchy_name: String,
     pub checkout_path: String,
     pub file_count: usize,
     pub status: String,
