@@ -1,5 +1,6 @@
-use opendal::{Operator, services};
+use opendal::{Operator, services, layers};
 use thiserror::Error;
+use tracing::instrument;
 
 #[derive(Error, Debug)]
 pub enum StorageError {
@@ -97,15 +98,21 @@ impl StorageConfig {
 pub struct StorageBackend {
     operator: Operator,
     backend_type: BackendType,
+    #[allow(dead_code)]
     lakefs_config: Option<LakeFsConfig>,
 }
 
 #[derive(Clone)]
 struct LakeFsConfig {
+    #[allow(dead_code)]
     host: String,
+    #[allow(dead_code)]
     access_key: String,
+    #[allow(dead_code)]
     secret_key: String,
+    #[allow(dead_code)]
     branch: String,
+    #[allow(dead_code)]
     repo: String,
 }
 
@@ -140,7 +147,7 @@ impl StorageBackend {
     fn build_operator(config: &StorageConfig) -> Result<Operator, StorageError> {
         let op = match &config.backend {
             BackendType::Fs => {
-                let mut builder = services::Fs::default().root(&config.root);
+                let builder = services::Fs::default().root(&config.root);
                 Operator::new(builder)?.finish()
             }
             BackendType::S3 => {
@@ -183,8 +190,6 @@ impl StorageBackend {
                 Operator::new(builder)?.finish()
             }
             BackendType::LakeFs => {
-                // OpenDAL LakeFS service is read-only; use S3-compatible interface for writes
-                // LakeFS exposes an S3-compatible API
                 let mut builder = services::S3::default()
                     .bucket(config.lakefs_repo.as_deref().unwrap_or("default"))
                     .root(&config.root)
@@ -207,19 +212,28 @@ impl StorageBackend {
             }
         };
 
+        let op = op.layer(layers::RetryLayer::new());
+
         Ok(op)
     }
 
     /// Write content to storage with the given key.
-    pub async fn write(&self, key: &str, data: Vec<u8>) -> Result<(), StorageError> {
-        self.operator.write(key, data).await?;
+    #[instrument(skip(self, data), fields(key = key), ret)]
+    pub async fn write(&self, key: &str, data: impl Into<Vec<u8>>) -> Result<(), StorageError> {
+        self.operator.write(key, data.into()).await?;
         Ok(())
     }
 
     /// Read content from storage by key.
+    #[instrument(skip(self), fields(key = key))]
     pub async fn read(&self, key: &str) -> Result<Vec<u8>, StorageError> {
-        let content = self.operator.read(key).await?;
-        Ok(content.to_vec())
+        match self.operator.read(key).await {
+            Ok(content) => Ok(content.to_vec()),
+            Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
+                Err(StorageError::NotFound(key.to_string()))
+            }
+            Err(e) => Err(StorageError::OperationFailed(e)),
+        }
     }
 
     /// Check if content exists in storage.
@@ -273,6 +287,7 @@ mod tests {
 
         let result = backend.read("nonexistent").await;
         assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), StorageError::NotFound(_)));
     }
 
     #[test]
