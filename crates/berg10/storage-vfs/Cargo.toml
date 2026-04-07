@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 deer-foundation-contracts = { path = "../../foundation/contracts" }
-opendal = { version = "0.55.0" }
+opendal = { version = "0.55.0", features = ["services-s3", "services-gcs", "services-azblob", "services-memory", "services-fs"] }
 blake3 = "1.8.4"
 bs58 = "0.5.1"
 thiserror = "2.0.17"
