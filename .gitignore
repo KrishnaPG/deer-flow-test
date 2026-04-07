@@ -65,3 +65,5 @@ Cargo.lock
 .kilocode
 skills-lock.json
 .worktrees/
+
+.bg-shell
