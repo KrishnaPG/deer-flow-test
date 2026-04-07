@@ -3,17 +3,18 @@
 //! Run with: `cargo run --example storage_demo`
 
 use deer_foundation_contracts::{
-    AppendControlRequest, CanonicalLevel, CanonicalPlane, ControlIntentKind, FileSavedTarget,
-    IdempotencyKey, LogicalWriteId, MissionId, StorageCorrelationIds, StorageHierarchyTag,
-    StorageLayout, StorageLineageRefs, StoragePayloadDescriptor, StoragePayloadFormat,
-    StoragePayloadKind, StorageQosPolicy, StorageQosTemplate, StorageRequestMetadata,
+    AppendControlRequest, AppendDataRequest, CanonicalLevel, CanonicalPlane, ControlIntentKind,
+    FileSavedTarget, IdempotencyKey, LogicalWriteId, MissionId, StorageCorrelationIds,
+    StorageHierarchyTag, StorageLayout, StorageLineageRefs, StoragePayloadDescriptor,
+    StoragePayloadFormat, StoragePayloadKind, StorageQosPolicy, StorageQosTemplate,
+    StorageRequestMetadata, WriterId,
 };
 use deer_storage_core::{
     admission::{AdmissionBudget, AdmissionController},
     downstream_handoff::{derive_trigger_from_manifest, make_file_saved},
-    path_builder::build_relative_path,
     topics::{route_topic, TopicClass},
     validation::validate_append_pair,
+    view_path_builder::build_relative_path,
 };
 
 fn main() {
@@ -38,7 +39,8 @@ fn main() {
                 ..Default::default()
             },
             lineage: StorageLineageRefs::default(),
-            writer_identity: "deerflow-driver".into(),
+            writer_identity: Some(WriterId::new("deerflow-driver")),
+            ..Default::default()
         },
         qos: StorageQosPolicy::from_template(StorageQosTemplate::FireAndForget),
         payload: StoragePayloadDescriptor::InlineBytes {
@@ -56,7 +58,8 @@ fn main() {
                 ..Default::default()
             },
             lineage: StorageLineageRefs::default(),
-            writer_identity: "deerflow-driver".into(),
+            writer_identity: Some(WriterId::new("deerflow-driver")),
+            ..Default::default()
         },
         qos: StorageQosPolicy::from_template(StorageQosTemplate::FireAndForget),
         rationale: Some("user_request".into()),
@@ -124,11 +127,21 @@ fn main() {
         vec![("mission_id".into(), "mission_1".into())],
         vec![],
         vec![("mission".into(), "mission_1".into())],
+        "sha256_abc123".into(),
     );
 
     match &saved.target {
         FileSavedTarget::SingleFile { relative_path } => {
             println!("7. FileSaved: target={}", relative_path);
+        }
+        FileSavedTarget::CommitManifest {
+            manifest_path,
+            member_count,
+        } => {
+            println!(
+                "7. FileSaved manifest: target={} members={}",
+                manifest_path, member_count
+            );
         }
     }
     println!(
@@ -147,6 +160,7 @@ fn main() {
         vec![("mission_id".into(), "mission_1".into())],
         vec!["write_1".into()],
         vec![("date".into(), "2026-04-04".into())],
+        "sha256_manifest".into(),
     );
     println!(
         "8. DerivationTrigger: target={} from={} parent(s)",

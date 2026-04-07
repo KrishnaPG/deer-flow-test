@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FileRecord {
@@ -10,12 +10,12 @@ pub struct FileRecord {
     pub payload_kind: String,
     pub payload_format: String,
     pub payload_size_bytes: u64,
-    pub physical_location: String,
     pub correlation_ids: Vec<(String, String)>,
     pub lineage_refs: Vec<String>,
     pub routing_tags: Vec<(String, String)>,
     pub written_at: DateTime<Utc>,
     pub writer_identity: Option<String>,
+    pub logical_filename: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

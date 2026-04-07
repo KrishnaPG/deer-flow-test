@@ -28,10 +28,6 @@ fn test_content_hash() -> String {
     "7bWpKq9xR3mNvHf2Tc8Yd".to_string()
 }
 
-fn test_physical_location() -> String {
-    "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd".to_string()
-}
-
 #[test]
 fn file_accepted_represents_durable_intent_handoff() {
     let accepted = FileAccepted {
@@ -60,7 +56,6 @@ fn file_saved_requires_full_downstream_handoff_metadata() {
         lineage_refs: full_lineage(),
         routing_tags: vec![("size".into(), "64x64".into())],
         content_hash: test_content_hash(),
-        physical_location: test_physical_location(),
     };
 
     match saved.target {
@@ -76,7 +71,6 @@ fn file_saved_requires_full_downstream_handoff_metadata() {
     );
 
     assert_eq!(saved.content_hash, "7bWpKq9xR3mNvHf2Tc8Yd");
-    assert_eq!(saved.physical_location, "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd");
 }
 
 #[test]
@@ -95,14 +89,15 @@ fn file_saved_carries_content_identity_and_location() {
         lineage_refs: full_lineage(),
         routing_tags: vec![],
         content_hash: test_content_hash(),
-        physical_location: test_physical_location(),
     };
 
     assert_eq!(saved.content_hash, "7bWpKq9xR3mNvHf2Tc8Yd");
-    assert_eq!(saved.physical_location, "s3://berg10-storage/7bWpKq9xR3mNvHf2Tc8Yd");
-    assert_eq!(saved.target, FileSavedTarget::SingleFile {
-        relative_path: "view/path/file.mp3".into(),
-    });
+    assert_eq!(
+        saved.target,
+        FileSavedTarget::SingleFile {
+            relative_path: "view/path/file.mp3".into(),
+        }
+    );
 }
 
 #[test]
@@ -201,7 +196,6 @@ fn derivation_trigger_reuses_full_saved_context() {
         lineage_refs: full_lineage(),
         routing_tags: vec![("date".into(), "2026-04-04".into())],
         content_hash: test_content_hash(),
-        physical_location: test_physical_location(),
     };
 
     assert_eq!(
@@ -228,7 +222,6 @@ fn file_saved_supports_manifest_targets_for_multi_file_commits() {
         lineage_refs: full_lineage(),
         routing_tags: vec![("date".into(), "2026-04-04".into())],
         content_hash: test_content_hash(),
-        physical_location: test_physical_location(),
     };
 
     match saved.target {

@@ -6,6 +6,13 @@ use deer_foundation_contracts::{AppendDataRequest, CanonicalPlane, FileSaved};
 use crate::downstream_handoff::make_file_saved;
 use crate::view_path_builder::build_relative_path;
 
+fn logical_filename_from_annotations(annotations: &[(String, String)]) -> Option<String> {
+    annotations
+        .iter()
+        .find(|(key, _)| key == "logical_filename")
+        .map(|(_, value)| value.clone())
+}
+
 /// Bridge: AppendDataRequest -> VFS write -> catalog registration -> FileSaved emission.
 pub struct IngestionBridge {
     catalog: Berg10Catalog,
@@ -33,7 +40,7 @@ impl IngestionBridge {
         self.vfs.write(&hash_str, payload_bytes.clone()).await
             .map_err(|e| format!("VFS write failed: {:?}", e))?;
 
-        // Build view-relative path
+        // Build virtual-folder-hierarchy-relative path
         let relative_path = build_relative_path(
             &request.layout.hierarchy,
             request.layout.level,
@@ -44,8 +51,7 @@ impl IngestionBridge {
             &hash_str,
         );
 
-        // Build physical location
-        let physical_location = format!("berg10://content/{}", hash_str);
+        let logical_filename = logical_filename_from_annotations(&request.metadata.opaque_annotations);
 
         // Register in catalog
         let record = FileRecord {
@@ -60,12 +66,12 @@ impl IngestionBridge {
             payload_kind: request.layout.payload_kind.as_str().to_string(),
             payload_format: request.layout.format.as_str().to_string(),
             payload_size_bytes: payload_bytes.len() as u64,
-            physical_location: physical_location.clone(),
             correlation_ids: request.metadata.correlation.extra.clone(),
             lineage_refs: request.metadata.lineage.parent_refs.clone(),
-            routing_tags: Vec::new(),
+            routing_tags: request.layout.partition_tags.clone(),
             written_at: Utc::now(),
             writer_identity: request.metadata.writer_identity.as_ref().map(|w| w.to_string()),
+            logical_filename,
         };
 
         self.catalog.register_file(&record).await
@@ -85,9 +91,8 @@ impl IngestionBridge {
             request.layout.format.clone(),
             correlation_tuples,
             lineage_strings,
-            Vec::new(),
+            request.layout.partition_tags.clone(),
             hash_str,
-            physical_location,
         ))
     }
 }

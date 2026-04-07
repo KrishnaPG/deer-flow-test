@@ -151,26 +151,26 @@ impl Berg10Catalog {
                     NestedField::required(5, "payload_kind", Type::Primitive(PrimitiveType::String)).into(),
                     NestedField::required(6, "payload_format", Type::Primitive(PrimitiveType::String)).into(),
                     NestedField::required(7, "payload_size_bytes", Type::Primitive(PrimitiveType::Long)).into(),
-                    NestedField::required(8, "physical_location", Type::Primitive(PrimitiveType::String)).into(),
-                    NestedField::required(9, "correlation_ids", Type::Map(
+                    NestedField::required(8, "correlation_ids", Type::Map(
                         iceberg::spec::MapType {
-                            key_field: NestedField::required(10, "key", Type::Primitive(PrimitiveType::String)).into(),
-                            value_field: NestedField::required(11, "value", Type::Primitive(PrimitiveType::String)).into(),
+                            key_field: NestedField::required(9, "key", Type::Primitive(PrimitiveType::String)).into(),
+                            value_field: NestedField::required(10, "value", Type::Primitive(PrimitiveType::String)).into(),
                         }
                     )).into(),
-                    NestedField::required(12, "lineage_refs", Type::List(
+                    NestedField::required(11, "lineage_refs", Type::List(
                         iceberg::spec::ListType {
-                            element_field: NestedField::required(13, "element", Type::Primitive(PrimitiveType::String)).into(),
+                            element_field: NestedField::required(12, "element", Type::Primitive(PrimitiveType::String)).into(),
                         }
                     )).into(),
-                    NestedField::required(14, "routing_tags", Type::Map(
+                    NestedField::required(13, "routing_tags", Type::Map(
                         iceberg::spec::MapType {
-                            key_field: NestedField::required(15, "key", Type::Primitive(PrimitiveType::String)).into(),
-                            value_field: NestedField::required(16, "value", Type::Primitive(PrimitiveType::String)).into(),
+                            key_field: NestedField::required(14, "key", Type::Primitive(PrimitiveType::String)).into(),
+                            value_field: NestedField::required(15, "value", Type::Primitive(PrimitiveType::String)).into(),
                         }
                     )).into(),
-                    NestedField::required(17, "written_at", Type::Primitive(PrimitiveType::Timestamp)).into(),
-                    NestedField::optional(18, "writer_identity", Type::Primitive(PrimitiveType::String)).into(),
+                    NestedField::required(16, "written_at", Type::Primitive(PrimitiveType::Timestamp)).into(),
+                    NestedField::optional(17, "writer_identity", Type::Primitive(PrimitiveType::String)).into(),
+                    NestedField::optional(18, "logical_filename", Type::Primitive(PrimitiveType::String)).into(),
                 ]
             )
             .build()
@@ -398,12 +398,12 @@ mod tests {
             payload_kind: "chat-note".to_string(),
             payload_format: "jsonl".to_string(),
             payload_size_bytes: 100,
-            physical_location: "file:///test".to_string(),
             correlation_ids: vec![("mission_id".to_string(), "m1".to_string())],
             lineage_refs: vec![],
             routing_tags: vec![],
             written_at: Utc::now(),
             writer_identity: Some("test".to_string()),
+            logical_filename: Some("note.jsonl".to_string()),
         };
 
         catalog.register_file(&record).await.unwrap();
