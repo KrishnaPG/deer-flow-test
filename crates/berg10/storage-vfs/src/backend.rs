@@ -2,6 +2,8 @@ use opendal::{Operator, services, layers};
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::lakefs::LakeFsClient;
+
 #[derive(Error, Debug)]
 pub enum StorageError {
     #[error("storage operation failed: {0}")]
@@ -98,41 +100,25 @@ impl StorageConfig {
 pub struct StorageBackend {
     operator: Operator,
     backend_type: BackendType,
-    #[allow(dead_code)]
-    lakefs_config: Option<LakeFsConfig>,
-}
-
-#[derive(Clone)]
-struct LakeFsConfig {
-    #[allow(dead_code)]
-    host: String,
-    #[allow(dead_code)]
-    access_key: String,
-    #[allow(dead_code)]
-    secret_key: String,
-    #[allow(dead_code)]
-    branch: String,
-    #[allow(dead_code)]
-    repo: String,
+    lakefs_client: Option<LakeFsClient>,
 }
 
 impl StorageBackend {
     pub fn new(config: &StorageConfig) -> Result<Self, StorageError> {
         let operator = Self::build_operator(config)?;
-        let lakefs_config = match &config.backend {
+        let lakefs_client = match &config.backend {
             BackendType::LakeFs => {
-                Some(LakeFsConfig {
-                    host: config.lakefs_host.clone()
-                        .ok_or(StorageError::MissingConfig("lakefs_host"))?,
-                    access_key: config.lakefs_access_key.clone()
-                        .ok_or(StorageError::MissingConfig("lakefs_access_key"))?,
-                    secret_key: config.lakefs_secret_key.clone()
-                        .ok_or(StorageError::MissingConfig("lakefs_secret_key"))?,
-                    branch: config.lakefs_branch.clone()
-                        .unwrap_or_else(|| "main".to_string()),
-                    repo: config.lakefs_repo.clone()
-                        .ok_or(StorageError::MissingConfig("lakefs_repo"))?,
-                })
+                let host = config.lakefs_host.as_deref()
+                    .unwrap_or("http://localhost:8000");
+                let repo = config.lakefs_repo.as_deref()
+                    .ok_or(StorageError::MissingConfig("lakefs_repo"))?;
+                let branch = config.lakefs_branch.as_deref()
+                    .unwrap_or("main");
+                let access_key = config.lakefs_access_key.as_deref()
+                    .ok_or(StorageError::MissingConfig("lakefs_access_key"))?;
+                let secret_key = config.lakefs_secret_key.as_deref()
+                    .ok_or(StorageError::MissingConfig("lakefs_secret_key"))?;
+                Some(LakeFsClient::new(host, repo, branch, access_key, secret_key))
             }
             _ => None,
         };
@@ -140,7 +126,7 @@ impl StorageBackend {
         Ok(Self {
             operator,
             backend_type: config.backend.clone(),
-            lakefs_config,
+            lakefs_client,
         })
     }
 
@@ -220,8 +206,20 @@ impl StorageBackend {
     /// Write content to storage with the given key.
     #[instrument(skip(self, data), fields(key = key), ret)]
     pub async fn write(&self, key: &str, data: impl Into<Vec<u8>>) -> Result<(), StorageError> {
-        self.operator.write(key, data.into()).await?;
-        Ok(())
+        match &self.backend_type {
+            BackendType::LakeFs => {
+                let client = self.lakefs_client.as_ref()
+                    .ok_or(StorageError::LakeFsApi("LakeFS client not initialized".into()))?;
+                let data = data.into();
+                client.upload_object(key, data).await
+                    .map_err(|e| StorageError::LakeFsApi(e.to_string()))?;
+                Ok(())
+            }
+            _ => {
+                self.operator.write(key, data.into()).await?;
+                Ok(())
+            }
+        }
     }
 
     /// Read content from storage by key.
@@ -253,6 +251,33 @@ impl StorageBackend {
     /// Get the raw operator for advanced operations.
     pub fn operator(&self) -> &Operator {
         &self.operator
+    }
+
+    /// Commit all staged LakeFS objects and return the commit ID.
+    /// No-op for non-LakeFS backends.
+    pub async fn commit(&self, message: &str) -> Result<Option<String>, StorageError> {
+        match &self.backend_type {
+            BackendType::LakeFs => {
+                let client = self.lakefs_client.as_ref()
+                    .ok_or(StorageError::LakeFsApi("LakeFS client not initialized".into()))?;
+                let commit = client.commit(message, None).await
+                    .map_err(|e| StorageError::LakeFsApi(e.to_string()))?;
+                Ok(Some(commit.commit_id))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Build a physical location string for a key using a known commit ID.
+    /// Returns None for non-LakeFS backends.
+    pub fn physical_location(&self, key: &str, commit_id: &str) -> Option<String> {
+        match &self.backend_type {
+            BackendType::LakeFs => {
+                let client = self.lakefs_client.as_ref()?;
+                Some(client.physical_location(key, commit_id))
+            }
+            _ => None,
+        }
     }
 }
 
