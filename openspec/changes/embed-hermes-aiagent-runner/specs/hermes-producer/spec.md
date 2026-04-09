@@ -75,3 +75,11 @@ The system SHALL document a file-based fallback under `<base_dir>/runners/hermes
 - **WHEN** Redpanda is unavailable in a low-priority dev environment
 - **THEN** raw events may be written to `<base_dir>/runners/hermes/l0_drop/<YYYY-MM-DD>/run_<uuid>.jsonl`
 - **AND** this path is considered a secondary fallback, not the primary architecture
+
+### Requirement: UI integration SHALL use a backend-compatible transport
+Hermes runner integration SHALL be exposed through a backend API rather than a desktop-only stdin/stdout subprocess contract.
+
+#### Scenario: Desktop and web clients share the same runner API
+- **WHEN** a desktop client or a web/WASM client needs Hermes interaction
+- **THEN** both use the same backend command and stream API
+- **AND** Hermes execution is not coupled to a UI-owned Python subprocess

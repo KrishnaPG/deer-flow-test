@@ -1,19 +1,18 @@
 # Tasks: Embed Hermes AIAgent Runner
 
-## Phase 1: Hermes Producer and Bridge
-1. **Create `apps/deer_gui/python/hermes_bridge.py` scaffold:**
-   - Copy the basic stdio loop and command handling structure from `bridge.py`.
-   - Remove LangChain `DeerFlowClient` initialization.
-   - Insert Hermes `AIAgent` initialization.
-   - Keep the bridge compatible with the current Rust `stdin`/`stdout` JSON-lines protocol.
+## Phase 1: Backend Hermes Runner Service
+1. **Create a backend-hosted Hermes runner service:**
+   - Host Hermes `AIAgent` in a backend process/service instead of a UI-spawned subprocess.
+   - Define a UI-neutral command surface for creating sessions, sending prompts, and subscribing to run events.
+   - Keep the service reusable by desktop and future web/WASM clients.
 
-2. **Implement Sink A (GUI Stdout):**
+2. **Implement Sink A (UI stream API):**
    - Implement `on_delta` and `on_tool_progress` callbacks.
-   - Map these callbacks to the `{"kind": "event", "event": "message", ...}` stdout protocol expected by the Rust UI.
+   - Map these callbacks to a backend stream event model usable by desktop and web/WASM clients.
    - Ensure UI events remain thin and do not become the source of truth for storage.
 
 3. **Implement Redpanda producer helper for raw L0 buffering:**
-   - Add producer wiring in Python for topic `hermes.l0_drop`.
+   - Add producer wiring in the Hermes runner for topic `hermes.l0_drop`.
    - Configure reliable settings:
      - `acks=all`
      - idempotent producer enabled
@@ -43,16 +42,17 @@
    - Preserve reasoning payloads and finish reasons when Hermes makes them available.
    - Add monotonic sequencing within a session so consumers can replay the session deterministically.
 
-## Phase 2: Rust Wiring
-6. **Update `apps/deer_gui/src/bridge/adapter.rs`:**
-   - Detect an environment variable (e.g., `DEER_ENGINE=hermes`).
-   - If set, spawn `hermes_bridge.py` instead of `bridge.py`.
-   - Export Redpanda configuration to the Python subprocess.
-   - Keep `BERG10_BASE_DIR` available for runner-owned files and low-priority fallback layout, even though Redpanda is primary.
-   - Ensure the process is started with the correct working directory and environment variables.
+## Phase 2: Client Wiring
+6. **Update `apps/deer_gui` to use the backend API:**
+   - Replace direct subprocess assumptions in the bridge/orchestrator layer with a transport that can talk to the Hermes runner service.
+   - Preserve the higher-level app/orchestrator model so the UI can remain mostly unchanged.
+
+7. **Prepare `apps/deer_chat_lab` as a thin consumer of the same backend API:**
+   - Reuse the shared transport-neutral event contract.
+   - Ensure future web/WASM compatibility by avoiding desktop-only process APIs.
 
 ## Phase 3: Operations and Reliability
-7. **Document and provision Redpanda topic behavior:**
+8. **Document and provision Redpanda topic behavior:**
    - Use topic name format `<engine>.l0_drop`.
    - Hermes topic is `hermes.l0_drop`.
    - Configure long-lived retention (target: one month).
@@ -60,19 +60,20 @@
    - Deletion after successful ingestion is a future ingestor responsibility and must be reflected in broker/data lifecycle policy later.
    - Operational target: future ingestor runs at least daily in the worst case.
 
-8. **Document low-priority file fallback (do not implement first):**
+9. **Document low-priority file fallback (do not implement first):**
    - Fallback path remains `<base_dir>/runners/hermes/l0_drop/<YYYY-MM-DD>/run_<uuid>.jsonl`.
    - This is dev-only and lower priority than the Redpanda path.
 
 ## Phase 4: Verification
-9. **Producer verification:**
-   - Run the GUI with Hermes selected and Redpanda configured.
+10. **Producer verification:**
+   - Run the backend Hermes service with Redpanda configured.
+   - Connect from a client (`deer_gui` first, later web/WASM-capable clients).
    - Send prompts that exercise normal responses, tool calls, and reasoning.
-   - Verify UI updates live.
+   - Verify UI updates live through the backend stream API.
    - Verify raw messages arrive on topic `hermes.l0_drop`.
    - Verify headers and payload fields are sufficient to reconstruct the session.
 
-10. **Reliability verification:**
+11. **Reliability verification:**
    - Simulate transient Redpanda failures and verify retries/backoff.
    - Verify duplicate publish protection with idempotent producer semantics.
    - Verify ordering within a session by consuming events back out of Redpanda.
