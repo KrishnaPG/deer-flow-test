@@ -1,0 +1,5 @@
+version: "0.1"
+name: "embed-hermes-aiagent-runner"
+description: "Embed Hermes AIAgent runner with dual-sink (GUI stdout + raw L0 disk drops)"
+status: "planning"
+applyRequires: ["proposal", "design", "tasks"]
