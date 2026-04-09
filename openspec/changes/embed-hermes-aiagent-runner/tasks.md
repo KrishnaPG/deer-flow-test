@@ -12,21 +12,23 @@
 
 3. **Implement Sink B (L0 Disk Drops):**
    - Create a `L0DropWriter` class to handle the file lifecycle.
-   - Implement date-based directory creation (`<drop_root>/l0_drop/YYYY-MM-DD/`).
+   - Resolve `<base_dir>` from `os.environ["BERG10_BASE_DIR"]`.
+   - Construct drop path: `<base_dir>/runners/hermes/l0_drop/<YYYY-MM-DD>/`.
    - Implement buffered `.tmp` writing with explicit `flush()` and `os.fsync()`.
    - Wire the Hermes callbacks to dump raw JSON payloads into this writer.
-   - Implement the atomic rename from `.tmp` to `.json` when the `AIAgent.run` completes.
+   - Implement the atomic rename from `.tmp` to `.jsonl` when the `AIAgent.run` completes.
 
 ## Phase 2: Rust Wiring
 4. **Update `apps/deer_gui/src/bridge/adapter.rs`:**
    - Detect an environment variable (e.g., `DEER_ENGINE=hermes`).
    - If set, spawn `hermes_bridge.py` instead of `bridge.py`.
+   - Ensure `BERG10_BASE_DIR` is exported to the Python subprocess.
    - Ensure the process is started with the correct working directory and environment variables.
 
 ## Phase 3: Verification
 5. **Manual Testing:**
-   - Run `DEER_ENGINE=hermes cargo run -p deer-gui`.
+   - Run `DEER_ENGINE=hermes BERG10_BASE_DIR=/tmp/test-base cargo run -p deer-gui`.
    - Send a prompt.
    - Verify UI updates live.
-   - Verify `<l0_drop>/YYYY-MM-DD/` contains the `.json` dump file with the raw events.
+   - Verify `<BERG10_BASE_DIR>/runners/hermes/l0_drop/<YYYY-MM-DD>/` contains the `.jsonl` dump file with raw events.
    - Verify the file contains valid JSON Lines.

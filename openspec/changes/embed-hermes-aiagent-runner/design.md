@@ -21,10 +21,10 @@ The system introduces a new Python process (`hermes_bridge.py`) spawned by the R
 
 4.  **Sink B: L0 Drop Buffer (Durable Staging)**
     - Captures the *raw, unmodified* event payloads directly from the Hermes callbacks.
-    - Organizes files by date: `<l0_drop_dir>/YYYY-MM-DD/run_<uuid>.tmp`.
+    - Organizes files by date: `<base_dir>/runners/hermes/l0_drop/YYYY-MM-DD/run_<uuid>.tmp`.
     - Appends events as JSON Lines (JSONL).
     - Executes `os.fsync()` for durability.
-    - Atomically renames to `<uuid>.json` on run completion.
+    - Atomically renames to `<uuid>.jsonl` on run completion.
 
 ## Data Model (Raw Event Shape)
 
@@ -46,17 +46,35 @@ Example JSONL row:
 
 ## Storage Directory Strategy
 
-- The `l0_drop` directory must be strictly isolated from user home directories (`~`).
-- It will be resolved dynamically based on system environment configuration (e.g., a specific temporary/cache volume or project-defined drop path). We will finalize the exact path resolution logic in code, ensuring it aligns with the backend's ingestion expectations.
-- Structure:
+- The system uses a centralized `<base_dir>` (resolved via environment variable `BERG10_BASE_DIR`).
+- Agent runners have dedicated directories under `<base_dir>/runners/<engine_name>/` to isolate their subsystems.
+- For Hermes:
+  - Raw L0 drops: `<base_dir>/runners/hermes/l0_drop/<YYYY-MM-DD>/run_<uuid>.tmp`
+  - Engine-specific files: `<base_dir>/runners/hermes/skills/`, `<base_dir>/runners/hermes/config/`, etc.
+- For DeerFlow:
+  - `<base_dir>/runners/deerflow/` (future runner subsystems).
+- For the VFS:
+  - `<base_dir>/vfs/checkouts/`, `<base_dir>/vfs/catalog/`, `<base_dir>/vfs/content/` (managed by `berg10-storage`).
+- **Schema Routing**: The ingestor determines how to parse events based on the path segment `runners/hermes/` vs `runners/deerflow/`, enabling schema-on-read without external registries.
+- Directory structure:
   ```text
-  <drop_root>/
-  └── l0_drop/
-      ├── 2026-04-08/
-      │   └── run_abc123.json     (Completed, pending ingestion)
-      └── 2026-04-09/
-          ├── run_def456.json     (Completed, pending ingestion)
-          └── run_ghi789.tmp      (In-progress writing)
+  <base_dir>/
+  ├── vfs/
+  │   ├── checkouts/
+  │   ├── catalog/
+  │   └── content/
+  └── runners/
+      ├── hermes/
+      │   ├── l0_drop/
+      │   │   ├── 2026-04-08/
+      │   │   │   └── run_abc123.jsonl     (Completed, pending ingestion)
+      │   │   └── 2026-04-09/
+      │   │       ├── run_def456.jsonl     (Completed, pending ingestion)
+      │   │       └── run_ghi789.tmp       (In-progress writing)
+      │   ├── skills/
+      │   └── config/
+      └── deerflow/
+          └── (future DeerFlow runner subsystems)
   ```
 
 ## State Machine (File Lifecycle)
