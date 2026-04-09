@@ -9,7 +9,7 @@ The current `deer-storage-core` crate implements an ingestion protocol: it valid
 
 The existing `deer-storage-core` crate will be preserved as the ingestion protocol layer. Three new crates layer on top: `berg10-storage-catalog`, `berg10-storage-vfs`, and `berg10-warm-cache`.
 
-The platform uses a user-configurable `base_dir` as the root for all subsystems. The warm cache lives at `base_dir/checkouts/`. The catalog defaults to SQLite at `base_dir/catalog/iceberg.sqlite`. Content blobs are cached locally at `base_dir/content/`.
+The platform uses a user-configurable `base_dir` as the root for all subsystems. The VFS and its related modules live under `base_dir/vfs/`. The warm cache lives at `base_dir/vfs/checkouts/`. The catalog defaults to SQLite at `base_dir/vfs/catalog/berg10.sqlite`. Content blobs are cached locally at `base_dir/vfs/content/`.
 
 ## Goals / Non-Goals
 
@@ -18,7 +18,7 @@ The platform uses a user-configurable `base_dir` as the root for all subsystems.
 - Iceberg catalog (`berg10.files`, `berg10.views`) as the queryable metadata layer
 - Configurable catalog backend: SQLite (default, embedded) or REST (Lakekeeper/Polaris)
 - Pluggable storage backends via OpenDAL (50+ services: S3, GCS, Azure, LakeFS, Google Drive, OneDrive, WebDAV, SFTP, etc.)
-- Warm cache: user-defined views materialized as symlink trees under `base_dir/checkouts/`
+- Warm cache: user-defined views materialized as symlink trees under `base_dir/vfs/checkouts/`
 - Multiple simultaneous view checkouts managed via UI
 - Iceberg snapshot alignment with LakeFS commits when LakeFS is the backend
 - Zero custom storage code — use `iceberg` (0.9.0), `opendal` (0.55.0), `blake3` (1.8.4), `bs58` (0.5.1)
@@ -65,7 +65,7 @@ The platform uses a user-configurable `base_dir` as the root for all subsystems.
 
 ### 5. Warm cache: symlinks to local content store
 
-**Decision:** Materialize views as symlink trees under `base_dir/checkouts/<view-name>/`. Symlinks point to `base_dir/content/<b58hash>` (local content cache). The content cache is populated on first access (lazy fetch from cold storage).
+**Decision:** Materialize views as symlink trees under `base_dir/vfs/checkouts/<view-name>/`. Symlinks point to `base_dir/vfs/content/<b58hash>` (local content cache). The content cache is populated on first access (lazy fetch from cold storage).
 
 **Rationale:** Symlinks are zero-copy, universal on Unix, and allow multiple views to reference the same content blob. The local content cache decouples the warm cache from cold storage availability. When cold storage is a local mount (e.g., S3 via s3fs), the content cache can optionally skip local copies.
 

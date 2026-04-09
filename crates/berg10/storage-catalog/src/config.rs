@@ -8,7 +8,7 @@ pub struct SqlCatalogConfig {
 impl Default for SqlCatalogConfig {
     fn default() -> Self {
         Self {
-            path: "catalog/berg10.sqlite".to_string(),
+            path: "vfs/catalog/berg10.sqlite".to_string(),
         }
     }
 }
@@ -49,7 +49,7 @@ impl CatalogConfig {
     pub fn with_base_dir(base_dir: &str) -> Self {
         Self {
             backend: CatalogBackendConfig::Sql(SqlCatalogConfig {
-                path: format!("{}/catalog/berg10.sqlite", base_dir),
+                path: format!("{}/vfs/catalog/berg10.sqlite", base_dir),
                 ..Default::default()
             }),
         }

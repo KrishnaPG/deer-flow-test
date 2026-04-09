@@ -248,8 +248,8 @@ mod tests {
     #[test]
     fn config_paths_are_correct() {
         let config = WarmCacheConfig::with_base_dir("/base");
-        assert_eq!(config.checkout_path("music-by-year"), "/base/checkouts/music-by-year");
-        assert_eq!(config.content_path("abc123"), "/base/content/ab/c1/23.blob");
+        assert_eq!(config.checkout_path("music-by-year"), "/base/vfs/checkouts/music-by-year");
+        assert_eq!(config.content_path("abc123"), "/base/vfs/content/ab/c1/23.blob");
     }
 
     #[test]

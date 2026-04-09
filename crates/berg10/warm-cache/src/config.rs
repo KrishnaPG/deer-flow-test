@@ -11,8 +11,8 @@ impl Default for WarmCacheConfig {
     fn default() -> Self {
         Self {
             base_dir: ".berg10".to_string(),
-            checkouts_dir: "checkouts".to_string(),
-            content_dir: "content".to_string(),
+            checkouts_dir: "vfs/checkouts".to_string(),
+            content_dir: "vfs/content".to_string(),
         }
     }
 }
@@ -21,8 +21,8 @@ impl WarmCacheConfig {
     pub fn with_base_dir(base_dir: &str) -> Self {
         Self {
             base_dir: base_dir.to_string(),
-            checkouts_dir: format!("{}/checkouts", base_dir),
-            content_dir: format!("{}/content", base_dir),
+            checkouts_dir: format!("{}/vfs/checkouts", base_dir),
+            content_dir: format!("{}/vfs/content", base_dir),
         }
     }
 
