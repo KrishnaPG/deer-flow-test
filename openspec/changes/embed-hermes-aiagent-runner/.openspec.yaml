@@ -1,5 +1,5 @@
 version: "0.1"
 name: "embed-hermes-aiagent-runner"
 description: "Embed Hermes AIAgent runner with GUI streaming and Redpanda-backed raw L0 buffering"
-status: "planning"
+status: "proposed"
 applyRequires: ["proposal", "design", "tasks"]
