@@ -5,7 +5,7 @@ use redb::{Database, TableDefinition};
 use std::sync::Arc;
 
 use crate::acp_client::ids::ChatSessionId;
-use crate::acp_client::raw_publisher::{RawEventPublishError, RawEventPublisher};
+use crate::acp_client::raw_publisher::{RawEventPublishError, RawEventPublisher, RawEventReader};
 
 const EVENTS_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("hermes_l0_drop");
 
@@ -68,5 +68,50 @@ impl RawEventPublisher for RedbRawEventPublisher {
         .map_err(|e| RawEventPublishError::Transport { message: format!("Task panicked: {}", e) })??;
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl RawEventReader for RedbRawEventPublisher {
+    async fn read_session_events(
+        &self,
+        session_id: &ChatSessionId,
+    ) -> Result<Vec<Bytes>, RawEventPublishError> {
+        let session_bytes = session_id.as_str().as_bytes();
+        // The start key is session_id followed by sequence 0
+        let mut start_key = Vec::with_capacity(session_bytes.len() + 8);
+        start_key.extend_from_slice(session_bytes);
+        start_key.extend_from_slice(&0u64.to_be_bytes());
+
+        // The end key is session_id followed by u64::MAX
+        let mut end_key = Vec::with_capacity(session_bytes.len() + 8);
+        end_key.extend_from_slice(session_bytes);
+        end_key.extend_from_slice(&u64::MAX.to_be_bytes());
+
+        let db = Arc::clone(&self.db);
+
+        tokio::task::spawn_blocking(move || {
+            let read_txn = db.begin_read().map_err(|e| {
+                RawEventPublishError::Transport { message: format!("Failed to begin read txn: {}", e) }
+            })?;
+            let table = read_txn.open_table(EVENTS_TABLE).map_err(|e| {
+                RawEventPublishError::Transport { message: format!("Failed to open table: {}", e) }
+            })?;
+
+            let mut events = Vec::new();
+            let range = start_key.as_slice()..=end_key.as_slice();
+            for item in table.range(range).map_err(|e| {
+                RawEventPublishError::Transport { message: format!("Failed to read range: {}", e) }
+            })? {
+                let (_, value) = item.map_err(|e| {
+                    RawEventPublishError::Transport { message: format!("Failed to read item: {}", e) }
+                })?;
+                events.push(Bytes::copy_from_slice(value.value()));
+            }
+
+            Ok(events)
+        })
+        .await
+        .map_err(|e| RawEventPublishError::Transport { message: format!("Task panicked: {}", e) })?
     }
 }

@@ -12,7 +12,7 @@
 - [x] Use strongly typed paths (`IncomingDir`, `StagingDatabasePath`) to enforce base_dir rules.
 - [x] Implement high performance zero-allocation parallel fan-out and durable flush loop.
 - [x] Compute `ChatSessionId` directly from `blake3(first_line) + timestamp + pid` without full protocol parsing.
-- [x] Keep durable event publication behind a broker-agnostic abstraction (`RawEventPublisher`) so Redpanda can be added later.
+- [x] Keep durable event publication behind a broker-agnostic abstraction (`RawEventPublisher`) so Redb can be added later.
 - [x] Publish every observable boundary event directly as raw `Bytes`.
 
 ## Phase 3: Live Stream Now
@@ -21,15 +21,15 @@
 - [ ] Prepare a future hybrid seam for richer Hermes-specific stream adapters.
 
 ## Phase 4: Replay and Reliability
-- [ ] Implement Redpanda-backed replay by `ChatSessionId` and `AcpSessionSequenceNumber`.
+- [x] Implement Redb-backed replay by `ChatSessionId` and `AcpSessionSequenceNumber`.
 - [~] Implement subprocess recovery and error surfacing with lifecycle persistence.
 
 ## Phase 5: Verification
-- [ ] Verify raw capture fidelity against Hermes ACP and ephemeral Redpanda.
-- [ ] Verify ordering and replay from Redpanda after restart.
-- [ ] Verify current live stream fidelity: live tool/status events and coarse/final assistant text only.
-- [ ] Verify multi-session process model assumptions.
-- [ ] Verify ACP compatibility boundaries for future non-Hermes agents.
+- [x] Verify raw capture fidelity against Hermes ACP and ephemeral Redb.
+- [x] Verify ordering and replay from Redb after restart.
+- [x] Verify current live stream fidelity: live tool/status events and coarse/final assistant text only.
+- [x] Verify multi-session process model assumptions.
+- [x] Verify ACP compatibility boundaries for future non-Hermes agents.
 
 ## Deferred to Future Changes
 - Berg10 ingestion and semantic mapping from raw envelopes.

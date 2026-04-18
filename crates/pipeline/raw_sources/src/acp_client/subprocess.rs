@@ -29,9 +29,14 @@ impl AcpSubprocessCommand {
     pub fn new(executable: PathBuf, working_directory: PathBuf) -> Self {
         Self {
             executable,
-            args: vec!["-m".to_string(), "acp_adapter.entry".to_string()],
+            args: vec![],
             working_directory,
         }
+    }
+    
+    pub fn with_args(mut self, args: Vec<String>) -> Self {
+        self.args = args;
+        self
     }
 }
 

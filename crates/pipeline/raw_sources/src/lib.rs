@@ -7,6 +7,8 @@ pub mod thread_gateway;
 pub mod upload_gateway;
 
 pub use acp_client::{
+    AcpClientSessionConfig,
+    OurAcpClient,
     AcpChatRunRegistry,
     AcpChatSessionRegistry,
     AcpJsonRpcRequestId,
@@ -19,6 +21,10 @@ pub use acp_client::{
     ChatRunId,
     ChatSessionId,
     ChatThreadId,
+    RawEventPublisher,
+    RawEventReader,
+    RawEventFanout,
+    RedbRawEventPublisher,
 };
 pub use artifact_gateway::{preview_artifact, ArtifactAccess};
 pub use deerflow_driver::DeerFlowDriver;
