@@ -1,3 +1,4 @@
+pub mod acp_client;
 pub mod artifact_gateway;
 pub mod deerflow_driver;
 pub mod error;
@@ -5,6 +6,27 @@ pub mod run_stream;
 pub mod thread_gateway;
 pub mod upload_gateway;
 
+pub use acp_client::{
+    AcpCapturedEventTimestamp,
+    AcpCapturedProtocolEvent,
+    AcpChatRunRegistry,
+    AcpChatSessionRegistry,
+    AcpJsonRpcRequestId,
+    AcpProtocolFrameKind,
+    AcpRedpandaHeaders,
+    AcpRedpandaTopic,
+    AcpResponseStreamEvent,
+    AcpResponseStreamEventKind,
+    AcpSequenceAllocator,
+    AcpSessionSequenceNumber,
+    AcpSubprocessCommand,
+    AcpSubprocessEvent,
+    AcpSubprocessId,
+    AcpSubprocessLifecycleKind,
+    ChatRunId,
+    ChatSessionId,
+    ChatThreadId,
+};
 pub use artifact_gateway::{preview_artifact, ArtifactAccess};
 pub use deerflow_driver::DeerFlowDriver;
 pub use run_stream::{load_stream_fixture, AdapterEvent, RawStreamEvent};
