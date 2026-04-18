@@ -55,6 +55,13 @@ impl AcpCaptureContextStore {
             .get(acp_subprocess_id)
             .map(|entry| entry.clone())
     }
+
+    pub fn first(&self) -> Option<AcpCaptureContext> {
+        self.entries
+            .iter()
+            .next()
+            .map(|entry| entry.value().clone())
+    }
 }
 
 pub type SharedAcpCaptureContextStore = Arc<AcpCaptureContextStore>;

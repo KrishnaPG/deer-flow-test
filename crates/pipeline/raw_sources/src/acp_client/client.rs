@@ -5,8 +5,9 @@ use agent_client_protocol::{self as acp, Agent as _};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::ChildStderr;
+use tokio::process::{Child, ChildStderr};
 use tokio::task::{spawn_local, LocalSet};
+use tokio::time::{timeout, Duration};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::instrument;
 
@@ -24,6 +25,8 @@ use crate::acp_client::{
     AcpCaptureContextStore, AcpSequenceAllocator, ChatRunId, ChatSessionId,
 };
 use crate::acp_client::{AcpSubprocessId, AcpResponseStreamEvent, AcpResponseStreamEventKind};
+
+const ACP_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Configuration for establishing one Hermes ACP client session.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,93 +75,32 @@ impl OurAcpClient {
         config: AcpClientSessionConfig,
     ) -> Result<ChatSessionId, std::io::Error> {
         let command = AcpSubprocessCommand::new(config.executable, config.working_directory);
-        let mut subprocess = spawn_acp_subprocess(&command).await?;
-        let acp_subprocess_id = subprocess.acp_subprocess_id.clone();
-        let stderr = subprocess.child.stderr.take().expect("stderr must be piped");
-        let stdin = subprocess.child.stdin.take().expect("stdin must be piped");
-        let stdout = subprocess.child.stdout.take().expect("stdout must be piped");
-        let durable_handoff = Arc::clone(&self.durable_handoff);
-        let capture_context = self.capture_contexts.initialize_for_subprocess(acp_subprocess_id);
+        let subprocess = spawn_acp_subprocess(&command).await?;
+        let capture_context = self
+            .capture_contexts
+            .initialize_for_subprocess(subprocess.acp_subprocess_id.clone());
+        publish_spawned_lifecycle(&self.durable_handoff, &capture_context).await?;
 
-        durable_handoff
-            .publish_subprocess_lifecycle(
-                capture_context.chat_session_id.clone(),
-                capture_context.chat_run_id.clone(),
-                capture_context.acp_subprocess_id.clone(),
-                AcpSubprocessLifecycleKind::Spawned,
-            )
-            .await
-            .map_err(io_error_from_publish)?;
+        let mut child = subprocess.child;
+        let stderr = child.stderr.take().ok_or_else(missing_stderr_error)?;
+        let stdin = child.stdin.take().ok_or_else(missing_stdin_error)?;
+        let stdout = child.stdout.take().ok_or_else(missing_stdout_error)?;
 
-        let chat_run_registry = Arc::clone(&self.chat_run_registry);
-        let capture_contexts = Arc::clone(&self.capture_contexts);
         let local_set = LocalSet::new();
         let chat_session_id = local_set
-            .run_until(async move {
-                let (connection, handle_io) = acp::ClientSideConnection::new(
-                    AcpClientCallbacks {
-                        fanout: self.fanout.clone(),
-                        chat_run_registry,
-                        capture_contexts,
-                    },
-                    stdin.compat_write(),
-                    stdout.compat(),
-                    |future| {
-                        spawn_local(future);
-                    },
-                );
-                spawn_local(handle_io);
-
-                let connection = Arc::new(connection);
-                let stream_receiver = connection.subscribe();
-                spawn_local(run_stream_capture_loop(
-                    Arc::clone(&self.capture_contexts),
-                    Arc::clone(&self.durable_handoff),
-                    Arc::clone(&self.chat_run_registry),
-                    stream_receiver,
-                ));
-                spawn_local(run_stderr_capture_loop(
-                    capture_context.chat_session_id.clone(),
-                    capture_context.chat_run_id.clone(),
-                    capture_context.acp_subprocess_id.clone(),
-                    Arc::clone(&self.durable_handoff),
-                    stderr,
-                ));
-
-                connection
-                    .initialize(
-                        acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
-                            acp::Implementation::new("deer-acp-client", env!("CARGO_PKG_VERSION"))
-                                .title("Deer ACP Client"),
-                        ),
-                    )
-                    .await
-                    .map_err(io_error_from_acp)?;
-
-                let current_directory = std::env::current_dir()?;
-                let response = connection
-                    .new_session(acp::NewSessionRequest::new(current_directory))
-                    .await
-                    .map_err(io_error_from_acp)?;
-
-                let chat_session_id = ChatSessionId::new(response.session_id.to_string());
-                self.capture_contexts.assign_session(&capture_context.acp_subprocess_id, chat_session_id.clone());
-                let bootstrap_run_id = ChatRunId::bootstrap_for_session(&chat_session_id);
-                self.capture_contexts.assign_run(&capture_context.acp_subprocess_id, bootstrap_run_id.clone());
-                self.chat_session_registry.insert(AcpChatSessionState {
-                    chat_session_id: chat_session_id.clone(),
-                    acp_subprocess_id: capture_context.acp_subprocess_id.clone(),
-                    chat_thread_id: None,
-                });
-                self.chat_run_registry.insert(AcpChatRunState {
-                    chat_run_id: bootstrap_run_id,
-                    chat_session_id: chat_session_id.clone(),
-                });
-                self.session_connections
-                    .insert(chat_session_id.clone(), Arc::clone(&connection));
-
-                Ok::<ChatSessionId, std::io::Error>(chat_session_id)
-            })
+            .run_until(connect_session_local(
+                self.fanout.clone(),
+                Arc::clone(&self.durable_handoff),
+                Arc::clone(&self.capture_contexts),
+                Arc::clone(&self.chat_session_registry),
+                Arc::clone(&self.chat_run_registry),
+                Arc::clone(&self.session_connections),
+                capture_context,
+                stdin,
+                stdout,
+                stderr,
+                child,
+            ))
             .await?;
 
         Ok(chat_session_id)
@@ -217,10 +159,170 @@ impl OurAcpClient {
     }
 }
 
+async fn connect_session_local(
+    fanout: AcpResponseStreamFanout,
+    durable_handoff: Arc<AcpDurableEventHandoff>,
+    capture_contexts: Arc<AcpCaptureContextStore>,
+    chat_session_registry: Arc<AcpChatSessionRegistry>,
+    chat_run_registry: Arc<AcpChatRunRegistry>,
+    session_connections: Arc<DashMap<ChatSessionId, Arc<acp::ClientSideConnection>>>,
+    capture_context: crate::acp_client::AcpCaptureContext,
+    stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+    stderr: ChildStderr,
+    child: Child,
+) -> Result<ChatSessionId, std::io::Error> {
+    let (connection, handle_io) = acp::ClientSideConnection::new(
+        AcpClientCallbacks {
+            fanout,
+            chat_run_registry: Arc::clone(&chat_run_registry),
+        },
+        stdin.compat_write(),
+        stdout.compat(),
+        |future| {
+            spawn_local(future);
+        },
+    );
+    spawn_local(handle_io);
+
+    let connection = Arc::new(connection);
+    spawn_capture_tasks(
+        Arc::clone(&capture_contexts),
+        Arc::clone(&durable_handoff),
+        Arc::clone(&chat_run_registry),
+        connection.subscribe(),
+        capture_context.clone(),
+        stderr,
+        child,
+    );
+
+    let chat_session_id = initialize_session_connection(Arc::clone(&connection), &capture_context, &durable_handoff).await?;
+    register_connected_session(
+        capture_contexts,
+        chat_session_registry,
+        chat_run_registry,
+        session_connections,
+        capture_context,
+        chat_session_id.clone(),
+        connection,
+    );
+    Ok(chat_session_id)
+}
+
+async fn publish_spawned_lifecycle(
+    durable_handoff: &AcpDurableEventHandoff,
+    capture_context: &crate::acp_client::AcpCaptureContext,
+) -> Result<(), std::io::Error> {
+    durable_handoff
+        .publish_subprocess_lifecycle(
+            capture_context.chat_session_id.clone(),
+            capture_context.chat_run_id.clone(),
+            capture_context.acp_subprocess_id.clone(),
+            AcpSubprocessLifecycleKind::Spawned,
+        )
+        .await
+        .map_err(io_error_from_publish)
+}
+
+fn spawn_capture_tasks(
+    capture_contexts: Arc<AcpCaptureContextStore>,
+    durable_handoff: Arc<AcpDurableEventHandoff>,
+    chat_run_registry: Arc<AcpChatRunRegistry>,
+    stream_receiver: acp::StreamReceiver,
+    capture_context: crate::acp_client::AcpCaptureContext,
+    stderr: ChildStderr,
+    child: Child,
+) {
+    spawn_local(run_stream_capture_loop(
+        capture_contexts,
+        Arc::clone(&durable_handoff),
+        chat_run_registry,
+        stream_receiver,
+    ));
+    spawn_local(run_stderr_capture_loop(
+        capture_context.chat_session_id.clone(),
+        capture_context.chat_run_id.clone(),
+        capture_context.acp_subprocess_id.clone(),
+        Arc::clone(&durable_handoff),
+        stderr,
+    ));
+    spawn_local(run_subprocess_exit_loop(
+        capture_context.chat_session_id,
+        capture_context.chat_run_id,
+        capture_context.acp_subprocess_id,
+        durable_handoff,
+        child,
+    ));
+}
+
+async fn initialize_session_connection(
+    connection: Arc<acp::ClientSideConnection>,
+    capture_context: &crate::acp_client::AcpCaptureContext,
+    durable_handoff: &AcpDurableEventHandoff,
+) -> Result<ChatSessionId, std::io::Error> {
+    let initialize_future = async {
+        connection
+            .initialize(
+                acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
+                    acp::Implementation::new("deer-acp-client", env!("CARGO_PKG_VERSION"))
+                        .title("Deer ACP Client"),
+                ),
+            )
+            .await
+            .map_err(io_error_from_acp)?;
+
+        let current_directory = std::env::current_dir()?;
+        let response = connection
+            .new_session(acp::NewSessionRequest::new(current_directory))
+            .await
+            .map_err(io_error_from_acp)?;
+        Ok::<ChatSessionId, std::io::Error>(ChatSessionId::new(response.session_id.to_string()))
+    };
+
+    match timeout(ACP_STARTUP_TIMEOUT, initialize_future).await {
+        Ok(result) => result,
+        Err(_) => {
+            durable_handoff
+                .publish_subprocess_lifecycle(
+                    capture_context.chat_session_id.clone(),
+                    capture_context.chat_run_id.clone(),
+                    capture_context.acp_subprocess_id.clone(),
+                    AcpSubprocessLifecycleKind::TimedOut,
+                )
+                .await
+                .map_err(io_error_from_publish)?;
+            Err(startup_timeout_error())
+        }
+    }
+}
+
+fn register_connected_session(
+    capture_contexts: Arc<AcpCaptureContextStore>,
+    chat_session_registry: Arc<AcpChatSessionRegistry>,
+    chat_run_registry: Arc<AcpChatRunRegistry>,
+    session_connections: Arc<DashMap<ChatSessionId, Arc<acp::ClientSideConnection>>>,
+    capture_context: crate::acp_client::AcpCaptureContext,
+    chat_session_id: ChatSessionId,
+    connection: Arc<acp::ClientSideConnection>,
+) {
+    capture_contexts.assign_session(&capture_context.acp_subprocess_id, chat_session_id.clone());
+    let bootstrap_run_id = ChatRunId::bootstrap_for_session(&chat_session_id);
+    capture_contexts.assign_run(&capture_context.acp_subprocess_id, bootstrap_run_id.clone());
+    chat_session_registry.insert(AcpChatSessionState {
+        chat_session_id: chat_session_id.clone(),
+        acp_subprocess_id: capture_context.acp_subprocess_id.clone(),
+        chat_thread_id: None,
+    });
+    chat_run_registry.insert(AcpChatRunState {
+        chat_run_id: bootstrap_run_id,
+        chat_session_id: chat_session_id.clone(),
+    });
+    session_connections.insert(chat_session_id, connection);
+}
+
 struct AcpClientCallbacks {
     fanout: AcpResponseStreamFanout,
     chat_run_registry: Arc<AcpChatRunRegistry>,
-    capture_contexts: Arc<AcpCaptureContextStore>,
 }
 
 #[async_trait(?Send)]
@@ -272,6 +374,22 @@ fn missing_session_error(chat_session_id: &ChatSessionId) -> std::io::Error {
     )
 }
 
+fn startup_timeout_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::TimedOut, "ACP startup timed out")
+}
+
+fn missing_stderr_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stderr missing")
+}
+
+fn missing_stdin_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stdin missing")
+}
+
+fn missing_stdout_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stdout missing")
+}
+
 async fn run_stream_capture_loop(
     capture_contexts: Arc<AcpCaptureContextStore>,
     durable_handoff: Arc<AcpDurableEventHandoff>,
@@ -319,7 +437,29 @@ async fn run_stderr_capture_loop(
     }
 }
 
+async fn run_subprocess_exit_loop(
+    chat_session_id: ChatSessionId,
+    chat_run_id: ChatRunId,
+    acp_subprocess_id: AcpSubprocessId,
+    durable_handoff: Arc<AcpDurableEventHandoff>,
+    mut child: Child,
+) {
+    let lifecycle_kind = match child.wait().await {
+        Ok(status) if status.success() => AcpSubprocessLifecycleKind::Exited,
+        Ok(_) => AcpSubprocessLifecycleKind::Crashed,
+        Err(_) => AcpSubprocessLifecycleKind::Crashed,
+    };
+
+    let _ = durable_handoff
+        .publish_subprocess_lifecycle(
+            chat_session_id,
+            chat_run_id,
+            acp_subprocess_id,
+            lifecycle_kind,
+        )
+        .await;
+}
+
 fn first_context(capture_contexts: &AcpCaptureContextStore) -> Option<crate::acp_client::AcpCaptureContext> {
-    capture_contexts
-        .get(&capture_contexts.entries.iter().next()?.key().clone())
+    capture_contexts.first()
 }
