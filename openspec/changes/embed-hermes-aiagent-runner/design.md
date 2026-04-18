@@ -84,10 +84,11 @@ The ACP crate's protocol ids and messages should not replace our application/run
    - Owns ordering semantics independently of Hermes internals.
    - Ensures replay consumers can reconstruct session order deterministically from Redpanda.
 
-5. **Redpanda Publisher**
-   - Publishes every `AcpCapturedProtocolEvent` to `hermes.l0_drop`.
-   - Uses reliable producer semantics with `rust-rdkafka`.
-   - Treats Redpanda as the first durable source of truth.
+5. **Durable Event Publisher**
+   - Publishes every `AcpCapturedProtocolEvent` to a broker-agnostic durable event sink.
+   - The initial implementation targets Redpanda stream `hermes.l0_drop`.
+   - Uses reliable producer semantics in the concrete broker adapter.
+   - Treats the configured broker as the first durable source of truth.
 
 6. **Live Stream Fanout**
    - Projects ACP-observed activity into `AcpResponseStreamEvent` for live consumers.
@@ -142,15 +143,16 @@ The ACP crate's protocol ids and messages should not replace our application/run
    - Normal exit, abnormal exit, read loop termination, protocol decode failure, timeout, and supervised restart each produce lifecycle envelopes.
    - These lifecycle events are part of the durable session reconstruction story.
 
-## Redpanda-First Raw Capture Contract
+## Broker-Agnostic Durable Capture Contract
 
-`our ACP Client` writes to Redpanda first. This is a quick, durable dump with low latency. It is not a place to perform ETL, classification, or Berg10 mapping.
+`our ACP Client` writes to a durable broker first. The initial implementation uses Redpanda. This is a quick, durable dump with low latency. It is not a place to perform ETL, classification, or Berg10 mapping.
 
-- Topic name: `hermes.l0_drop`
-- Message key: `ChatSessionId`
+- Initial stream/topic name: `hermes.l0_drop`
+- Partition key: `ChatSessionId`
 - Ordering authority: client-assigned `AcpSessionSequenceNumber`
-- Durable replay source: Redpanda
+- Initial durable replay source: Redpanda
 - Domain interpretation: deferred to ingestion
+- Broker binding is implementation-specific and must remain replaceable without changing client-owned runtime event types
 
 ## Durable Raw Event Model
 

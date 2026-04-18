@@ -1,39 +1,51 @@
-use bytes::Bytes;
-
 use crate::acp_client::captured_event::AcpCapturedProtocolEvent;
+use crate::acp_client::publish::{AcpDurableEventHeaders, AcpDurableStreamName};
 
-/// Strongly typed Redpanda topic name for ACP raw protocol capture.
+#[cfg(feature = "redpanda")]
+use async_trait::async_trait;
+#[cfg(feature = "redpanda")]
+use crate::acp_client::publish::{
+    AcpCapturedEventPublishError, AcpCapturedEventPublisher, AcpDurableEventRecord,
+};
+
+/// Initial Redpanda stream binding for Hermes ACP raw capture.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AcpRedpandaTopic(&'static str);
+pub struct AcpRedpandaStreamBinding {
+    stream_name: AcpDurableStreamName,
+}
 
-impl AcpRedpandaTopic {
-    pub const HERMES_L0_DROP: Self = Self("hermes.l0_drop");
+impl AcpRedpandaStreamBinding {
+    pub fn hermes_l0_drop() -> Self {
+        Self {
+            stream_name: AcpDurableStreamName::new("hermes.l0_drop"),
+        }
+    }
 
-    pub fn as_str(&self) -> &str {
-        self.0
+    pub fn stream_name(&self) -> AcpDurableStreamName {
+        self.stream_name.clone()
     }
 }
 
-/// Minimal Redpanda headers derived from one captured ACP event.
+/// Redpanda-specific header adapter layered over broker-agnostic headers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AcpRedpandaHeaders {
-    pairs: Vec<(&'static str, String)>,
+    inner: AcpDurableEventHeaders,
 }
 
 impl AcpRedpandaHeaders {
     pub fn from_captured_event(event: &AcpCapturedProtocolEvent) -> Self {
-        let mut pairs = Vec::with_capacity(5);
-        pairs.push(("engine", event.engine_name.clone()));
-        pairs.push(("schema_version", event.schema_version.clone()));
-        pairs.push(("session_id", event.chat_session_id.to_string()));
-        pairs.push(("run_id", event.chat_run_id.to_string()));
-        pairs.push(("seq", event.acp_session_sequence_number.to_string()));
-        Self { pairs }
+        Self {
+            inner: AcpDurableEventHeaders::from_captured_event(event),
+        }
+    }
+
+    pub fn as_pairs(&self) -> &[(&'static str, String)] {
+        self.inner.as_pairs()
     }
 
     #[cfg(feature = "redpanda")]
     pub fn to_owned_headers(&self) -> rdkafka::message::OwnedHeaders {
-        self.pairs.iter().fold(
+        self.as_pairs().iter().fold(
             rdkafka::message::OwnedHeaders::new(),
             |headers, (key, value)| {
                 headers.insert(rdkafka::message::Header {
@@ -43,14 +55,34 @@ impl AcpRedpandaHeaders {
             },
         )
     }
+}
 
-    pub fn as_pairs(&self) -> &[(&'static str, String)] {
-        &self.pairs
+/// Feature-gated Redpanda publisher implementation.
+#[cfg(feature = "redpanda")]
+pub struct RedpandaAcpCapturedEventPublisher {
+    stream_binding: AcpRedpandaStreamBinding,
+}
+
+#[cfg(feature = "redpanda")]
+impl RedpandaAcpCapturedEventPublisher {
+    pub fn new(stream_binding: AcpRedpandaStreamBinding) -> Self {
+        Self { stream_binding }
     }
 }
 
-pub fn captured_event_payload_bytes(
-    event: &AcpCapturedProtocolEvent,
-) -> Result<Bytes, serde_json::Error> {
-    serde_json::to_vec(event).map(Bytes::from)
+#[cfg(feature = "redpanda")]
+#[async_trait]
+impl AcpCapturedEventPublisher for RedpandaAcpCapturedEventPublisher {
+    async fn publish_captured_event(
+        &self,
+        event: &AcpCapturedProtocolEvent,
+    ) -> Result<(), AcpCapturedEventPublishError> {
+        let _record = AcpDurableEventRecord::from_captured_event(
+            self.stream_binding.stream_name(),
+            event,
+        )?;
+        Err(AcpCapturedEventPublishError::Transport {
+            message: "redpanda transport not yet wired".to_string(),
+        })
+    }
 }

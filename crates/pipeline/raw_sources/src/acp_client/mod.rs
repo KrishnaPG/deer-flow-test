@@ -21,9 +21,15 @@ pub use ids::{
 pub use live_event::{AcpResponseStreamEvent, AcpResponseStreamEventKind};
 pub use notification_mapper::map_session_notification_to_live_event;
 pub use publish::{
-    AcpCapturedEventPublishError, AcpCapturedEventPublisher, NoopAcpCapturedEventPublisher,
+    AcpCapturedEventPublishError,
+    AcpCapturedEventPublisher,
+    AcpDurableEventHeaders,
+    AcpDurableEventRecord,
+    AcpDurablePartitionKey,
+    AcpDurableStreamName,
+    NoopAcpCapturedEventPublisher,
 };
-pub use redpanda::{AcpRedpandaHeaders, AcpRedpandaTopic};
+pub use redpanda::{AcpRedpandaHeaders, AcpRedpandaStreamBinding};
 pub use registry::{AcpChatRunRegistry, AcpChatSessionRegistry};
 pub use sequence::AcpSequenceAllocator;
 pub use subprocess::{AcpSubprocessCommand, AcpSubprocessEvent, AcpSubprocessLifecycleKind};

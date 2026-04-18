@@ -14,7 +14,7 @@ pub use acp_client::{
     AcpJsonRpcRequestId,
     AcpProtocolFrameKind,
     AcpRedpandaHeaders,
-    AcpRedpandaTopic,
+    AcpRedpandaStreamBinding,
     AcpResponseStreamEvent,
     AcpResponseStreamEventKind,
     AcpSequenceAllocator,
