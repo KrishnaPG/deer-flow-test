@@ -1,5 +1,6 @@
 pub mod captured_event;
 pub mod client;
+pub mod control_capture;
 pub mod fanout;
 pub mod ids;
 pub mod jsonrpc;
@@ -13,6 +14,7 @@ pub mod subprocess;
 
 pub use captured_event::{AcpCapturedEventTimestamp, AcpCapturedProtocolEvent, AcpProtocolFrameKind};
 pub use client::{AcpClientSessionConfig, OurAcpClient};
+pub use control_capture::capture_client_control_event;
 pub use fanout::AcpResponseStreamFanout;
 pub use ids::{
     AcpJsonRpcRequestId, AcpSessionSequenceNumber, AcpSubprocessId, ChatRunId, ChatSessionId,

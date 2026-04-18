@@ -43,6 +43,13 @@ impl AcpChatRunRegistry {
     pub fn get(&self, chat_run_id: &ChatRunId) -> Option<AcpChatRunState> {
         self.entries.get(chat_run_id).map(|entry| entry.clone())
     }
+
+    pub fn latest_for_session(&self, chat_session_id: &ChatSessionId) -> Option<AcpChatRunState> {
+        self.entries
+            .iter()
+            .find(|entry| entry.value().chat_session_id == *chat_session_id)
+            .map(|entry| entry.value().clone())
+    }
 }
 
 #[cfg(test)]
