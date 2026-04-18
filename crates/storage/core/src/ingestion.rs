@@ -1,7 +1,18 @@
-use berg10_storage_catalog::{Berg10Catalog, FileRecord};
+use berg10_storage_catalog::{
+    Berg10Catalog,
+    Berg10DataHierarchy,
+    Berg10DataLevel,
+    Berg10PayloadFormat,
+    Berg10PayloadKind,
+    Berg10StoragePlane,
+    ContentRecord,
+    ContentTag,
+    LineageRef,
+    LogicalFilename,
+};
 use berg10_storage_vfs::StorageBackend;
 use chrono::Utc;
-use deer_foundation_contracts::{AppendDataRequest, CanonicalPlane, FileSaved};
+use deer_foundation_contracts::{AppendDataRequest, FileSaved};
 
 use crate::downstream_handoff::make_file_saved;
 use crate::view_path_builder::build_relative_path;
@@ -44,27 +55,43 @@ impl IngestionBridge {
         let logical_filename = request.metadata.logical_filename.clone();
 
         // Register in catalog
-        let record = FileRecord {
-            content_hash: hash_str.clone(),
-            hierarchy: request.layout.hierarchy.as_str().to_string(),
-            level: format!("{:?}", request.layout.level),
-            plane: match request.layout.plane {
-                CanonicalPlane::AsIs => "as-is".to_string(),
-                CanonicalPlane::Chunks => "chunks".to_string(),
-                CanonicalPlane::Embeddings => "embeddings".to_string(),
-            },
-            payload_kind: request.layout.payload_kind.as_str().to_string(),
-            payload_format: request.layout.format.as_str().to_string(),
+        let record = ContentRecord {
+            content_hash: content_hash.clone(),
+            data_hierarchy: map_storage_hierarchy(&request.layout.hierarchy),
+            data_level: Berg10DataLevel::from(request.layout.level),
+            storage_plane: Berg10StoragePlane::from(request.layout.plane),
+            payload_kind: Berg10PayloadKind::from(request.layout.payload_kind.clone()),
+            payload_format: Berg10PayloadFormat::from(request.layout.format.clone()),
             payload_size_bytes: payload_bytes.len() as u64,
-            correlation_ids: request.metadata.correlation.extra.clone(),
-            lineage_refs: request.metadata.lineage.parent_refs.clone(),
-            routing_tags: request.layout.partition_tags.clone(),
+            correlation_ids: request
+                .metadata
+                .correlation
+                .extra
+                .iter()
+                .cloned()
+                .map(|(key, value)| ContentTag::new(key, value))
+                .collect(),
+            lineage_refs: request
+                .metadata
+                .lineage
+                .parent_refs
+                .iter()
+                .cloned()
+                .map(LineageRef::new)
+                .collect(),
+            routing_tags: request
+                .layout
+                .partition_tags
+                .iter()
+                .cloned()
+                .map(|(key, value)| ContentTag::new(key, value))
+                .collect(),
             written_at: Utc::now(),
-            writer_identity: request.metadata.writer_identity.as_ref().map(|w| w.to_string()),
-            logical_filename,
+            writer_identity: request.metadata.writer_identity.clone(),
+            logical_filename: logical_filename.map(LogicalFilename::from),
         };
 
-        self.catalog.register_file(&record).await
+        self.catalog.register_content(&record).await
             .map_err(|e| format!("Catalog registration failed: {:?}", e))?;
 
         // Emit FileSaved
@@ -89,5 +116,14 @@ impl IngestionBridge {
     /// Deconstruct the bridge to recover catalog and VFS for downstream use.
     pub fn into_parts(self) -> (Berg10Catalog, StorageBackend) {
         (self.catalog, self.vfs)
+    }
+}
+
+fn map_storage_hierarchy(hierarchy: &deer_foundation_contracts::StorageHierarchyTag) -> Berg10DataHierarchy {
+    match hierarchy.as_str() {
+        "orchestration" | "A" | "a" => Berg10DataHierarchy::Orchestration,
+        "artifact_content" | "artifact" | "content" | "B" | "b" => Berg10DataHierarchy::ArtifactContent,
+        "presentation" | "view" | "C" | "c" => Berg10DataHierarchy::Presentation,
+        _ => Berg10DataHierarchy::ArtifactContent,
     }
 }

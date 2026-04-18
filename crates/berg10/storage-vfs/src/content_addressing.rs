@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -11,8 +14,8 @@ pub enum ContentHashError {
 /// A content-addressed hash: base58(blake3(payload)).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ContentHash {
-    pub b58: String,
-    pub bytes: [u8; 32],
+    b58: String,
+    bytes: [u8; 32],
 }
 
 impl ContentHash {
@@ -48,9 +51,58 @@ impl ContentHash {
     }
 }
 
+impl FromStr for ContentHash {
+    type Err = ContentHashError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_b58(s)
+    }
+}
+
+impl TryFrom<&str> for ContentHash {
+    type Error = ContentHashError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::from_b58(value)
+    }
+}
+
+impl TryFrom<String> for ContentHash {
+    type Error = ContentHashError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_b58(&value)
+    }
+}
+
+impl From<ContentHash> for String {
+    fn from(value: ContentHash) -> Self {
+        value.b58
+    }
+}
+
 impl std::fmt::Display for ContentHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.b58)
+    }
+}
+
+impl Serialize for ContentHash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for ContentHash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_b58(&value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -88,8 +140,8 @@ mod tests {
     fn base58_round_trip() {
         let data = b"test content for round trip";
         let ch = hash_content(data);
-        let decoded = decode_content_hash(&ch.b58).unwrap();
-        assert_eq!(decoded, ch.bytes);
+        let decoded = decode_content_hash(ch.as_str()).unwrap();
+        assert_eq!(decoded, *ch.as_bytes());
     }
 
     #[test]
@@ -97,8 +149,8 @@ mod tests {
         let data = b"identical content";
         let h1 = hash_content(data);
         let h2 = hash_content(data);
-        assert_eq!(h1.b58, h2.b58);
-        assert_eq!(h1.bytes, h2.bytes);
+        assert_eq!(h1.as_str(), h2.as_str());
+        assert_eq!(h1.as_bytes(), h2.as_bytes());
     }
 
     #[test]
