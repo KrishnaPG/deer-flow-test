@@ -75,50 +75,15 @@ impl ChatSessionId {
     pub fn pending_for_subprocess(acp_subprocess_id: &AcpSubprocessId) -> Self {
         Self::new(format!("pending:{}", acp_subprocess_id.as_str()))
     }
+
+    pub fn from_first_event(first_event_bytes: &[u8], pid: u32, timestamp_ns: i64) -> Self {
+        let hash = blake3::hash(first_event_bytes);
+        Self::new(format!("{}_{}_{}", hash.to_hex(), timestamp_ns, pid))
+    }
 }
 
 impl AcpSubprocessId {
     pub fn generate() -> Self {
         Self::new(Uuid::now_v7().to_string())
-    }
-}
-
-/// Monotonic sequence number scoped to a single `ChatSessionId`.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
-#[serde(transparent)]
-pub struct AcpSessionSequenceNumber(u64);
-
-impl AcpSessionSequenceNumber {
-    pub fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub fn get(self) -> u64 {
-        self.0
-    }
-
-    pub fn next(self) -> Self {
-        Self(self.0.saturating_add(1))
-    }
-}
-
-impl fmt::Display for AcpSessionSequenceNumber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sequence_numbers_increment_monotonically() {
-        let first = AcpSessionSequenceNumber::new(41);
-        let second = first.next();
-
-        assert_eq!(second.get(), 42);
     }
 }

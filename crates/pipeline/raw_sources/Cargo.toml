@@ -10,11 +10,14 @@ redpanda = ["dep:rdkafka"]
 [dependencies]
 agent-client-protocol = "0.10.4"
 async-trait = "0.1.89"
+blake3 = "1.5.1"
 bytes = { version = "1.10.1", features = ["serde"] }
 chrono = { version = "0.4.42", features = ["clock", "serde"] }
 dashmap = "6.1.0"
 deer-foundation-contracts = { path = "../../foundation/contracts" }
+deer-foundation-paths = { version = "0.1.0", path = "../../foundation/paths" }
 rdkafka = { version = "0.38.0", features = ["cmake-build", "tokio"], optional = true }
+redb = "2.2.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149", features = ["raw_value"] }
 thiserror = "2.0.17"
