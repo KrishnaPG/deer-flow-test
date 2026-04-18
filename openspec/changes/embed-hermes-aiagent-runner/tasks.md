@@ -1,96 +1,79 @@
-# Tasks: Embed Hermes AIAgent Runner
+# Tasks: Embed Hermes ACP Producer
 
-## Phase 1: Backend Hermes Runner Service
-1. **Create a backend-hosted Hermes runner service:**
-   - Implement the service in Rust.
-   - Host Hermes `AIAgent` in a backend process/service instead of a UI-spawned subprocess.
-   - Define the initial API surface as `POST /runs`, `POST /runs/{run_id}/cancel`, and `WS /runs/{run_id}/events`.
-   - Keep the service reusable by desktop and future web/WASM clients.
+## Phase 1: ACP Subprocess Producer Core
+1. **Implement Hermes ACP subprocess manager:**
+   - Launch Hermes ACP as a child process from Rust.
+   - Reserve stdout for JSON-RPC protocol and stderr for diagnostics.
+   - Detect startup, clean exit, abnormal exit, timeout, and crash conditions.
+   - Emit producer lifecycle envelopes for material subprocess events.
 
-2. **Implement Sink A (UI stream API):**
-   - Implement `on_delta` and `on_tool_progress` callbacks.
-   - Map these callbacks to a backend stream event model usable by desktop and web/WASM clients.
-   - Use WebSocket as the primary streaming transport.
-   - Deliver the same logical event envelope to the UI that is published to Redpanda.
-   - Ensure UI events remain thin and do not become the source of truth for storage.
+2. **Implement ACP JSON-RPC stdio client:**
+   - Encode producer-issued JSON-RPC commands to Hermes ACP.
+   - Decode JSON-RPC requests, responses, and notifications observed on the boundary.
+   - Preserve full raw frames for durable publication.
 
-3. **Implement Redpanda producer helper for raw L0 buffering:**
-   - Add producer wiring in the Hermes runner for topic `hermes.l0_drop`.
-   - Use `rust-rdkafka` for broker integration.
-   - Configure reliable settings:
-      - `acks=all`
-      - idempotent producer enabled
-      - retries with exponential backoff
-      - ordering-safe in-flight request configuration
-    - Accept optional gzip compression for message values to reduce broker storage usage.
-    - Expose producer config via environment variables (bootstrap servers, topic override, compression toggle).
+3. **Implement session and run registry:**
+   - Track `session_id` as the durable conversational boundary.
+   - Track `run_id` as one prompt execution within a session.
+   - Keep optional `thread_id` support without requiring a source today.
+   - Ensure the abstraction allows one subprocess to host multiple sessions later.
 
-4. **Publish raw Hermes events to Redpanda:**
-   - Wrap every Hermes callback payload in a raw envelope containing:
-     - `engine`
-     - `schema_version`
-     - `session_id`
-     - `thread_id` when available
-     - `run_id`
-     - `message_id` when available
-     - `tool_call_id` when available
-     - `seq`
-     - `event_kind`
-     - `timestamp`
-     - `raw_payload`
-   - Publish each envelope to `hermes.l0_drop` using `session_id` as the message key.
-   - Emit explicit finish/completion events so future ingestion can reconstruct final assistant responses and run boundaries.
+4. **Implement producer-owned sequencing:**
+   - Assign monotonic `seq` within each `session_id`.
+   - Use `session_id` as the Redpanda message key.
+   - Ensure ordering remains reconstructible across multiple runs in the same session.
 
-5. **Preserve session reconstruction fidelity:**
-    - Ensure user request payloads and assistant response payloads are both emitted.
-    - Preserve tool call/tool result linkage.
-    - Preserve reasoning payloads and finish reasons when Hermes makes them available.
-    - Add monotonic sequencing within a session so consumers can replay the session deterministically.
+## Phase 2: Redpanda-First Raw Capture
+5. **Implement Redpanda producer for `hermes.l0_drop`:**
+   - Use `rust-rdkafka`.
+   - Configure high-durability producer settings:
+     - `acks=all`
+     - idempotent producer enabled
+     - retries with backoff
+     - ordering-safe in-flight configuration
+   - Expose broker/topic/compression settings via configuration.
 
-6. **Add reconnect and replay support in the runner:**
-   - Keep a bounded in-memory replay window per run/session for fast reconnects.
-   - Support client replay requests using `replay_from_seq` on the WebSocket subscription.
-   - Fall back to Redpanda-backed replay when the requested sequence is older than the in-memory cache.
+6. **Publish every observable boundary event:**
+   - Publish producer-issued command envelopes such as session create, session load, session resume, prompt, and cancel.
+   - Publish observed ACP requests, responses, and notifications.
+   - Publish lifecycle/error envelopes for subprocess and protocol failures.
+   - Preserve `raw_payload` exactly as observed at the boundary.
 
-## Phase 2: Client Wiring
-7. **Update `apps/deer_gui` to use the backend API:**
-    - Replace direct subprocess assumptions in the bridge/orchestrator layer with a transport that can talk to the Hermes runner service.
-    - Replace the Python subprocess path with HTTP control calls plus WebSocket event streaming.
-    - Preserve the higher-level app/orchestrator model so the UI can remain mostly unchanged.
+7. **Preserve replay metadata without domain interpretation:**
+   - Include `engine`, `schema_version`, `session_id`, `run_id`, `seq`, and `timestamp` on every envelope.
+   - Include optional identifiers such as `thread_id`, `message_id`, and `tool_call_id` only when observable.
+   - Do not assign Berg10 semantic fields or perform classification in the producer.
 
-8. **Prepare `apps/deer_chat_lab` as a thin consumer of the same backend API:**
-    - Reuse the shared transport-neutral event contract.
-    - Ensure future web/WASM compatibility by avoiding desktop-only process APIs.
+## Phase 3: Replay and Reliability
+8. **Implement Redpanda-backed replay:**
+   - Support replay by `session_id` and `seq` from Redpanda as the durable source.
+   - Add an optional bounded in-memory replay tail only as a performance optimization.
+   - Ensure reconstruction does not depend on process-local memory surviving restarts.
 
-## Phase 3: Operations and Reliability
-9. **Document and provision Redpanda topic behavior:**
-   - Use topic name format `<engine>.l0_drop`.
-   - Hermes topic is `hermes.l0_drop`.
-   - Configure long-lived retention (target: one month).
-   - Do not rely on short retention windows.
-   - Deletion after successful ingestion is a future ingestor responsibility and must be reflected in broker/data lifecycle policy later.
-   - Operational target: future ingestor runs at least daily in the worst case.
-
-10. **Document low-priority file fallback (do not implement first):**
-   - Fallback path remains `<base_dir>/runners/hermes/l0_drop/<YYYY-MM-DD>/run_<uuid>.jsonl`.
-   - This is dev-only and lower priority than the Redpanda path.
+9. **Implement subprocess recovery and error surfacing:**
+   - Handle malformed JSON-RPC frames, broken pipes, unexpected exits, and startup failures.
+   - Decide and implement restart policy hooks without assuming a strict 1:1 process/session model forever.
+   - Persist recovery-relevant lifecycle envelopes into Redpanda.
 
 ## Phase 4: Verification
-11. **Producer verification:**
-   - Run the backend Hermes service with Redpanda configured.
-   - Connect from a client (`deer_gui` first, later web/WASM-capable clients).
-   - Send prompts that exercise normal responses, tool calls, and reasoning.
-   - Verify UI updates live through the backend stream API.
-   - Verify raw messages arrive on topic `hermes.l0_drop`.
-   - Verify headers and payload fields are sufficient to reconstruct the session.
+10. **Verify raw capture fidelity:**
+    - Run against an ephemeral Redpanda instance.
+    - Exercise session create/load/resume, prompt execution, cancellation, and error paths.
+    - Verify that every observable producer command and ACP frame is published to `hermes.l0_drop`.
 
-12. **Reliability verification:**
-    - Simulate transient Redpanda failures and verify retries/backoff.
-    - Verify duplicate publish protection with idempotent producer semantics.
-    - Verify ordering within a session by consuming events back out of Redpanda.
+11. **Verify ordering and replay:**
+    - Confirm `session_id` partitioning and monotonic `seq` ordering.
+    - Reconstruct a full session from Redpanda alone.
+    - Verify replay works after producer restart without relying on local memory.
 
-13. **Replay verification:**
-    - Run integration tests with an ephemeral Redpanda instance.
-    - Disconnect and reconnect a client mid-run and request replay from a prior `seq`.
-    - Verify the runner serves replay from memory when available and from Redpanda when the replay point is older than the local cache.
-    - Verify WebSocket-delivered events match Redpanda envelopes for identifiers and ordering.
+12. **Verify multi-session process model assumptions:**
+    - Prove the code does not hard-code one subprocess per session.
+    - Keep the default runtime policy at one subprocess per session.
+    - Add tests or harness coverage showing registries and sequencing remain scoped by `session_id`.
+
+## Deferred to Future Changes
+- Berg10 ingestion and semantic mapping from raw envelopes.
+- Public client-facing HTTP/WebSocket APIs.
+- Presentation-layer chat streaming contract.
+- File fallback as an active or recommended write path.
+- Any modifications to `3rdParty/hermes-agent`.
