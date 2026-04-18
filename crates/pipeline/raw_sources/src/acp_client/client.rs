@@ -1,30 +1,33 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use bytes::Bytes;
 
 use agent_client_protocol::{self as acp, Agent as _};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, ChildStderr};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, ChildStderr, ChildStdout};
 use tokio::task::{spawn_local, LocalSet};
 use tokio::time::{timeout, Duration};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::instrument;
 
-use crate::acp_client::durable_handoff::AcpDurableEventHandoff;
 use crate::acp_client::fanout::AcpResponseStreamFanout;
 use crate::acp_client::notification_mapper::map_session_notification_to_live_event;
-use crate::acp_client::publish::{AcpCapturedEventPublisher, NoopAcpCapturedEventPublisher};
 use crate::acp_client::registry::{
     AcpChatRunRegistry, AcpChatRunState, AcpChatSessionRegistry, AcpChatSessionState,
 };
 use crate::acp_client::subprocess::{
-    spawn_acp_subprocess, AcpSubprocessCommand, AcpSubprocessLifecycleKind,
+    spawn_acp_subprocess, AcpSubprocessCommand,
 };
 use crate::acp_client::{
-    AcpCaptureContextStore, AcpSequenceAllocator, ChatRunId, ChatSessionId,
+    AcpCaptureContextStore, ChatRunId, ChatSessionId,
 };
-use crate::acp_client::{AcpSubprocessId, AcpResponseStreamEvent, AcpResponseStreamEventKind};
+use crate::acp_client::{AcpResponseStreamEvent, AcpResponseStreamEventKind};
+
+use crate::acp_client::raw_publisher::{RawEventPublisher, NoopRawEventPublisher};
+use crate::acp_client::raw_fanout::RawEventFanout;
 
 const ACP_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -39,34 +42,41 @@ pub struct AcpClientSessionConfig {
 #[derive(Clone)]
 pub struct OurAcpClient {
     fanout: AcpResponseStreamFanout,
-    durable_handoff: Arc<AcpDurableEventHandoff>,
+    raw_publisher: Arc<dyn RawEventPublisher>,
+    raw_fanout: RawEventFanout,
     capture_contexts: Arc<AcpCaptureContextStore>,
     chat_session_registry: Arc<AcpChatSessionRegistry>,
     chat_run_registry: Arc<AcpChatRunRegistry>,
     session_connections: Arc<DashMap<ChatSessionId, Arc<acp::ClientSideConnection>>>,
+    session_sequences: Arc<DashMap<ChatSessionId, Arc<AtomicU64>>>,
 }
 
 impl Default for OurAcpClient {
     fn default() -> Self {
-        let publisher: Arc<dyn AcpCapturedEventPublisher> = Arc::new(NoopAcpCapturedEventPublisher);
-        let sequence_allocator = Arc::new(AcpSequenceAllocator::default());
-        Self {
-            fanout: AcpResponseStreamFanout::default(),
-            durable_handoff: Arc::new(AcpDurableEventHandoff::new(
-                Arc::clone(&publisher),
-                Arc::clone(&sequence_allocator),
-            )),
-            capture_contexts: Arc::new(AcpCaptureContextStore::default()),
-            chat_session_registry: Arc::new(AcpChatSessionRegistry::default()),
-            chat_run_registry: Arc::new(AcpChatRunRegistry::default()),
-            session_connections: Arc::new(DashMap::new()),
-        }
+        Self::new(Arc::new(NoopRawEventPublisher), RawEventFanout::default())
     }
 }
 
 impl OurAcpClient {
+    pub fn new(raw_publisher: Arc<dyn RawEventPublisher>, raw_fanout: RawEventFanout) -> Self {
+        Self {
+            fanout: AcpResponseStreamFanout::default(),
+            raw_publisher,
+            raw_fanout,
+            capture_contexts: Arc::new(AcpCaptureContextStore::default()),
+            chat_session_registry: Arc::new(AcpChatSessionRegistry::default()),
+            chat_run_registry: Arc::new(AcpChatRunRegistry::default()),
+            session_connections: Arc::new(DashMap::new()),
+            session_sequences: Arc::new(DashMap::new()),
+        }
+    }
+
     pub fn fanout(&self) -> &AcpResponseStreamFanout {
         &self.fanout
+    }
+
+    pub fn raw_fanout(&self) -> &RawEventFanout {
+        &self.raw_fanout
     }
 
     #[instrument(skip(self))]
@@ -76,29 +86,67 @@ impl OurAcpClient {
     ) -> Result<ChatSessionId, std::io::Error> {
         let command = AcpSubprocessCommand::new(config.executable, config.working_directory);
         let subprocess = spawn_acp_subprocess(&command).await?;
-        let capture_context = self
-            .capture_contexts
-            .initialize_for_subprocess(subprocess.acp_subprocess_id.clone());
-        publish_spawned_lifecycle(&self.durable_handoff, &capture_context).await?;
-
+        let acp_subprocess_id = subprocess.acp_subprocess_id.clone();
+        
         let mut child = subprocess.child;
         let stderr = child.stderr.take().ok_or_else(missing_stderr_error)?;
         let stdin = child.stdin.take().ok_or_else(missing_stdin_error)?;
         let stdout = child.stdout.take().ok_or_else(missing_stdout_error)?;
 
+        // Intercept stdout to compute session ID from the very first line
+        let mut stdout_reader = BufReader::new(stdout);
+        let mut first_line = String::new();
+        stdout_reader.read_line(&mut first_line).await?;
+        if first_line.is_empty() {
+            return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "subprocess stdout closed before first line"));
+        }
+        let first_line_bytes = first_line.as_bytes();
+        let timestamp_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+        let pid = child.id().unwrap_or(0);
+        let chat_session_id = ChatSessionId::from_first_event(first_line_bytes, pid, timestamp_ns);
+
+        let sequence_counter = Arc::new(AtomicU64::new(1));
+        self.session_sequences.insert(chat_session_id.clone(), Arc::clone(&sequence_counter));
+
+        // Create duplex pipes to feed the acp crate
+        let (acp_stdout_tx, acp_stdout_rx) = tokio::io::duplex(65536);
+
+        // Spawn raw tee capture for stdout
+        tokio::spawn(run_raw_stdout_capture_loop(
+            chat_session_id.clone(),
+            Arc::clone(&sequence_counter),
+            first_line.clone(),
+            stdout_reader,
+            acp_stdout_tx,
+            Arc::clone(&self.raw_publisher),
+            self.raw_fanout.clone(),
+        ));
+
+        // Spawn raw tee capture for stderr
+        tokio::spawn(run_raw_stderr_capture_loop(
+            chat_session_id.clone(),
+            Arc::clone(&sequence_counter),
+            stderr,
+            Arc::clone(&self.raw_publisher),
+            self.raw_fanout.clone(),
+        ));
+
+        // We can just use the acp_stdout_rx and stdin directly.
+        let mut capture_context = self.capture_contexts.initialize_for_subprocess(acp_subprocess_id.clone());
+        capture_context.chat_session_id.clone_from(&chat_session_id); // update context
+
         let local_set = LocalSet::new();
-        let chat_session_id = local_set
+        local_set
             .run_until(connect_session_local(
                 self.fanout.clone(),
-                Arc::clone(&self.durable_handoff),
                 Arc::clone(&self.capture_contexts),
                 Arc::clone(&self.chat_session_registry),
                 Arc::clone(&self.chat_run_registry),
                 Arc::clone(&self.session_connections),
                 capture_context,
+                chat_session_id.clone(),
                 stdin,
-                stdout,
-                stderr,
+                acp_stdout_rx,
                 child,
             ))
             .await?;
@@ -131,15 +179,9 @@ impl OurAcpClient {
             .ok_or_else(|| missing_session_error(chat_session_id))?;
         let request = acp::PromptRequest::new(chat_session_id.as_str().to_string(), prompt_blocks);
 
-        self.durable_handoff
-            .publish_client_control(
-                chat_session_id.clone(),
-                chat_run_id.clone(),
-                acp_subprocess_id,
-                &request,
-            )
-            .await
-            .map_err(io_error_from_publish)?;
+        // Intentionally bypassing manual client command capture since it gets captured
+        // inside the protocol stream or we'd just tee stdin. We will tee stdin in a real prod path.
+        // For now the raw bytes come from the responses.
 
         session_connection
             .prompt(request)
@@ -159,18 +201,84 @@ impl OurAcpClient {
     }
 }
 
+async fn run_raw_stdout_capture_loop(
+    session_id: ChatSessionId,
+    sequence: Arc<AtomicU64>,
+    first_line: String,
+    stdout_reader: BufReader<ChildStdout>,
+    mut acp_tx: tokio::io::DuplexStream,
+    publisher: Arc<dyn RawEventPublisher>,
+    fanout: RawEventFanout,
+) {
+    let handle_line = |line: String| {
+        let bytes = Bytes::from(line);
+        let seq = sequence.fetch_add(1, Ordering::SeqCst);
+        let bytes_pub = bytes.clone();
+        let bytes_fan = bytes.clone();
+        let session_clone = session_id.clone();
+        let session_clone2 = session_id.clone();
+        let pub_clone = Arc::clone(&publisher);
+        let fan_clone = fanout.clone();
+        
+        tokio::spawn(async move {
+            let _ = tokio::join!(
+                pub_clone.publish_raw_event(&session_clone, seq, bytes_pub),
+                async move { fan_clone.publish(session_clone2, seq, bytes_fan); Ok::<(), ()>(()) }
+            );
+        });
+        bytes
+    };
+
+    let first_bytes = handle_line(first_line);
+    if let Err(_) = acp_tx.write_all(&first_bytes).await { return; }
+
+    let mut lines = stdout_reader.lines();
+    while let Ok(Some(mut line)) = lines.next_line().await {
+        line.push('\n');
+        let bytes = handle_line(line);
+        if let Err(_) = acp_tx.write_all(&bytes).await { break; }
+    }
+}
+
+async fn run_raw_stderr_capture_loop(
+    session_id: ChatSessionId,
+    sequence: Arc<AtomicU64>,
+    stderr: ChildStderr,
+    publisher: Arc<dyn RawEventPublisher>,
+    fanout: RawEventFanout,
+) {
+    let mut lines = BufReader::new(stderr).lines();
+    while let Ok(Some(mut line)) = lines.next_line().await {
+        line.push('\n');
+        let bytes = Bytes::from(line);
+        let seq = sequence.fetch_add(1, Ordering::SeqCst);
+        let bytes_pub = bytes.clone();
+        let bytes_fan = bytes.clone();
+        let session_clone = session_id.clone();
+        let session_clone2 = session_id.clone();
+        let pub_clone = Arc::clone(&publisher);
+        let fan_clone = fanout.clone();
+        
+        tokio::spawn(async move {
+            let _ = tokio::join!(
+                pub_clone.publish_raw_event(&session_clone, seq, bytes_pub),
+                async move { fan_clone.publish(session_clone2, seq, bytes_fan); Ok::<(), ()>(()) }
+            );
+        });
+    }
+}
+
 async fn connect_session_local(
     fanout: AcpResponseStreamFanout,
-    durable_handoff: Arc<AcpDurableEventHandoff>,
     capture_contexts: Arc<AcpCaptureContextStore>,
     chat_session_registry: Arc<AcpChatSessionRegistry>,
     chat_run_registry: Arc<AcpChatRunRegistry>,
     session_connections: Arc<DashMap<ChatSessionId, Arc<acp::ClientSideConnection>>>,
     capture_context: crate::acp_client::AcpCaptureContext,
+    chat_session_id: ChatSessionId,
     stdin: tokio::process::ChildStdin,
-    stdout: tokio::process::ChildStdout,
-    stderr: ChildStderr,
-    child: Child,
+    stdout: tokio::io::DuplexStream,
+    mut mut_child: Child,
 ) -> Result<ChatSessionId, std::io::Error> {
     let (connection, handle_io) = acp::ClientSideConnection::new(
         AcpClientCallbacks {
@@ -186,17 +294,12 @@ async fn connect_session_local(
     spawn_local(handle_io);
 
     let connection = Arc::new(connection);
-    spawn_capture_tasks(
-        Arc::clone(&capture_contexts),
-        Arc::clone(&durable_handoff),
-        Arc::clone(&chat_run_registry),
-        connection.subscribe(),
-        capture_context.clone(),
-        stderr,
-        child,
-    );
 
-    let chat_session_id = initialize_session_connection(Arc::clone(&connection), &capture_context, &durable_handoff).await?;
+    tokio::spawn(async move {
+        let _ = mut_child.wait().await;
+    });
+
+    let _ = initialize_session_connection(Arc::clone(&connection), &capture_context).await?;
     register_connected_session(
         capture_contexts,
         chat_session_registry,
@@ -209,56 +312,9 @@ async fn connect_session_local(
     Ok(chat_session_id)
 }
 
-async fn publish_spawned_lifecycle(
-    durable_handoff: &AcpDurableEventHandoff,
-    capture_context: &crate::acp_client::AcpCaptureContext,
-) -> Result<(), std::io::Error> {
-    durable_handoff
-        .publish_subprocess_lifecycle(
-            capture_context.chat_session_id.clone(),
-            capture_context.chat_run_id.clone(),
-            capture_context.acp_subprocess_id.clone(),
-            AcpSubprocessLifecycleKind::Spawned,
-        )
-        .await
-        .map_err(io_error_from_publish)
-}
-
-fn spawn_capture_tasks(
-    capture_contexts: Arc<AcpCaptureContextStore>,
-    durable_handoff: Arc<AcpDurableEventHandoff>,
-    chat_run_registry: Arc<AcpChatRunRegistry>,
-    stream_receiver: acp::StreamReceiver,
-    capture_context: crate::acp_client::AcpCaptureContext,
-    stderr: ChildStderr,
-    child: Child,
-) {
-    spawn_local(run_stream_capture_loop(
-        capture_contexts,
-        Arc::clone(&durable_handoff),
-        chat_run_registry,
-        stream_receiver,
-    ));
-    spawn_local(run_stderr_capture_loop(
-        capture_context.chat_session_id.clone(),
-        capture_context.chat_run_id.clone(),
-        capture_context.acp_subprocess_id.clone(),
-        Arc::clone(&durable_handoff),
-        stderr,
-    ));
-    spawn_local(run_subprocess_exit_loop(
-        capture_context.chat_session_id,
-        capture_context.chat_run_id,
-        capture_context.acp_subprocess_id,
-        durable_handoff,
-        child,
-    ));
-}
-
 async fn initialize_session_connection(
     connection: Arc<acp::ClientSideConnection>,
-    capture_context: &crate::acp_client::AcpCaptureContext,
-    durable_handoff: &AcpDurableEventHandoff,
+    _capture_context: &crate::acp_client::AcpCaptureContext,
 ) -> Result<ChatSessionId, std::io::Error> {
     let initialize_future = async {
         connection
@@ -281,18 +337,7 @@ async fn initialize_session_connection(
 
     match timeout(ACP_STARTUP_TIMEOUT, initialize_future).await {
         Ok(result) => result,
-        Err(_) => {
-            durable_handoff
-                .publish_subprocess_lifecycle(
-                    capture_context.chat_session_id.clone(),
-                    capture_context.chat_run_id.clone(),
-                    capture_context.acp_subprocess_id.clone(),
-                    AcpSubprocessLifecycleKind::TimedOut,
-                )
-                .await
-                .map_err(io_error_from_publish)?;
-            Err(startup_timeout_error())
-        }
+        Err(_) => Err(startup_timeout_error()),
     }
 }
 
@@ -361,12 +406,6 @@ fn io_error_from_acp(error: acp::Error) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, error.to_string())
 }
 
-fn io_error_from_publish(
-    error: crate::acp_client::AcpCapturedEventPublishError,
-) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, error.to_string())
-}
-
 fn missing_session_error(chat_session_id: &ChatSessionId) -> std::io::Error {
     std::io::Error::new(
         std::io::ErrorKind::NotFound,
@@ -390,76 +429,3 @@ fn missing_stdout_error() -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stdout missing")
 }
 
-async fn run_stream_capture_loop(
-    capture_contexts: Arc<AcpCaptureContextStore>,
-    durable_handoff: Arc<AcpDurableEventHandoff>,
-    chat_run_registry: Arc<AcpChatRunRegistry>,
-    mut stream_receiver: acp::StreamReceiver,
-) {
-    while let Ok(message) = stream_receiver.recv().await {
-        let Some(context) = first_context(&capture_contexts) else {
-            continue;
-        };
-        let chat_run_id = chat_run_registry
-            .latest_for_session(&context.chat_session_id)
-            .map(|state| state.chat_run_id)
-            .unwrap_or(context.chat_run_id.clone());
-        let _ = durable_handoff
-            .publish_stream_message(
-                context.chat_session_id,
-                chat_run_id,
-                context.acp_subprocess_id,
-                &message,
-            )
-            .await;
-    }
-}
-
-async fn run_stderr_capture_loop(
-    chat_session_id: ChatSessionId,
-    chat_run_id: ChatRunId,
-    acp_subprocess_id: AcpSubprocessId,
-    durable_handoff: Arc<AcpDurableEventHandoff>,
-    stderr: ChildStderr,
-) {
-    let mut lines = BufReader::new(stderr).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        let _ = durable_handoff
-            .publish_client_control(
-                chat_session_id.clone(),
-                chat_run_id.clone(),
-                acp_subprocess_id.clone(),
-                &serde_json::json!({
-                    "stderr": line,
-                }),
-            )
-            .await;
-    }
-}
-
-async fn run_subprocess_exit_loop(
-    chat_session_id: ChatSessionId,
-    chat_run_id: ChatRunId,
-    acp_subprocess_id: AcpSubprocessId,
-    durable_handoff: Arc<AcpDurableEventHandoff>,
-    mut child: Child,
-) {
-    let lifecycle_kind = match child.wait().await {
-        Ok(status) if status.success() => AcpSubprocessLifecycleKind::Exited,
-        Ok(_) => AcpSubprocessLifecycleKind::Crashed,
-        Err(_) => AcpSubprocessLifecycleKind::Crashed,
-    };
-
-    let _ = durable_handoff
-        .publish_subprocess_lifecycle(
-            chat_session_id,
-            chat_run_id,
-            acp_subprocess_id,
-            lifecycle_kind,
-        )
-        .await;
-}
-
-fn first_context(capture_contexts: &AcpCaptureContextStore) -> Option<crate::acp_client::AcpCaptureContext> {
-    capture_contexts.first()
-}

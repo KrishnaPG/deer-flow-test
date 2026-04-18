@@ -4,6 +4,7 @@ members = [
     "apps/deer_design",
     "apps/deer_gui",
     "crates/foundation/contracts",
+    "crates/foundation/paths",
     "crates/foundation/domain",
     "crates/foundation/replay",
     "crates/pipeline/derivations",

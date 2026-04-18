@@ -7,18 +7,11 @@ pub mod thread_gateway;
 pub mod upload_gateway;
 
 pub use acp_client::{
-    AcpCapturedEventTimestamp,
-    AcpCapturedProtocolEvent,
     AcpChatRunRegistry,
     AcpChatSessionRegistry,
     AcpJsonRpcRequestId,
-    AcpProtocolFrameKind,
-    AcpRedpandaHeaders,
-    AcpRedpandaStreamBinding,
     AcpResponseStreamEvent,
     AcpResponseStreamEventKind,
-    AcpSequenceAllocator,
-    AcpSessionSequenceNumber,
     AcpSubprocessCommand,
     AcpSubprocessEvent,
     AcpSubprocessId,

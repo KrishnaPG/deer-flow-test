@@ -7,11 +7,13 @@
 - [x] Implement chat session and run registry with optional `ChatThreadId` support and future multi-session-per-process compatibility.
 - [x] Implement client-owned sequencing scoped to `ChatSessionId`.
 
-## Phase 2: Redpanda-First Raw Capture
-- [ ] Implement Redpanda publication for `hermes.l0_drop` with durable producer settings.
-- [x] Keep durable event publication behind a broker-agnostic abstraction so another broker can replace Redpanda later.
-- [x] Publish every observable boundary event: client-issued commands, observed ACP requests/responses/notifications, and lifecycle/error envelopes.
-- [ ] Preserve replay metadata without Berg10 domain interpretation.
+## Phase 2: Redb-First Raw Capture
+- [x] Implement Redb staging database publication for `hermes.l0_drop` with durable `sync` settings.
+- [x] Use strongly typed paths (`IncomingDir`, `StagingDatabasePath`) to enforce base_dir rules.
+- [x] Implement high performance zero-allocation parallel fan-out and durable flush loop.
+- [x] Compute `ChatSessionId` directly from `blake3(first_line) + timestamp + pid` without full protocol parsing.
+- [x] Keep durable event publication behind a broker-agnostic abstraction (`RawEventPublisher`) so Redpanda can be added later.
+- [x] Publish every observable boundary event directly as raw `Bytes`.
 
 ## Phase 3: Live Stream Now
 - [x] Implement `AcpResponseStreamEvent` live fanout from ACP-observed events.
