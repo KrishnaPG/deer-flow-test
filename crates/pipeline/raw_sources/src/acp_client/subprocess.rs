@@ -1,13 +1,15 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 
+use serde::{Deserialize, Serialize};
 use tokio::process::{Child, Command};
 use tracing::instrument;
 
 use crate::acp_client::ids::AcpSubprocessId;
 
 /// Material lifecycle states for one Hermes ACP subprocess instance.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AcpSubprocessLifecycleKind {
     Spawned,
     Exited,

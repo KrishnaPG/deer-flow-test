@@ -24,6 +24,9 @@ impl AcpCapturedEventTimestamp {
 pub enum AcpProtocolFrameKind {
     ClientControlIntent,
     AcpClientRequest,
+    AcpClientNotification,
+    AcpClientResponse,
+    AcpServerRequest,
     AcpServerResponse,
     AcpServerNotification,
     SubprocessLifecycle,

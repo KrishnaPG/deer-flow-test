@@ -28,6 +28,12 @@ impl AcpChatSessionRegistry {
     pub fn get(&self, chat_session_id: &ChatSessionId) -> Option<AcpChatSessionState> {
         self.entries.get(chat_session_id).map(|entry| entry.clone())
     }
+
+    pub fn subprocess_id_for(&self, chat_session_id: &ChatSessionId) -> Option<AcpSubprocessId> {
+        self.entries
+            .get(chat_session_id)
+            .map(|entry| entry.acp_subprocess_id.clone())
+    }
 }
 
 #[derive(Default)]
