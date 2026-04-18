@@ -11,9 +11,21 @@ use serde::{Deserialize, Serialize};
 /// Berg10-scoped semantic hierarchy describing what kind of meaning a piece of
 /// immutable content carries.
 ///
-/// This is intentionally distinct from a virtual folder hierarchy. A virtual
-/// folder hierarchy is a user-defined ordering over content attributes, while a
-/// data hierarchy describes the architectural role of the content itself.
+/// This is intentionally distinct from a virtual folder hierarchy.
+///
+/// - A `Berg10DataHierarchy` answers: "what kind of thing is this content?"
+/// - A `VirtualFolderHierarchy` answers: "how should matching content be
+///   organized for browsing?"
+///
+/// The architecture docs describe three interleaved data hierarchies:
+///
+/// - `Orchestration`: what the agent/runtime did.
+/// - `ArtifactContent`: what the agent/user/tool produced.
+/// - `Presentation`: what a downstream consumer wants to see as a view model.
+///
+/// A single user-visible session can contain records from all three
+/// hierarchies. Keeping this as a strong enum prevents accidentally storing
+/// orchestration data as artifact content or vice versa.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Berg10DataHierarchy {
@@ -24,7 +36,12 @@ pub enum Berg10DataHierarchy {
     /// gathered sources, summaries, and derived artifacts.
     ArtifactContent,
     /// Consumer-facing projections and view models derived from lower levels.
-    /// These records are optimized for presentation rather than canonical truth.
+    ///
+    /// This is intentionally separate from `ArtifactContent` because
+    /// presentation records are optimized for a particular consumer or UX,
+    /// not for canonical storage truth. For example, a thread view, a
+    /// commander dashboard row, and a researcher-oriented summary can all be
+    /// derived from the same underlying artifact/orchestration content.
     Presentation,
 }
 
@@ -60,19 +77,65 @@ impl FromStr for Berg10DataHierarchy {
 /// Berg10-scoped wrapper around the canonical storage levels used throughout the
 /// state-server architecture.
 ///
-/// The same physical content may participate in multiple consumer-relative
-/// interpretations later, but the stored record captures the level at which it
-/// was produced.
+/// A level answers: "how far has this content been transformed relative to its
+/// current consumer?"
+///
+/// Levels are about semantic readiness and derivation stage, not about physical
+/// storage representation. A record's plane tells you *how* it is stored, while
+/// its level tells you *how processed* it is.
+///
+/// Practical interpretation of levels:
+///
+/// - `L0`: crude/raw data captured from the generator boundary.
+/// - `L1`: sanitized/normalized forms of `L0`.
+/// - `L2`: views or domain-shaped projections on top of lower levels.
+/// - `L3`: aggregates, insights, or historical interpretations.
+/// - `L4`: generated/predictive/final artifacts.
+/// - `L5`: prescriptions/plans intended to influence `L4` predicted outcomes.
+/// - `L6`: outcome evaluation/deviation versus what was expected/predicted.
+///
+/// The same underlying fact can appear at multiple levels in different derived
+/// forms. For example, a final artifact may be `L4` in the artifact hierarchy,
+/// while a UI-ready projection of that same artifact later appears as
+/// `Presentation/L2`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Berg10DataLevel(pub CanonicalLevel);
 
 impl Berg10DataLevel {
+    /// Raw/crude source data with minimal interpretation.
+    ///
+    /// Use this for directly captured runtime events, raw prompts, raw tool
+    /// outputs, logs, audio/video, and other source-of-truth payloads.
     pub const L0: Self = Self(CanonicalLevel::L0);
+    /// Sanitized or normalized data derived from `L0`.
+    ///
+    /// Use this when the payload has been cleaned, deduplicated, structurally
+    /// normalized, or lightly corrected without changing its core meaning.
     pub const L1: Self = Self(CanonicalLevel::L1);
+    /// Consumer-relative views and domain-shaped projections.
+    ///
+    /// Use this for query-ready views, joined projections, presentation-ready
+    /// slices, or domain models built from lower levels.
     pub const L2: Self = Self(CanonicalLevel::L2);
+    /// Aggregates, insights, and historical interpretation.
+    ///
+    /// Use this when the record captures a higher-order conclusion such as
+    /// summaries, metrics, rollups, extracted insights, or trend signals.
     pub const L3: Self = Self(CanonicalLevel::L3);
+    /// Predictive, generated, or final output artifacts.
+    ///
+    /// Use this for content that did not exist verbatim in the source stream,
+    /// such as reports, generated code, synthesized media, or forecasts.
     pub const L4: Self = Self(CanonicalLevel::L4);
+    /// Prescriptions or plans intended to alter future outcomes.
+    ///
+    /// Use this for recommended actions, interventions, mitigations, or
+    /// alternative plans derived from lower-level observations.
     pub const L5: Self = Self(CanonicalLevel::L5);
+    /// Outcome evaluation and deviation versus projections.
+    ///
+    /// Use this to record whether `L4` predictions or generated outcomes matched
+    /// observed reality, including the influence of any `L5` interventions.
     pub const L6: Self = Self(CanonicalLevel::L6);
 
     pub fn as_str(self) -> &'static str {
@@ -125,14 +188,29 @@ impl FromStr for Berg10DataLevel {
 
 /// Berg10-scoped wrapper around canonical storage planes.
 ///
-/// A plane describes the physical representation of content in storage:
-/// canonical payload bytes, chunked derivatives, or embeddings.
+/// A plane answers: "what physical representation of this content is stored?"
+///
+/// Planes are intentionally *not* levels:
+///
+/// - A level describes semantic processing stage (`L0` raw, `L1` normalized,
+///   `L2` view, etc.).
+/// - A plane describes storage representation (`AsIs`, `Chunks`,
+///   `Embeddings`).
+///
+/// This distinction matters because the same semantic level can exist on
+/// multiple planes. For example, `L1` normalized text may exist both as
+/// canonical `AsIs` content and as derived `Chunks` for retrieval. Likewise,
+/// embeddings are a storage representation derived from chunk content; they are
+/// not themselves a semantic level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Berg10StoragePlane(pub CanonicalPlane);
 
 impl Berg10StoragePlane {
+    /// Canonical payload bytes exactly as stored for that level.
     pub const AS_IS: Self = Self(CanonicalPlane::AsIs);
+    /// Segmented or chunked derivatives of canonical payloads.
     pub const CHUNKS: Self = Self(CanonicalPlane::Chunks);
+    /// Embedding/vector representations that point back to chunk payloads.
     pub const EMBEDDINGS: Self = Self(CanonicalPlane::Embeddings);
 
     pub fn as_str(self) -> &'static str {
@@ -175,8 +253,14 @@ impl FromStr for Berg10StoragePlane {
     }
 }
 
-/// Strongly typed payload kind carried by Berg10 content. This keeps the field
-/// semantically distinct from unrelated string labels elsewhere in the system.
+/// Strongly typed payload kind carried by Berg10 content.
+///
+/// `payload_kind` answers: "what is this payload within its hierarchy/level?"
+/// Examples: `message.delta`, `tool.started`, `session.segment`,
+/// `thread.view`, `report.markdown`.
+///
+/// This remains string-backed for extensibility, but wrapping it prevents it
+/// from being confused with arbitrary strings elsewhere in the codebase.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Berg10PayloadKind(pub StoragePayloadKind);
@@ -222,6 +306,9 @@ impl From<Berg10PayloadKind> for StoragePayloadKind {
 }
 
 /// Strongly typed payload format for Berg10 content.
+///
+/// `payload_format` answers: "what serialization or media format is this
+/// payload encoded in?" Examples: `json`, `jsonl`, `md`, `mp3`, `parquet`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Berg10PayloadFormat(pub StoragePayloadFormat);
@@ -271,6 +358,10 @@ impl From<Berg10PayloadFormat> for StoragePayloadFormat {
 }
 
 /// Application-defined key for metadata tags attached to immutable content.
+///
+/// Tags are intentionally open-ended and user/system defined. They are not a
+/// replacement for strongly typed architectural fields such as hierarchy, level,
+/// and plane.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct TagKey(String);
@@ -338,6 +429,9 @@ impl From<String> for TagValue {
 
 /// A strongly typed key/value attribute used for routing, filtering, and
 /// virtual hierarchy construction.
+///
+/// These are auxiliary attributes, not identity fields. The same content hash
+/// may be referenced through many tags and many virtual views later.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContentTag {
     pub key: TagKey,
@@ -425,6 +519,10 @@ impl From<String> for LogicalFilename {
 /// This is intentionally not called a file record. Berg10 stores immutable
 /// content plus attributes; files are only one possible virtual presentation of
 /// that content later.
+///
+/// The core identity is `content_hash`. Everything else describes the content's
+/// architectural role (`data_hierarchy`, `data_level`, `storage_plane`) and its
+/// query/browse metadata (`payload_kind`, tags, lineage, logical filename).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContentRecord {
     pub content_hash: ContentHash,
@@ -510,8 +608,11 @@ impl From<String> for HierarchyName {
     }
 }
 
-/// A single segment in a virtual folder path builder. Built-in segments target
-/// well-known content attributes, while tag segments reference arbitrary tags.
+/// A single segment in a virtual folder path builder.
+///
+/// Built-in segments target strongly typed architectural fields. `Tag(...)`
+/// segments target arbitrary metadata tags. This keeps view-construction logic
+/// separate from the stored semantics of the content itself.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum HierarchyPathSegment {

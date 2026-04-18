@@ -1,55 +1,60 @@
-# Embed Hermes AIAgent Runner
+# Embed Hermes ACP Producer
 
 ## Summary
-Provide a backend-hosted Hermes runner service, implemented in Rust, that wraps an in-process Hermes `AIAgent`. The runner exposes a transport-neutral HTTP plus WebSocket API that both desktop and web/WASM clients can use, while simultaneously publishing raw, unmapped Hermes session traffic into Redpanda on the `hermes.l0_drop` topic.
+Provide a Rust-managed Hermes producer that launches Hermes ACP as a subprocess over JSON-RPC stdio, captures every observable ACP frame and producer-issued command envelope, and durably publishes that raw traffic to Redpanda topic `hermes.l0_drop` before any ingestion or Berg10 interpretation occurs.
 
 ## Why
-- Avoids coupling Hermes execution to a desktop-only stdin/stdout subprocess model that cannot work for web/WASM clients.
-- Enables one backend integration path for `deer_gui`, future web/WASM UIs, and thin labs.
-- Keeps storage canonical and durable: raw Hermes session/request/response traffic is durably buffered before being ingested into the Berg10 content-addressable VFS as L0 records.
-- Preserves enough raw fidelity to reconstruct the full Hermes conversation/session, including user requests, assistant responses, tool calls, tool results, reasoning, and finish markers.
-- Provides a clear boundary between raw data capture (Hermes producer) and structured ingestion/normalization (future ingestor).
+- Keeps the first write path extremely fast and durable: Redpanda is the primary L0 landing zone, not an ETL layer.
+- Preserves enough raw fidelity to reconstruct full Hermes sessions for replay, audit, and future real-time agentic chat UI.
+- Avoids modifying `3rdParty/hermes-agent`; integration happens entirely through the ACP boundary.
+- Makes sequencing and durability our responsibility instead of relying on internal Hermes storage semantics.
+- Cleanly separates producer concerns (capture, order, durability, replay metadata) from ingestion concerns (classification, Berg10 mapping, normalization, projection).
 
 ## Scope
 In-scope:
-- A backend-hosted Hermes runner component that instantiates `AIAgent`.
-- A transport-neutral API for starting runs, canceling runs, and subscribing to stream events.
-- Storage path resolution respects `<base_dir>/runners/<engine_name>/` hierarchy:
-  - Runner-owned files: `<base_dir>/runners/hermes/...`
-  - Supporting files: `<base_dir>/runners/hermes/skills/`, `<base_dir>/runners/hermes/config/`, etc.
-- Dual-sink implementation: 
-  - Emit stream events over a backend API suitable for desktop and web/WASM clients.
-  - Publish raw, unmapped Hermes callback payloads to Redpanda topic `hermes.l0_drop`.
-- Reliable Redpanda producer semantics: idempotent producer, `acks=all`, retry/backoff, and durable buffering until a future ingestor marks items as successfully ingested.
-- Session reconstruction contract: published messages carry stable `session_id`, `thread_id` (when available), `run_id`, `message_id`, `tool_call_id`, `seq`, and finish markers.
-- Replay support for reconnecting clients, using a small in-memory event window in the runner and Redpanda-backed replay when the requested sequence is older than the in-memory cache.
-- Desktop and lab clients use the same backend API instead of directly spawning Python.
-- Environment variable `BERG10_BASE_DIR` is used by the backend-hosted Hermes service for runner path resolution.
+- A Rust producer that launches and manages Hermes ACP over JSON-RPC stdio.
+- Redpanda-first raw capture to topic `hermes.l0_drop`.
+- Preservation of every observable boundary event the producer can capture, including:
+  - producer-issued commands such as prompt, cancel, session create, session load, and resume
+  - ACP requests, responses, and notifications observed on the subprocess boundary
+  - subprocess lifecycle events that materially affect reconstruction (spawned, exited, crashed, restarted, timeout)
+- Stable replay metadata on each published envelope:
+  - `session_id`
+  - `run_id`
+  - `seq`
+  - `timestamp`
+  - optional `thread_id`, `message_id`, `tool_call_id`, and similar fields when observable
+- A sequencing model owned by the Rust producer, scoped monotonically within `session_id`.
+- A process model that supports multiple sessions per ACP subprocess, while defaulting to one subprocess per session for initial isolation.
+- Redpanda-backed replay as the durable recovery source, with optional in-memory replay tail as an optimization.
+- Use of `BERG10_BASE_DIR` for runner-owned paths under `<base_dir>/runners/hermes/` when local state or diagnostics are needed.
 
-Out-of-scope (initial iteration):
-- Full ingestion pipeline implementation on the Rust side (producer-side capture is the current priority; ingestor comes later).
-- Full UI features (we are just providing the streaming data to the existing GUI).
-- File-based `l0_drop` fallback under `<base_dir>/runners/hermes/l0_drop/...` beyond documenting the design for lower-priority dev usage.
+Out-of-scope (this change):
+- Berg10 field mapping, `data_hierarchy` classification, normalization, and any other domain interpretation.
+- Ingestion from `hermes.l0_drop` into `crates/berg10/storage-vfs/` and `crates/berg10/storage-catalog/`.
+- Stable public HTTP/WebSocket client APIs.
+- File fallback as a primary path; this change is explicitly Redpanda-first.
+- Any source changes under `3rdParty/`.
 
 ## Acceptance Criteria
-- A backend Hermes runner service can start a Hermes session/run on request.
-- Sending a prompt from a client streams live text and event updates back through a WebSocket event stream.
-- The runner exposes `POST /runs`, `POST /runs/{run_id}/cancel`, and `WS /runs/{run_id}/events` as the initial stable API surface.
-- Concurrently, raw Hermes callback events are published to Redpanda topic `hermes.l0_drop`.
-- Published messages preserve enough identifiers and ordering metadata to reconstruct the full session/thread transcript.
-- Producer uses reliable delivery settings (`acks=all`, idempotence enabled, retries with backoff, strict ordering-safe in-flight configuration) and surfaces publish failures cleanly to the UI.
-- Raw payload may be gzip-compressed before publish to reduce Redpanda storage usage, while remaining opaque to the producer path.
-- Data remains in Redpanda until a future ingestor marks it as successfully ingested; short retention is not allowed.
-- Default retention budget is long-lived (target: one month), with operational expectation that ingestors run at least daily in the worst case.
-- `deer_gui` and any future WASM/web UI can use the same API contract without subprocess-only assumptions.
-- Reconnecting clients can request replay from a prior `seq`, and the runner replays events without requiring the client to reconstruct missing state on its own.
+- The producer launches Hermes ACP as a subprocess and communicates using JSON-RPC over stdio.
+- The producer can create or resume Hermes sessions and execute prompts as runs within those sessions.
+- Every observable boundary event the producer can capture is published to Redpanda topic `hermes.l0_drop`.
+- Published envelopes preserve raw ACP payloads and producer command payloads without Berg10 mapping or semantic reinterpretation.
+- Each published envelope includes stable replay metadata with `session_id`, `run_id`, `seq`, and `timestamp`, plus optional identifiers when available.
+- `session_id` is used as the Redpanda message key.
+- `seq` is assigned by the Rust producer and is monotonic within a session.
+- The implementation supports multiple sessions per subprocess at the abstraction level, while the default runtime policy uses one subprocess per session.
+- Redpanda producer settings provide high durability and ordering safety (`acks=all`, idempotence enabled, retries with backoff, ordering-safe in-flight configuration).
+- Redpanda remains the durable source of raw truth until downstream ingestion succeeds; producer-side storage interpretation is not performed.
+- The design keeps `thread_id` optional so future manual session branching can attach it when a real source exists.
 
 ## Risks & Mitigations
-- **Broker Outage or Backpressure:** Redpanda unavailability could block or fail session capture.
-  - *Mitigation:* Use idempotent producer settings, bounded retries with backoff, explicit UI error surfacing, and keep file-based fallback documented for low-priority dev use.
-- **Message Growth:** Full-fidelity raw session capture can consume significant broker storage.
-  - *Mitigation:* Allow gzip-compressed payloads, use long retention with operational monitoring, and only delete data after successful ingestion has been recorded.
-- **Ordering Drift:** Reconstructing sessions from streamed callbacks requires stable ordering metadata.
-  - *Mitigation:* Partition by `session_id`, include monotonic `seq` values within the session, and emit explicit finish events for each completed assistant message.
-- **Reconnect Gaps:** UI clients can disconnect mid-run and miss deltas or tool progress events.
-  - *Mitigation:* Use WebSocket delivery for live fan-out, retain a short in-memory replay window per run, and fall back to Redpanda replay when reconnect gaps exceed local cache.
+- **Subprocess Instability:** Hermes ACP can hang, crash, or emit malformed frames.
+  - *Mitigation:* Treat stdout as protocol-only, stderr as diagnostics, add heartbeat/timeouts, emit lifecycle envelopes, and allow supervised restart.
+- **Reconstruction Gaps:** Missing prompt/cancel or protocol frames would weaken replay fidelity.
+  - *Mitigation:* Persist every observable producer-side command and every observable ACP frame, not only assistant-visible events.
+- **Ordering Drift:** Multiple runs inside one session can interleave unexpectedly.
+  - *Mitigation:* Use `session_id` as the partition key and assign session-scoped monotonic `seq` in the producer.
+- **Storage Growth:** Full raw capture increases broker retention cost.
+  - *Mitigation:* Allow compression, keep retention operationally long-lived, and defer deletion to successful downstream ingestion policy.
