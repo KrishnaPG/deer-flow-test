@@ -71,6 +71,12 @@ impl ChatRunId {
     }
 }
 
+impl ChatSessionId {
+    pub fn pending_for_subprocess(acp_subprocess_id: &AcpSubprocessId) -> Self {
+        Self::new(format!("pending:{}", acp_subprocess_id.as_str()))
+    }
+}
+
 impl AcpSubprocessId {
     pub fn generate() -> Self {
         Self::new(Uuid::now_v7().to_string())

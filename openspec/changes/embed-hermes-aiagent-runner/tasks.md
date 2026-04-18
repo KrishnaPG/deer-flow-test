@@ -20,7 +20,7 @@
 
 ## Phase 4: Replay and Reliability
 - [ ] Implement Redpanda-backed replay by `ChatSessionId` and `AcpSessionSequenceNumber`.
-- [ ] Implement subprocess recovery and error surfacing with lifecycle persistence.
+- [~] Implement subprocess recovery and error surfacing with lifecycle persistence.
 
 ## Phase 5: Verification
 - [ ] Verify raw capture fidelity against Hermes ACP and ephemeral Redpanda.
