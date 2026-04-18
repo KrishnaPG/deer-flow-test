@@ -65,6 +65,10 @@ impl ChatRunId {
     pub fn generate() -> Self {
         Self::new(Uuid::now_v7().to_string())
     }
+
+    pub fn bootstrap_for_session(chat_session_id: &ChatSessionId) -> Self {
+        Self::new(format!("bootstrap:{}", chat_session_id.as_str()))
+    }
 }
 
 impl AcpSubprocessId {
