@@ -1,5 +1,4 @@
 use std::path::Path;
-
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow};
@@ -7,8 +6,16 @@ use sqlx::{ConnectOptions, Pool, Row, Sqlite};
 use tracing::{self, log::LevelFilter};
 
 use crate::config::{CatalogBackendConfig, CatalogConfig};
-use crate::types::FileRecord;
-use crate::types::VirtualFolderHierarchy;
+use crate::types::{
+    ContentRecord,
+    ContentTag,
+    HierarchyPathSegment,
+    HierarchyStatus,
+    LineageRef,
+    TagKey,
+    TagValue,
+    VirtualFolderHierarchy,
+};
 
 #[derive(Clone)]
 pub struct Berg10Catalog {
@@ -150,7 +157,7 @@ impl Berg10Catalog {
         Ok(())
     }
 
-    pub async fn register_file(&self, record: &FileRecord) -> Result<()> {
+    pub async fn register_content(&self, record: &ContentRecord) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
@@ -162,65 +169,65 @@ impl Berg10Catalog {
             ON CONFLICT(content_hash) DO NOTHING
             "#,
         )
-        .bind(&record.content_hash)
-        .bind(&record.hierarchy)
-        .bind(&record.level)
-        .bind(&record.plane)
-        .bind(&record.payload_kind)
-        .bind(&record.payload_format)
+        .bind(record.content_hash.as_str())
+        .bind(record.data_hierarchy.as_str())
+        .bind(record.data_level.as_str())
+        .bind(record.storage_plane.as_str())
+        .bind(record.payload_kind.as_str())
+        .bind(record.payload_format.as_str())
         .bind(record.payload_size_bytes as i64)
         .bind(record.written_at.to_rfc3339())
-        .bind(&record.writer_identity)
-        .bind(&record.logical_filename)
+        .bind(record.writer_identity.as_ref().map(|value| value.as_str()))
+        .bind(record.logical_filename.as_ref().map(|value| value.as_str()))
         .execute(&mut *tx)
         .await?;
 
         sqlx::query("DELETE FROM blob_correlation_ids WHERE content_hash = ?")
-            .bind(&record.content_hash)
+            .bind(record.content_hash.as_str())
             .execute(&mut *tx)
             .await?;
-        for (key, value) in &record.correlation_ids {
+        for tag in &record.correlation_ids {
             sqlx::query(
                 "INSERT INTO blob_correlation_ids (content_hash, key, value) VALUES (?, ?, ?)",
             )
-            .bind(&record.content_hash)
-            .bind(key)
-            .bind(value)
+            .bind(record.content_hash.as_str())
+            .bind(tag.key.as_str())
+            .bind(tag.value.as_str())
             .execute(&mut *tx)
             .await?;
         }
 
         sqlx::query("DELETE FROM blob_lineage_refs WHERE content_hash = ?")
-            .bind(&record.content_hash)
+            .bind(record.content_hash.as_str())
             .execute(&mut *tx)
             .await?;
         for reference in &record.lineage_refs {
             sqlx::query("INSERT INTO blob_lineage_refs (content_hash, ref) VALUES (?, ?)")
-                .bind(&record.content_hash)
-                .bind(reference)
+                .bind(record.content_hash.as_str())
+                .bind(reference.as_str())
                 .execute(&mut *tx)
                 .await?;
         }
 
         sqlx::query("DELETE FROM blob_tags WHERE content_hash = ?")
-            .bind(&record.content_hash)
+            .bind(record.content_hash.as_str())
             .execute(&mut *tx)
             .await?;
-        for (key, value) in &record.routing_tags {
+        for tag in &record.routing_tags {
             sqlx::query("INSERT INTO blob_tags (content_hash, tag_key, tag_value) VALUES (?, ?, ?)")
-                .bind(&record.content_hash)
-                .bind(key)
-                .bind(value)
+                .bind(record.content_hash.as_str())
+                .bind(tag.key.as_str())
+                .bind(tag.value.as_str())
                 .execute(&mut *tx)
                 .await?;
         }
 
         tx.commit().await?;
-        tracing::info!(content_hash = %record.content_hash, "Registered blob metadata");
+        tracing::info!(content_hash = %record.content_hash, "Registered content metadata");
         Ok(())
     }
 
-    pub async fn get_file(&self, content_hash: &str) -> Result<Option<FileRecord>> {
+    pub async fn get_content(&self, content_hash: &str) -> Result<Option<ContentRecord>> {
         let row = sqlx::query(
             r#"
             SELECT content_hash, hierarchy, level, plane, payload_kind, payload_format,
@@ -234,14 +241,14 @@ impl Berg10Catalog {
         .await?;
 
         match row {
-            Some(row) => self.file_record_from_row(row).await.map(Some),
+            Some(row) => self.content_record_from_row(row).await.map(Some),
             None => Ok(None),
         }
     }
 
-    pub async fn query_files(&self, filter: &str) -> Result<Vec<FileRecord>> {
+    pub async fn query_content(&self, filter: &str) -> Result<Vec<ContentRecord>> {
         if filter.trim().is_empty() || filter.trim() == "*" {
-            return self.load_all_files().await;
+            return self.load_all_content().await;
         }
 
         let normalized = Self::normalize_filter(filter)?;
@@ -260,7 +267,7 @@ impl Berg10Catalog {
         let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
-            records.push(self.file_record_from_row(row).await?);
+            records.push(self.content_record_from_row(row).await?);
         }
         Ok(records)
     }
@@ -279,10 +286,10 @@ impl Berg10Catalog {
                 updated_at = excluded.updated_at
             "#,
         )
-        .bind(&hierarchy.hierarchy_name)
+        .bind(hierarchy.hierarchy_name.as_str())
         .bind(order)
         .bind(&hierarchy.filter_expr)
-        .bind(&hierarchy.status)
+        .bind(hierarchy.status.as_str())
         .bind(hierarchy.created_at.to_rfc3339())
         .bind(hierarchy.updated_at.to_rfc3339())
         .execute(&self.pool)
@@ -291,7 +298,7 @@ impl Berg10Catalog {
         Ok(())
     }
 
-    pub async fn list_virtual_folder_hierarchies(&self, status: Option<&str>) -> Result<Vec<VirtualFolderHierarchy>> {
+    pub async fn list_virtual_folder_hierarchies(&self, status: Option<HierarchyStatus>) -> Result<Vec<VirtualFolderHierarchy>> {
         let rows = match status {
             Some(status) => {
                 sqlx::query(
@@ -302,7 +309,7 @@ impl Berg10Catalog {
                     ORDER BY hierarchy_name ASC
                     "#,
                 )
-                .bind(status)
+                .bind(status.as_str())
                 .fetch_all(&self.pool)
                 .await?
             }
@@ -322,12 +329,12 @@ impl Berg10Catalog {
         rows.into_iter().map(Self::hierarchy_from_row).collect()
     }
 
-    pub async fn update_virtual_folder_hierarchy_status(&self, hierarchy_name: &str, status: &str) -> Result<()> {
+    pub async fn update_virtual_folder_hierarchy_status(&self, hierarchy_name: &str, status: HierarchyStatus) -> Result<()> {
         let updated_at = Utc::now().to_rfc3339();
         let result = sqlx::query(
             "UPDATE virtual_folder_hierarchies SET status = ?, updated_at = ? WHERE hierarchy_name = ?",
         )
-        .bind(status)
+        .bind(status.as_str())
         .bind(updated_at)
         .bind(hierarchy_name)
         .execute(&self.pool)
@@ -353,7 +360,7 @@ impl Berg10Catalog {
         Ok(())
     }
 
-    pub async fn resolve_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<Vec<FileRecord>> {
+    pub async fn resolve_virtual_folder_hierarchy(&self, hierarchy_name: &str) -> Result<Vec<ContentRecord>> {
         let hierarchy = sqlx::query(
             r#"
             SELECT hierarchy_name, hierarchy_order_json, filter_expr, status, created_at, updated_at
@@ -370,10 +377,10 @@ impl Berg10Catalog {
         };
 
         let hierarchy = Self::hierarchy_from_row(row)?;
-        self.query_files(hierarchy.filter_expr.as_deref().unwrap_or("*")).await
+        self.query_content(hierarchy.filter_expr.as_deref().unwrap_or("*")).await
     }
 
-    async fn load_all_files(&self) -> Result<Vec<FileRecord>> {
+    async fn load_all_content(&self) -> Result<Vec<ContentRecord>> {
         let rows = sqlx::query(
             r#"
             SELECT content_hash, hierarchy, level, plane, payload_kind, payload_format,
@@ -387,12 +394,12 @@ impl Berg10Catalog {
 
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
-            records.push(self.file_record_from_row(row).await?);
+            records.push(self.content_record_from_row(row).await?);
         }
         Ok(records)
     }
 
-    async fn file_record_from_row(&self, row: SqliteRow) -> Result<FileRecord> {
+    async fn content_record_from_row(&self, row: SqliteRow) -> Result<ContentRecord> {
         let content_hash: String = row.try_get("content_hash")?;
 
         let correlation_ids = sqlx::query(
@@ -402,8 +409,13 @@ impl Berg10Catalog {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(|row| Ok((row.try_get("key")?, row.try_get("value")?)))
-        .collect::<Result<Vec<(String, String)>>>()?;
+        .map(|row| {
+            Ok(ContentTag::new(
+                TagKey::new(row.try_get::<String, _>("key")?),
+                TagValue::new(row.try_get::<String, _>("value")?),
+            ))
+        })
+        .collect::<Result<Vec<ContentTag>>>()?;
 
         let lineage_refs = sqlx::query(
             "SELECT ref FROM blob_lineage_refs WHERE content_hash = ? ORDER BY ref",
@@ -412,8 +424,8 @@ impl Berg10Catalog {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(|row| row.try_get("ref"))
-        .collect::<std::result::Result<Vec<String>, _>>()?;
+        .map(|row| row.try_get::<String, _>("ref").map(LineageRef::new))
+        .collect::<std::result::Result<Vec<LineageRef>, _>>()?;
 
         let routing_tags = sqlx::query(
             "SELECT tag_key, tag_value FROM blob_tags WHERE content_hash = ? ORDER BY tag_key, tag_value",
@@ -422,32 +434,40 @@ impl Berg10Catalog {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(|row| Ok((row.try_get("tag_key")?, row.try_get("tag_value")?)))
-        .collect::<Result<Vec<(String, String)>>>()?;
+        .map(|row| {
+            Ok(ContentTag::new(
+                TagKey::new(row.try_get::<String, _>("tag_key")?),
+                TagValue::new(row.try_get::<String, _>("tag_value")?),
+            ))
+        })
+        .collect::<Result<Vec<ContentTag>>>()?;
 
-        Ok(FileRecord {
-            content_hash,
-            hierarchy: row.try_get("hierarchy")?,
-            level: row.try_get("level")?,
-            plane: row.try_get("plane")?,
-            payload_kind: row.try_get("payload_kind")?,
-            payload_format: row.try_get("payload_format")?,
+        Ok(ContentRecord {
+            content_hash: content_hash
+                .parse::<berg10_storage_vfs::ContentHash>()
+                .map_err(|e| anyhow!(e))?,
+            data_hierarchy: row.try_get::<String, _>("hierarchy")?.parse().map_err(|e: String| anyhow!(e))?,
+            data_level: row.try_get::<String, _>("level")?.parse().map_err(|e: String| anyhow!(e))?,
+            storage_plane: row.try_get::<String, _>("plane")?.parse().map_err(|e: String| anyhow!(e))?,
+            payload_kind: row.try_get::<String, _>("payload_kind")?.into(),
+            payload_format: row.try_get::<String, _>("payload_format")?.into(),
             payload_size_bytes: row.try_get::<i64, _>("payload_size_bytes")? as u64,
             correlation_ids,
             lineage_refs,
             routing_tags,
             written_at: parse_rfc3339(row.try_get::<String, _>("written_at")?)?,
-            writer_identity: row.try_get("writer_identity")?,
-            logical_filename: row.try_get("logical_filename")?,
+            writer_identity: row.try_get::<Option<String>, _>("writer_identity")?.map(Into::into),
+            logical_filename: row.try_get::<Option<String>, _>("logical_filename")?.map(Into::into),
         })
     }
 
     fn hierarchy_from_row(row: SqliteRow) -> Result<VirtualFolderHierarchy> {
+        let hierarchy_order_json: String = row.try_get("hierarchy_order_json")?;
         Ok(VirtualFolderHierarchy {
-            hierarchy_name: row.try_get("hierarchy_name")?,
-            hierarchy_order: serde_json::from_str(&row.try_get::<String, _>("hierarchy_order_json")?)?,
+            hierarchy_name: row.try_get::<String, _>("hierarchy_name")?.into(),
+            hierarchy_order: parse_hierarchy_order(&hierarchy_order_json)?,
             filter_expr: row.try_get("filter_expr")?,
-            status: row.try_get("status")?,
+            status: row.try_get::<String, _>("status")?.parse().map_err(|e: String| anyhow!(e))?,
             created_at: parse_rfc3339(row.try_get::<String, _>("created_at")?)?,
             updated_at: parse_rfc3339(row.try_get::<String, _>("updated_at")?)?,
         })
@@ -491,6 +511,7 @@ fn escape_sql_string(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Berg10DataHierarchy, Berg10DataLevel, Berg10StoragePlane};
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -512,26 +533,26 @@ mod tests {
     async fn file_registration_and_retrieval() {
         let catalog = Berg10Catalog::new(&CatalogConfig::memory()).await.unwrap();
 
-        let record = FileRecord {
-            content_hash: "test_hash_123".to_string(),
-            hierarchy: "A".to_string(),
-            level: "L0".to_string(),
-            plane: "as-is".to_string(),
-            payload_kind: "chat-note".to_string(),
-            payload_format: "jsonl".to_string(),
+        let record = ContentRecord {
+            content_hash: berg10_storage_vfs::ContentHash::new(b"test_hash_123"),
+            data_hierarchy: Berg10DataHierarchy::Orchestration,
+            data_level: Berg10DataLevel::L0,
+            storage_plane: Berg10StoragePlane::AS_IS,
+            payload_kind: "chat-note".to_string().into(),
+            payload_format: "jsonl".to_string().into(),
             payload_size_bytes: 100,
-            correlation_ids: vec![("mission_id".to_string(), "m1".to_string())],
+            correlation_ids: vec![ContentTag::new("mission_id", "m1")],
             lineage_refs: vec![],
-            routing_tags: vec![("env".to_string(), "test".to_string())],
+            routing_tags: vec![ContentTag::new("env", "test")],
             written_at: Utc::now(),
-            writer_identity: Some("test".to_string()),
-            logical_filename: Some("note.jsonl".to_string()),
+            writer_identity: Some("test".into()),
+            logical_filename: Some("note.jsonl".into()),
         };
 
-        catalog.register_file(&record).await.unwrap();
-        let retrieved = catalog.get_file("test_hash_123").await.unwrap().unwrap();
-        assert_eq!(retrieved.content_hash, "test_hash_123");
-        assert_eq!(retrieved.routing_tags, vec![("env".to_string(), "test".to_string())]);
+        catalog.register_content(&record).await.unwrap();
+        let retrieved = catalog.get_content(record.content_hash.as_str()).await.unwrap().unwrap();
+        assert_eq!(retrieved.content_hash, record.content_hash);
+        assert_eq!(retrieved.routing_tags, vec![ContentTag::new("env", "test")]);
     }
 
     #[tokio::test]
@@ -539,10 +560,10 @@ mod tests {
         let catalog = Berg10Catalog::new(&CatalogConfig::memory()).await.unwrap();
 
         let hierarchy = VirtualFolderHierarchy {
-            hierarchy_name: "test-hierarchy".to_string(),
-            hierarchy_order: vec!["year".to_string(), "singer".to_string()],
+            hierarchy_name: "test-hierarchy".into(),
+            hierarchy_order: vec![HierarchyPathSegment::Tag("year".into()), HierarchyPathSegment::Tag("singer".into())],
             filter_expr: Some("payload_kind = 'mp3'".to_string()),
-            status: "active".to_string(),
+            status: HierarchyStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -551,8 +572,8 @@ mod tests {
         let hierarchies = catalog.list_virtual_folder_hierarchies(None).await.unwrap();
         assert_eq!(hierarchies.len(), 1);
 
-        catalog.update_virtual_folder_hierarchy_status("test-hierarchy", "inactive").await.unwrap();
-        let active = catalog.list_virtual_folder_hierarchies(Some("active")).await.unwrap();
+        catalog.update_virtual_folder_hierarchy_status("test-hierarchy", HierarchyStatus::Inactive).await.unwrap();
+        let active = catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await.unwrap();
         assert!(active.is_empty());
 
         catalog.delete_virtual_folder_hierarchy("test-hierarchy").await.unwrap();
@@ -564,25 +585,36 @@ mod tests {
     async fn query_files_supports_routing_tags() {
         let catalog = Berg10Catalog::new(&CatalogConfig::memory()).await.unwrap();
 
-        let record = FileRecord {
-            content_hash: "hash-adele".to_string(),
-            hierarchy: "A".to_string(),
-            level: "L0".to_string(),
-            plane: "as-is".to_string(),
-            payload_kind: "mp3".to_string(),
-            payload_format: "mp3".to_string(),
+        let record = ContentRecord {
+            content_hash: berg10_storage_vfs::ContentHash::new(b"hash-adele"),
+            data_hierarchy: Berg10DataHierarchy::Orchestration,
+            data_level: Berg10DataLevel::L0,
+            storage_plane: Berg10StoragePlane::AS_IS,
+            payload_kind: "mp3".to_string().into(),
+            payload_format: "mp3".to_string().into(),
             payload_size_bytes: 123,
             correlation_ids: vec![],
             lineage_refs: vec![],
-            routing_tags: vec![("singer".to_string(), "Adele".to_string())],
+            routing_tags: vec![ContentTag::new("singer", "Adele")],
             written_at: Utc::now(),
             writer_identity: None,
-            logical_filename: Some("song1.mp3".to_string()),
+            logical_filename: Some("song1.mp3".into()),
         };
-        catalog.register_file(&record).await.unwrap();
+        catalog.register_content(&record).await.unwrap();
 
-        let rows = catalog.query_files("routing_tags['singer'] = 'Adele'").await.unwrap();
+        let rows = catalog.query_content("routing_tags['singer'] = 'Adele'").await.unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].content_hash, "hash-adele");
+        assert_eq!(rows[0].content_hash, record.content_hash);
     }
+}
+
+fn parse_hierarchy_order(value: &str) -> Result<Vec<HierarchyPathSegment>> {
+    serde_json::from_str(value)
+        .or_else(|_| {
+            let legacy: Vec<String> = serde_json::from_str(value)?;
+            legacy
+                .into_iter()
+                .map(|segment| segment.parse().map_err(|e: String| anyhow!(e)))
+                .collect()
+        })
 }

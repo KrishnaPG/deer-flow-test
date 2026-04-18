@@ -4,7 +4,14 @@ use anyhow::Result;
 use chrono::Utc;
 use tracing;
 
-use berg10_storage_catalog::{Berg10Catalog, FileRecord, HierarchyCheckoutInfo, HierarchyCheckoutReceipt};
+use berg10_storage_catalog::{
+    Berg10Catalog,
+    ContentRecord,
+    HierarchyCheckoutInfo,
+    HierarchyCheckoutReceipt,
+    HierarchyPathSegment,
+    HierarchyStatus,
+};
 use berg10_storage_vfs::StorageBackend;
 
 use crate::config::WarmCacheConfig;
@@ -24,12 +31,16 @@ impl WarmCache {
     /// Materialize a virtual folder hierarchy as a symlink tree under base_dir/checkouts/<hierarchy_name>/.
     pub async fn checkout_hierarchy(&self, hierarchy_name: &str) -> Result<HierarchyCheckoutReceipt> {
         let files = self.catalog.resolve_virtual_folder_hierarchy(hierarchy_name).await?;
-        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some("active")).await?;
-        let hierarchy = hierarchies.iter().find(|h| h.hierarchy_name == hierarchy_name);
+        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await?;
+        let hierarchy = hierarchies.iter().find(|h| h.hierarchy_name.as_str() == hierarchy_name);
 
         let hierarchy_order = match hierarchy {
             Some(v) => v.hierarchy_order.clone(),
-            None => vec!["hierarchy".to_string(), "level".to_string(), "plane".to_string()],
+            None => vec![
+                HierarchyPathSegment::DataHierarchy,
+                HierarchyPathSegment::DataLevel,
+                HierarchyPathSegment::StoragePlane,
+            ],
         };
 
         let checkout_path = self.config.checkout_path(hierarchy_name);
@@ -60,7 +71,7 @@ impl WarmCache {
             }
 
             // Create symlink to content blob
-            let content_path = self.config.content_path(&file.content_hash);
+            let content_path = self.config.content_path(file.content_hash.as_str());
             let content_path = Path::new(&content_path);
 
             // Compute relative path from symlink location to content
@@ -96,7 +107,7 @@ impl WarmCache {
         );
 
         Ok(HierarchyCheckoutReceipt {
-            hierarchy_name: hierarchy_name.to_string(),
+            hierarchy_name: hierarchy_name.to_string().into(),
             checkout_path,
             file_count,
             created_at: Utc::now(),
@@ -104,15 +115,15 @@ impl WarmCache {
     }
 
     /// Ensure content blob exists in local cache, fetching from cold storage if needed.
-    async fn ensure_content_cached(&self, file: &FileRecord) -> Result<()> {
-        let content_path = self.config.content_path(&file.content_hash);
+    async fn ensure_content_cached(&self, file: &ContentRecord) -> Result<()> {
+        let content_path = self.config.content_path(file.content_hash.as_str());
         let path = Path::new(&content_path);
 
         if path.exists() {
             return Ok(());
         }
 
-        let data = self.vfs.read(&file.content_hash).await?;
+        let data = self.vfs.read(file.content_hash.as_str()).await?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -123,24 +134,27 @@ impl WarmCache {
     }
 
     /// Build the symlink path within the checkout directory based on hierarchy order.
-    pub fn build_hierarchy_path(file: &FileRecord, hierarchy_order: &[String]) -> String {
+    pub fn build_hierarchy_path(file: &ContentRecord, hierarchy_order: &[HierarchyPathSegment]) -> String {
         let mut parts = Vec::new();
 
         for attr in hierarchy_order {
-            let value = match attr.as_str() {
-                "hierarchy" => file.hierarchy.clone(),
-                "level" => file.level.clone(),
-                "plane" => file.plane.clone(),
-                "payload_kind" => file.payload_kind.clone(),
-                "payload_format" => file.payload_format.clone(),
-                "writer_identity" => file.writer_identity.clone().unwrap_or_default(),
-                _ => {
-                    // Look up in routing_tags
-                    file.routing_tags.iter()
-                        .find(|(k, _)| k == attr)
-                        .map(|(_, v)| v.clone())
-                        .unwrap_or_else(|| "unknown".to_string())
-                }
+            let value = match attr {
+                HierarchyPathSegment::DataHierarchy => file.data_hierarchy.to_string(),
+                HierarchyPathSegment::DataLevel => file.data_level.to_string(),
+                HierarchyPathSegment::StoragePlane => file.storage_plane.to_string(),
+                HierarchyPathSegment::PayloadKind => file.payload_kind.to_string(),
+                HierarchyPathSegment::PayloadFormat => file.payload_format.to_string(),
+                HierarchyPathSegment::WriterIdentity => file
+                    .writer_identity
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                HierarchyPathSegment::Tag(tag_key) => file
+                    .routing_tags
+                    .iter()
+                    .find(|tag| tag.key == *tag_key)
+                    .map(|tag| tag.value.to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
             };
 
             if !value.is_empty() {
@@ -150,7 +164,8 @@ impl WarmCache {
 
         let filename = file
             .logical_filename
-            .clone()
+            .as_ref()
+            .map(ToString::to_string)
             .unwrap_or_else(|| format!("{}.{}", file.content_hash, file.payload_format));
         parts.push(filename);
 
@@ -159,18 +174,18 @@ impl WarmCache {
 
     /// List all active hierarchy checkouts.
     pub async fn list_checkouts(&self) -> Result<Vec<HierarchyCheckoutInfo>> {
-        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some("active")).await?;
+        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await?;
         let mut infos = Vec::new();
 
         for hierarchy in &hierarchies {
-            let checkout_path = self.config.checkout_path(&hierarchy.hierarchy_name);
+            let checkout_path = self.config.checkout_path(hierarchy.hierarchy_name.as_str());
             let file_count = count_files_in_dir(&checkout_path).unwrap_or(0);
 
             infos.push(HierarchyCheckoutInfo {
                 hierarchy_name: hierarchy.hierarchy_name.clone(),
                 checkout_path,
                 file_count,
-                status: hierarchy.status.clone(),
+                status: hierarchy.status,
             });
         }
 
@@ -184,7 +199,7 @@ impl WarmCache {
             std::fs::remove_dir_all(&checkout_path)?;
         }
 
-        self.catalog.update_virtual_folder_hierarchy_status(hierarchy_name, "inactive").await?;
+        self.catalog.update_virtual_folder_hierarchy_status(hierarchy_name, HierarchyStatus::Inactive).await?;
         tracing::info!(hierarchy_name = %hierarchy_name, "Hierarchy checkout deactivated");
         Ok(())
     }
@@ -254,32 +269,54 @@ mod tests {
 
     #[test]
     fn build_hierarchy_path_with_hierarchy() {
-        let file = FileRecord {
-            content_hash: "abc123".to_string(),
-            hierarchy: "A".to_string(),
-            level: "L0".to_string(),
-            plane: "as-is".to_string(),
-            payload_kind: "mp3".to_string(),
-            payload_format: "mp3".to_string(),
+        let file = ContentRecord {
+            content_hash: berg10_storage_vfs::ContentHash::new(b"abc123"),
+            data_hierarchy: berg10_storage_catalog::Berg10DataHierarchy::Orchestration,
+            data_level: berg10_storage_catalog::Berg10DataLevel::L0,
+            storage_plane: berg10_storage_catalog::Berg10StoragePlane::AS_IS,
+            payload_kind: "mp3".into(),
+            payload_format: "mp3".into(),
             payload_size_bytes: 1000,
             correlation_ids: vec![],
             lineage_refs: vec![],
-            routing_tags: vec![("year".to_string(), "2024".to_string()), ("singer".to_string(), "Adele".to_string())],
+            routing_tags: vec![
+                berg10_storage_catalog::ContentTag::new("year", "2024"),
+                berg10_storage_catalog::ContentTag::new("singer", "Adele"),
+            ],
             written_at: Utc::now(),
-            writer_identity: Some("test".to_string()),
-            logical_filename: Some("song1.mp3".to_string()),
+            writer_identity: Some("test".into()),
+            logical_filename: Some("song1.mp3".into()),
         };
 
         // Test year-first hierarchy
-        let path = WarmCache::build_hierarchy_path(&file, &["year".to_string(), "singer".to_string()]);
+        let path = WarmCache::build_hierarchy_path(
+            &file,
+            &[
+                HierarchyPathSegment::Tag("year".into()),
+                HierarchyPathSegment::Tag("singer".into()),
+            ],
+        );
         assert_eq!(path, "2024/adele/song1.mp3");
 
         // Test singer-first hierarchy
-        let path = WarmCache::build_hierarchy_path(&file, &["singer".to_string(), "year".to_string()]);
+        let path = WarmCache::build_hierarchy_path(
+            &file,
+            &[
+                HierarchyPathSegment::Tag("singer".into()),
+                HierarchyPathSegment::Tag("year".into()),
+            ],
+        );
         assert_eq!(path, "adele/2024/song1.mp3");
 
         // Test with standard hierarchy
-        let path = WarmCache::build_hierarchy_path(&file, &["hierarchy".to_string(), "level".to_string(), "plane".to_string()]);
-        assert_eq!(path, "a/l0/as-is/song1.mp3");
+        let path = WarmCache::build_hierarchy_path(
+            &file,
+            &[
+                HierarchyPathSegment::DataHierarchy,
+                HierarchyPathSegment::DataLevel,
+                HierarchyPathSegment::StoragePlane,
+            ],
+        );
+        assert_eq!(path, "orchestration/l0/as-is/song1.mp3");
     }
 }

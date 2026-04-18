@@ -1,6 +1,12 @@
 use std::path::Path;
 
-use berg10_storage_catalog::{Berg10Catalog, CatalogConfig, VirtualFolderHierarchy};
+use berg10_storage_catalog::{
+    Berg10Catalog,
+    CatalogConfig,
+    HierarchyPathSegment,
+    HierarchyStatus,
+    VirtualFolderHierarchy,
+};
 use berg10_storage_vfs::{StorageBackend, StorageConfig};
 use berg10_warm_cache::WarmCacheConfig;
 use chrono::Utc;
@@ -87,17 +93,23 @@ async fn e2e_single_file_ingest_and_checkout() {
 
     let (catalog, _vfs) = bridge.into_parts();
 
-    let record = catalog.get_file(&file_saved.content_hash).await.unwrap().unwrap();
-    assert_eq!(record.content_hash, file_saved.content_hash);
-    assert_eq!(record.payload_kind, "chat-note");
-    assert_eq!(record.logical_filename.as_deref(), Some("greeting.jsonl"));
-    assert_eq!(record.routing_tags, vec![("env".to_string(), "test".to_string())]);
+    let record = catalog.get_content(&file_saved.content_hash).await.unwrap().unwrap();
+    assert_eq!(record.content_hash.as_str(), file_saved.content_hash);
+    assert_eq!(record.payload_kind.as_str(), "chat-note");
+    assert_eq!(record.logical_filename.as_ref().map(|v| v.as_str()), Some("greeting.jsonl"));
+    assert_eq!(record.routing_tags.len(), 1);
+    assert_eq!(record.routing_tags[0].key.as_str(), "env");
+    assert_eq!(record.routing_tags[0].value.as_str(), "test");
 
     let hierarchy = VirtualFolderHierarchy {
-        hierarchy_name: "test-hierarchy".to_string(),
-        hierarchy_order: vec!["hierarchy".to_string(), "level".to_string(), "plane".to_string()],
+        hierarchy_name: "test-hierarchy".into(),
+        hierarchy_order: vec![
+            HierarchyPathSegment::DataHierarchy,
+            HierarchyPathSegment::DataLevel,
+            HierarchyPathSegment::StoragePlane,
+        ],
         filter_expr: None,
-        status: "active".to_string(),
+        status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
@@ -212,20 +224,20 @@ async fn e2e_multiple_files_with_tag_filtering_and_hierarchy_ordering() {
     let (catalog, _vfs) = bridge.into_parts();
 
     let hierarchy_by_singer = VirtualFolderHierarchy {
-        hierarchy_name: "music-by-singer".to_string(),
-        hierarchy_order: vec!["singer".to_string(), "year".to_string()],
+        hierarchy_name: "music-by-singer".into(),
+        hierarchy_order: vec![HierarchyPathSegment::Tag("singer".into()), HierarchyPathSegment::Tag("year".into())],
         filter_expr: Some("payload_kind = 'mp3'".to_string()),
-        status: "active".to_string(),
+        status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
     catalog.create_virtual_folder_hierarchy(&hierarchy_by_singer).await.unwrap();
 
     let hierarchy_by_year = VirtualFolderHierarchy {
-        hierarchy_name: "music-by-year".to_string(),
-        hierarchy_order: vec!["year".to_string(), "singer".to_string()],
+        hierarchy_name: "music-by-year".into(),
+        hierarchy_order: vec![HierarchyPathSegment::Tag("year".into()), HierarchyPathSegment::Tag("singer".into())],
         filter_expr: Some("payload_kind = 'mp3'".to_string()),
-        status: "active".to_string(),
+        status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
@@ -286,10 +298,10 @@ async fn e2e_multiple_files_with_tag_filtering_and_hierarchy_ordering() {
     assert!(year_2024_adele_found, "2024/adele symlink not found in year hierarchy");
     assert!(year_2024_beyonce_found, "2024/beyonce symlink not found in year hierarchy");
 
-    let files = catalog.query_files("payload_kind = 'chat-note'").await.unwrap();
+    let files = catalog.query_content("payload_kind = 'chat-note'").await.unwrap();
     assert_eq!(files.len(), 1);
-    assert_eq!(files[0].payload_kind, "chat-note");
-    assert_eq!(files[0].logical_filename.as_deref(), Some("transcript.jsonl"));
+    assert_eq!(files[0].payload_kind.as_str(), "chat-note");
+    assert_eq!(files[0].logical_filename.as_ref().map(|v| v.as_str()), Some("transcript.jsonl"));
 }
 
 #[tokio::test]
@@ -334,11 +346,11 @@ async fn e2e_content_deduplication_same_bytes_different_metadata() {
 
     let (catalog, _vfs) = bridge.into_parts();
 
-    let record1 = catalog.get_file(&saved1.content_hash).await.unwrap().unwrap();
-    assert_eq!(record1.logical_filename.as_deref(), Some("song-a.mp3"));
+    let record1 = catalog.get_content(&saved1.content_hash).await.unwrap().unwrap();
+    assert_eq!(record1.logical_filename.as_ref().map(|v| v.as_str()), Some("song-a.mp3"));
 
-    let record2 = catalog.get_file(&saved2.content_hash).await.unwrap().unwrap();
-    assert_eq!(record2.logical_filename.as_deref(), Some("song-a.mp3"));
+    let record2 = catalog.get_content(&saved2.content_hash).await.unwrap().unwrap();
+    assert_eq!(record2.logical_filename.as_ref().map(|v| v.as_str()), Some("song-a.mp3"));
 
     let _blob_path = format!("{}/{}", vfs_root, saved1.content_hash);
     let blob_count = std::fs::read_dir(&vfs_root).unwrap().count();
@@ -395,22 +407,22 @@ async fn e2e_filter_by_multiple_attributes() {
 
     let (catalog, _vfs) = bridge.into_parts();
 
-    let l0_files = catalog.query_files("level = 'L0'").await.unwrap();
+    let l0_files = catalog.query_content("level = 'L0'").await.unwrap();
     assert_eq!(l0_files.len(), 2);
 
-    let l0_as_is = catalog.query_files("level = 'L0' AND plane = 'as-is'").await.unwrap();
+    let l0_as_is = catalog.query_content("level = 'L0' AND plane = 'as-is'").await.unwrap();
     assert_eq!(l0_as_is.len(), 1);
-    assert_eq!(l0_as_is[0].logical_filename.as_deref(), Some("l0-note.jsonl"));
+    assert_eq!(l0_as_is[0].logical_filename.as_ref().map(|v| v.as_str()), Some("l0-note.jsonl"));
 
-    let chunks_files = catalog.query_files("plane = 'chunks'").await.unwrap();
+    let chunks_files = catalog.query_content("plane = 'chunks'").await.unwrap();
     assert_eq!(chunks_files.len(), 1);
-    assert_eq!(chunks_files[0].payload_kind, "chunks");
+    assert_eq!(chunks_files[0].payload_kind.as_str(), "chunks");
 
     let hierarchy = VirtualFolderHierarchy {
-        hierarchy_name: "by-level".to_string(),
-        hierarchy_order: vec!["level".to_string(), "plane".to_string()],
+        hierarchy_name: "by-level".into(),
+        hierarchy_order: vec![HierarchyPathSegment::DataLevel, HierarchyPathSegment::StoragePlane],
         filter_expr: Some("level = 'L0'".to_string()),
-        status: "active".to_string(),
+        status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
