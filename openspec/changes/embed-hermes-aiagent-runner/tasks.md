@@ -9,6 +9,7 @@
 
 ## Phase 2: Redpanda-First Raw Capture
 - [ ] Implement Redpanda publication for `hermes.l0_drop` with durable producer settings.
+- [x] Keep durable event publication behind a broker-agnostic abstraction so another broker can replace Redpanda later.
 - [ ] Publish every observable boundary event: client-issued commands, observed ACP requests/responses/notifications, and lifecycle/error envelopes.
 - [ ] Preserve replay metadata without Berg10 domain interpretation.
 

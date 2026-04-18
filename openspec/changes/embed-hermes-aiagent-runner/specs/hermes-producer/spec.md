@@ -49,6 +49,14 @@ Our ACP Client SHALL treat Redpanda as the primary durable L0 landing zone for l
 - **THEN** the first durable write is to Redpanda
 - **AND** the client does not block on Berg10 ingestion or semantic transformation
 
+### Requirement: Durable broker binding SHALL remain replaceable
+Our ACP Client SHALL keep durable event publication behind a broker-agnostic abstraction so Redpanda can be replaced with another broker later without changing client-owned runtime event types.
+
+#### Scenario: Swap durable broker implementation later
+- **WHEN** a future deployment replaces Redpanda with another broker
+- **THEN** client-owned runtime types such as `AcpCapturedProtocolEvent`, `ChatSessionId`, and `AcpSessionSequenceNumber` remain unchanged
+- **AND** only the concrete broker adapter/binding changes
+
 ### Requirement: Every observable boundary event SHALL be preserved
 Our ACP Client SHALL preserve every boundary event it can observe so a future consumer can reconstruct the whole session.
 

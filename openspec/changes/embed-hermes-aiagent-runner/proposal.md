@@ -21,7 +21,7 @@ In-scope:
   - `ChatThreadId`
   - `AcpCapturedProtocolEvent`
   - `AcpResponseStreamEvent`
-- Redpanda-first raw capture to topic `hermes.l0_drop`.
+- Redpanda-first raw capture to topic `hermes.l0_drop`, behind a broker-agnostic durable event publication boundary so another broker can replace Redpanda later.
 - Preservation of every observable boundary event `our ACP Client` can capture, including:
   - client-issued commands such as prompt, cancel, session create, session load, and resume
   - ACP requests, responses, and notifications observed on the subprocess boundary
@@ -39,7 +39,7 @@ In-scope:
   - live tool activity
   - live coarse thought/status events currently available from Hermes ACP
   - final/coarse assistant text at the granularity Hermes ACP currently exposes
-- Redpanda-backed replay as the durable recovery source, with optional in-memory replay tail as an optimization.
+- Redpanda-backed replay as the initial durable recovery source, with optional in-memory replay tail as an optimization and a broker abstraction that keeps future broker replacement possible.
 - Use of `BERG10_BASE_DIR` for runner-owned paths under `<base_dir>/runners/hermes/` when local state or diagnostics are needed.
 
 Out-of-scope (this change):
