@@ -2,7 +2,7 @@
 
 ## Architecture
 
-The system introduces a Rust-managed integration layer, referred to as `our ACP Client`, that manages Hermes ACP as a child process over JSON-RPC stdio. Its job is to capture every observable boundary event with very low latency, attach minimal replay metadata, expose a live response stream for consumers such as terminal UI, and durably publish the raw protocol traffic to Redpanda topic `hermes.l0_drop`.
+The system introduces a Rust-managed integration layer, referred to as `our ACP Client`, that manages Hermes ACP as a child process over JSON-RPC stdio. Its job is to capture every observable boundary event with very low latency, attach minimal replay metadata, expose a live response stream for consumers such as terminal UI, and durably publish the raw protocol traffic to Redb topic `hermes.l0_drop`.
 
 `our ACP Client` is intentionally not an ETL or interpretation layer. It does not assign Berg10 `data_hierarchy`, `data_level`, or `storage_plane` values. It does not normalize ACP payloads into domain records. Those concerns are deferred to future ingestion.
 
@@ -34,7 +34,7 @@ Rust should still own:
 
 - subprocess creation and supervision
 - stdio wiring into the ACP connection
-- Redpanda publication
+- Redb publication
 - replay sequencing
 - runtime registries
 - live stream fanout
@@ -82,11 +82,11 @@ The ACP crate's protocol ids and messages should not replace our application/run
 4. **Sequence Allocator**
    - Assigns monotonic `AcpSessionSequenceNumber` per `ChatSessionId`.
    - Owns ordering semantics independently of Hermes internals.
-   - Ensures replay consumers can reconstruct session order deterministically from Redpanda.
+   - Ensures replay consumers can reconstruct session order deterministically from Redb.
 
 5. **Durable Event Publisher**
    - Publishes every `AcpCapturedProtocolEvent` to a broker-agnostic durable event sink.
-   - The initial implementation targets Redpanda stream `hermes.l0_drop`.
+   - The initial implementation targets Redb stream `hermes.l0_drop`.
    - Uses reliable producer semantics in the concrete broker adapter.
    - Treats the configured broker as the first durable source of truth.
 
@@ -97,7 +97,7 @@ The ACP crate's protocol ids and messages should not replace our application/run
    - Emits after durable publication acknowledgement so live consumers see events that are already accepted into the raw log.
 
 7. **Replay Layer**
-   - Redpanda is the durable replay source.
+   - Redb is the durable replay source.
    - A bounded in-memory tail may be kept as a fast-path optimization.
    - `our ACP Client` does not require downstream ingestion to provide replay.
 
@@ -123,7 +123,7 @@ The ACP crate's protocol ids and messages should not replace our application/run
 2. **Handshake / Ready**
    - Establish JSON-RPC stdio framing.
    - Perform initialization/authentication/session setup flows required by ACP.
-   - Publish the observed request and response frames to Redpanda.
+   - Publish the observed request and response frames to Redb.
 
 3. **Session Create / Load / Resume**
    - `our ACP Client` can create a new ACP session or attach to an existing one.
@@ -145,12 +145,12 @@ The ACP crate's protocol ids and messages should not replace our application/run
 
 ## Broker-Agnostic Durable Capture Contract
 
-`our ACP Client` writes to a durable broker first. The initial implementation uses Redpanda. This is a quick, durable dump with low latency. It is not a place to perform ETL, classification, or Berg10 mapping.
+`our ACP Client` writes to a durable broker first. The initial implementation uses Redb. This is a quick, durable dump with low latency. It is not a place to perform ETL, classification, or Berg10 mapping.
 
 - Initial stream/topic name: `hermes.l0_drop`
 - Partition key: `ChatSessionId`
 - Ordering authority: client-assigned `AcpSessionSequenceNumber`
-- Initial durable replay source: Redpanda
+- Initial durable replay source: Redb
 - Domain interpretation: deferred to ingestion
 - Broker binding is implementation-specific and must remain replaceable without changing client-owned runtime event types
 
@@ -246,7 +246,7 @@ These are transport-observation kinds only. They are not Berg10 `payload_kind` o
 ## Replay Model
 
 - Replay is keyed by `ChatSessionId` and ordered by `AcpSessionSequenceNumber`.
-- Redpanda is the durable replay source.
+- Redb is the durable replay source.
 - A bounded in-memory replay tail may be used to accelerate recent reconnects, but it is an optimization only.
 - Session reconstruction should not depend on local memory surviving process restarts.
 
@@ -254,7 +254,7 @@ These are transport-observation kinds only. They are not Berg10 `payload_kind` o
 
 - `ChatSessionId`
   - Primary durable conversational boundary.
-  - Redpanda partition key.
+  - Redb partition key.
   - Sequence scope.
 
 - `ChatRunId`
@@ -287,7 +287,7 @@ These are transport-observation kinds only. They are not Berg10 `payload_kind` o
 
 - `BERG10_BASE_DIR` remains the base path for client-owned runtime files.
 - Hermes-owned runtime data, diagnostics, and any future local state live under `<base_dir>/runners/hermes/`.
-- This change does not define Berg10 ingestion paths because client output lands in Redpanda, not directly in `crates/berg10/storage-vfs/`.
+- This change does not define Berg10 ingestion paths because client output lands in Redb, not directly in `crates/berg10/storage-vfs/`.
 
 ## Deferred Concerns
 
@@ -303,7 +303,7 @@ The following are explicitly deferred to future changes:
 
 ## Verification Strategy
 
-- Run integration tests against an ephemeral Redpanda instance.
+- Run integration tests against an ephemeral Redb instance.
 - Launch Hermes ACP as a subprocess in test harnesses where possible.
 - Exercise:
   - session create
@@ -313,6 +313,6 @@ The following are explicitly deferred to future changes:
   - subprocess crash/restart paths
 - Verify every observable boundary frame is published to `hermes.l0_drop`.
 - Verify `ChatSessionId` partitioning and monotonic `AcpSessionSequenceNumber` ordering.
-- Verify replay from Redpanda reconstructs a complete session log without requiring client-local memory.
+- Verify replay from Redb reconstructs a complete session log without requiring client-local memory.
 - Verify live stream fanout surfaces tool/status events immediately and assistant text only at current Hermes ACP granularity.
 - Verify the ACP control/session model remains reusable for future non-Hermes agents.

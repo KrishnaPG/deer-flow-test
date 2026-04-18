@@ -13,9 +13,17 @@ pub trait RawEventPublisher: Send + Sync {
     ) -> Result<(), RawEventPublishError>;
 }
 
+#[async_trait]
+pub trait RawEventReader: Send + Sync {
+    async fn read_session_events(
+        &self,
+        session_id: &ChatSessionId,
+    ) -> Result<Vec<Bytes>, RawEventPublishError>;
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RawEventPublishError {
-    #[error("raw event publication failed: {message}")]
+    #[error("raw event publication/read failed: {message}")]
     Transport { message: String },
 }
 
@@ -31,5 +39,15 @@ impl RawEventPublisher for NoopRawEventPublisher {
         _raw_bytes: Bytes,
     ) -> Result<(), RawEventPublishError> {
         Ok(())
+    }
+}
+
+#[async_trait]
+impl RawEventReader for NoopRawEventPublisher {
+    async fn read_session_events(
+        &self,
+        _session_id: &ChatSessionId,
+    ) -> Result<Vec<Bytes>, RawEventPublishError> {
+        Ok(vec![])
     }
 }

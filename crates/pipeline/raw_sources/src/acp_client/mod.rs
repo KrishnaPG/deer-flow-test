@@ -18,7 +18,7 @@ pub use ids::{AcpJsonRpcRequestId, AcpSubprocessId, ChatRunId, ChatSessionId, Ch
 pub use live_event::{AcpResponseStreamEvent, AcpResponseStreamEventKind};
 pub use notification_mapper::map_session_notification_to_live_event;
 pub use raw_fanout::RawEventFanout;
-pub use raw_publisher::{NoopRawEventPublisher, RawEventPublishError, RawEventPublisher};
+pub use raw_publisher::{NoopRawEventPublisher, RawEventPublishError, RawEventPublisher, RawEventReader};
 pub use redb_buffer::RedbRawEventPublisher;
 pub use registry::{AcpChatRunRegistry, AcpChatSessionRegistry};
 pub use subprocess::{AcpSubprocessCommand, AcpSubprocessEvent, AcpSubprocessLifecycleKind};

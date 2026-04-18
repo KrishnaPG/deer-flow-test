@@ -1,10 +1,10 @@
 # Embed Hermes In Our ACP Client
 
 ## Summary
-Provide a Rust-managed ACP integration layer, referred to as `our ACP Client`, that launches Hermes ACP as a subprocess over JSON-RPC stdio, captures every observable ACP frame and client-issued command envelope, exposes a live response stream, and durably publishes the raw protocol traffic to Redpanda topic `hermes.l0_drop` before any ingestion or Berg10 interpretation occurs.
+Provide a Rust-managed ACP integration layer, referred to as `our ACP Client`, that launches Hermes ACP as a subprocess over JSON-RPC stdio, captures every observable ACP frame and client-issued command envelope, exposes a live response stream, and durably publishes the raw protocol traffic to Redb topic `hermes.l0_drop` before any ingestion or Berg10 interpretation occurs.
 
 ## Why
-- Keeps the first write path extremely fast and durable: Redpanda is the primary L0 landing zone, not an ETL layer.
+- Keeps the first write path extremely fast and durable: Redb is the primary L0 landing zone, not an ETL layer.
 - Preserves enough raw fidelity to reconstruct full Hermes sessions for replay, audit, and future real-time agentic chat UI.
 - Avoids modifying `3rdParty/hermes-agent`; integration happens entirely through the ACP boundary.
 - Makes sequencing and durability our responsibility instead of relying on internal Hermes storage semantics.
@@ -21,7 +21,7 @@ In-scope:
   - `ChatThreadId`
   - `AcpCapturedProtocolEvent`
   - `AcpResponseStreamEvent`
-- Redpanda-first raw capture to topic `hermes.l0_drop`, behind a broker-agnostic durable event publication boundary so another broker can replace Redpanda later.
+- Redb-first raw capture to topic `hermes.l0_drop`, behind a broker-agnostic durable event publication boundary so another broker can replace Redb later.
 - Preservation of every observable boundary event `our ACP Client` can capture, including:
   - client-issued commands such as prompt, cancel, session create, session load, and resume
   - ACP requests, responses, and notifications observed on the subprocess boundary
@@ -39,7 +39,7 @@ In-scope:
   - live tool activity
   - live coarse thought/status events currently available from Hermes ACP
   - final/coarse assistant text at the granularity Hermes ACP currently exposes
-- Redpanda-backed replay as the initial durable recovery source, with optional in-memory replay tail as an optimization and a broker abstraction that keeps future broker replacement possible.
+- Redb-backed replay as the initial durable recovery source, with optional in-memory replay tail as an optimization and a broker abstraction that keeps future broker replacement possible.
 - Use of `BERG10_BASE_DIR` for runner-owned paths under `<base_dir>/runners/hermes/` when local state or diagnostics are needed.
 
 Out-of-scope (this change):
@@ -48,23 +48,23 @@ Out-of-scope (this change):
 - Stable public HTTP/WebSocket client APIs.
 - True incremental assistant-text deltas when Hermes ACP does not expose them.
 - Hermes-specific hybrid streaming integration such as a future TUI-gateway-backed stream adapter.
-- File fallback as a primary path; this change is explicitly Redpanda-first.
+- File fallback as a primary path; this change is explicitly Redb-first.
 - Any source changes under `3rdParty/`.
 
 ## Acceptance Criteria
 - `our ACP Client` launches Hermes ACP as a subprocess and communicates using JSON-RPC over stdio.
 - `our ACP Client` uses the Rust `agent-client-protocol` crate where appropriate for ACP wire typing and session-update handling.
 - `our ACP Client` can create or resume Hermes sessions and execute prompts as runs within those sessions.
-- Every observable boundary event `our ACP Client` can capture is published to Redpanda topic `hermes.l0_drop`.
+- Every observable boundary event `our ACP Client` can capture is published to Redb topic `hermes.l0_drop`.
 - Published envelopes preserve raw ACP payloads and client command payloads without Berg10 mapping or semantic reinterpretation.
 - Each published envelope includes stable replay metadata with `session_id`, `run_id`, `seq`, and `timestamp`, plus optional identifiers when available.
-- `session_id` is used as the Redpanda message key.
+- `session_id` is used as the Redb message key.
 - `seq` is assigned by `our ACP Client` and is monotonic within a session.
 - The implementation supports multiple sessions per subprocess at the abstraction level, while the default runtime policy uses one subprocess per session.
 - `our ACP Client` exposes a live response stream immediately, even though current Hermes ACP granularity only supports live status/tool events and final/coarse assistant text.
 - `our ACP Client` does not invent synthetic assistant text deltas when Hermes ACP only exposes coarse/final text.
-- Redpanda producer settings provide high durability and ordering safety (`acks=all`, idempotence enabled, retries with backoff, ordering-safe in-flight configuration).
-- Redpanda remains the durable source of raw truth until downstream ingestion succeeds; client-side storage interpretation is not performed.
+- Redb producer settings provide high durability and ordering safety (`acks=all`, idempotence enabled, retries with backoff, ordering-safe in-flight configuration).
+- Redb remains the durable source of raw truth until downstream ingestion succeeds; client-side storage interpretation is not performed.
 - The design keeps `thread_id` optional so future manual session branching can attach it when a real source exists.
 
 ## Risks & Mitigations

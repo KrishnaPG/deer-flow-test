@@ -5,7 +5,7 @@
 ### 1. Call the Rust integration layer `our ACP Client`
 The Rust side is referred to as `our ACP Client`, not a generic `producer`.
 
-- Use `producer` only when specifically discussing Redpanda/Kafka publication semantics.
+- Use `producer` only when specifically discussing Redb/Kafka publication semantics.
 - Use `our ACP Client` for the application/runtime integration boundary.
 
 ### 2. ACP remains the primary control and session boundary
@@ -14,8 +14,8 @@ ACP is the canonical control/session protocol for Hermes now and future non-Herm
 - Session lifecycle, prompt execution, cancellation, and replay sequencing are all anchored at the ACP boundary.
 - Future Hermes-specific richer streaming must augment ACP, not replace it.
 
-### 3. Redpanda is the first durable landing zone
-`hermes.l0_drop` on Redpanda is the first durable raw write path.
+### 3. Redb is the first durable landing zone
+`hermes.l0_drop` on Redb is the first durable raw write path.
 
 - This path is low-latency and durable.
 - It is not an ETL layer.
@@ -58,7 +58,7 @@ Keep local ownership of:
 - subprocess management
 - runtime ids and registries
 - sequencing
-- Redpanda envelopes
+- Redb envelopes
 - live stream projection
 
 ### 7. Expose a live stream now

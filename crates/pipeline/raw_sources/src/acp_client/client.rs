@@ -35,6 +35,7 @@ const ACP_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AcpClientSessionConfig {
     pub executable: PathBuf,
+    pub args: Vec<String>,
     pub working_directory: PathBuf,
 }
 
@@ -84,7 +85,7 @@ impl OurAcpClient {
         &self,
         config: AcpClientSessionConfig,
     ) -> Result<ChatSessionId, std::io::Error> {
-        let command = AcpSubprocessCommand::new(config.executable, config.working_directory);
+        let command = AcpSubprocessCommand::new(config.executable, config.working_directory).with_args(config.args);
         let subprocess = spawn_acp_subprocess(&command).await?;
         let acp_subprocess_id = subprocess.acp_subprocess_id.clone();
         

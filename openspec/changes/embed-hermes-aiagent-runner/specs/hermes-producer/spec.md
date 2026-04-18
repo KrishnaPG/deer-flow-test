@@ -33,27 +33,27 @@ Our ACP Client SHALL use context-sensitive strong runtime types for its internal
 - **THEN** they use context-sensitive names such as `ChatSessionId`, `ChatRunId`, `ChatThreadId`, `AcpCapturedProtocolEvent`, and `AcpResponseStreamEvent`
 - **AND** generic names such as `RawObservedEvent`, `UiStreamEvent`, or plain `SessionId` are not used for client-owned runtime concepts
 
-### Requirement: Hermes raw traffic SHALL be published to Redpanda before ingestion
-Our ACP Client flows SHALL publish raw Hermes ACP traffic to Redpanda topic `hermes.l0_drop` before any ingestion, Berg10 mapping, or domain interpretation occurs.
+### Requirement: Hermes raw traffic SHALL be published to Redb before ingestion
+Our ACP Client flows SHALL publish raw Hermes ACP traffic to Redb topic `hermes.l0_drop` before any ingestion, Berg10 mapping, or domain interpretation occurs.
 
 #### Scenario: Publish raw ACP traffic
 - **WHEN** our ACP Client observes an ACP frame or emits a client-side command envelope
 - **THEN** it publishes that event to `hermes.l0_drop`
 - **AND** the payload remains raw and unmapped
 
-### Requirement: Durable buffer semantics SHALL remain Redpanda-first and low-latency
-Our ACP Client SHALL treat Redpanda as the primary durable L0 landing zone for low-latency raw capture rather than as an ETL layer.
+### Requirement: Durable buffer semantics SHALL remain Redb-first and low-latency
+Our ACP Client SHALL treat Redb as the primary durable L0 landing zone for low-latency raw capture rather than as an ETL layer.
 
 #### Scenario: Client writes first durable copy
 - **WHEN** our ACP Client captures Hermes boundary traffic
-- **THEN** the first durable write is to Redpanda
+- **THEN** the first durable write is to Redb
 - **AND** the client does not block on Berg10 ingestion or semantic transformation
 
 ### Requirement: Durable broker binding SHALL remain replaceable
-Our ACP Client SHALL keep durable event publication behind a broker-agnostic abstraction so Redpanda can be replaced with another broker later without changing client-owned runtime event types.
+Our ACP Client SHALL keep durable event publication behind a broker-agnostic abstraction so Redb can be replaced with another broker later without changing client-owned runtime event types.
 
 #### Scenario: Swap durable broker implementation later
-- **WHEN** a future deployment replaces Redpanda with another broker
+- **WHEN** a future deployment replaces Redb with another broker
 - **THEN** client-owned runtime types such as `AcpCapturedProtocolEvent`, `ChatSessionId`, and `AcpSessionSequenceNumber` remain unchanged
 - **AND** only the concrete broker adapter/binding changes
 
@@ -78,7 +78,7 @@ Each published raw event SHALL contain enough metadata to reconstruct the full H
 - **AND** optional identifiers such as `thread_id`, `message_id`, and `tool_call_id` are included when observable
 
 ### Requirement: Session ordering SHALL be preserved by partition key
-Hermes raw events SHALL use `session_id` as the Redpanda message key so a full session can be replayed in order.
+Hermes raw events SHALL use `session_id` as the Redb message key so a full session can be replayed in order.
 
 #### Scenario: Multiple runs share a session
 - **WHEN** several prompt executions belong to the same session
@@ -91,7 +91,7 @@ Our ACP Client SHALL assign monotonic `seq` values within a session instead of r
 #### Scenario: Client controls ordering
 - **WHEN** our ACP Client publishes envelopes for one session
 - **THEN** each envelope gets a session-scoped monotonic `seq`
-- **AND** replay consumers can reconstruct a deterministic order from Redpanda alone
+- **AND** replay consumers can reconstruct a deterministic order from Redb alone
 
 ### Requirement: Multiple sessions per subprocess SHALL be supported by design
 Our ACP Client design SHALL allow one ACP subprocess to serve multiple sessions, while the default runtime policy may still use one subprocess per session.
@@ -102,7 +102,7 @@ Our ACP Client design SHALL allow one ACP subprocess to serve multiple sessions,
 - **AND** its registries and sequencing logic do not assume this is the only possible topology
 
 ### Requirement: Payload compression MAY be applied
-Hermes raw payloads MAY be compressed before publish to reduce Redpanda storage usage.
+Hermes raw payloads MAY be compressed before publish to reduce Redb storage usage.
 
 #### Scenario: Compressed raw payload
 - **WHEN** compression is enabled
@@ -110,7 +110,7 @@ Hermes raw payloads MAY be compressed before publish to reduce Redpanda storage 
 - **AND** the raw message body remains otherwise opaque until ingestion
 
 ### Requirement: ACP Client delivery SHALL be reliable
-Our ACP Client SHALL use reliable Redpanda/Kafka producer settings so raw traffic is not dropped silently.
+Our ACP Client SHALL use reliable Redb/Kafka producer settings so raw traffic is not dropped silently.
 
 #### Scenario: Client waits for durable acknowledgement
 - **WHEN** our ACP Client publishes a raw event
@@ -150,12 +150,12 @@ ACP SHALL remain the primary control and session boundary for Hermes now and for
 - **THEN** the same ACP control/session model remains reusable
 - **AND** richer engine-specific stream adapters remain optional enhancements rather than replacements for ACP control semantics
 
-### Requirement: Redpanda retention SHALL outlive delayed ingestion
-Raw Hermes data SHALL remain in Redpanda long enough to tolerate delayed ingestion runs.
+### Requirement: Redb retention SHALL outlive delayed ingestion
+Raw Hermes data SHALL remain in Redb long enough to tolerate delayed ingestion runs.
 
 #### Scenario: Ingestor delayed for days
 - **WHEN** the ingestor has not yet processed a message
-- **THEN** the message remains in Redpanda and is not deleted due to short retention
+- **THEN** the message remains in Redb and is not deleted due to short retention
 
 #### Scenario: Operational retention target
 - **WHEN** retention is configured for `hermes.l0_drop`
@@ -167,7 +167,7 @@ Hermes raw data SHALL NOT be treated as disposable before ingestion success is k
 
 #### Scenario: Message ingested successfully
 - **WHEN** a future ingestor has durably completed ingestion for a raw Hermes message
-- **THEN** the system may allow Redpanda cleanup according to the configured post-ingestion retention policy
+- **THEN** the system may allow Redb cleanup according to the configured post-ingestion retention policy
 - **BUT** deletion semantics are controlled by ingestion success, not by a short default retention window
 
 ### Requirement: Berg10 mapping SHALL be deferred to ingestion
@@ -178,12 +178,12 @@ Our ACP Client SHALL NOT assign Berg10 semantic fields or perform domain interpr
 - **THEN** it does not classify the record into Berg10 `data_hierarchy`, `data_level`, or `storage_plane`
 - **AND** those mappings are deferred to future ingestion work
 
-### Requirement: Replay SHALL be reconstructible from Redpanda
-Our ACP Client SHALL allow a future consumer to reconstruct a session from Redpanda without depending on client-local memory.
+### Requirement: Replay SHALL be reconstructible from Redb
+Our ACP Client SHALL allow a future consumer to reconstruct a session from Redb without depending on client-local memory.
 
 #### Scenario: Replay after client restart
 - **WHEN** our ACP Client restarts after publishing part of a session
-- **THEN** a replay consumer can still reconstruct the session from Redpanda using `session_id` and `seq`
+- **THEN** a replay consumer can still reconstruct the session from Redb using `session_id` and `seq`
 
 ### Requirement: Optional identifiers SHALL remain optional until a source exists
 Our ACP Client SHALL preserve optional fields such as `thread_id` when available, but SHALL NOT invent a required source-backed value when no source exists.

@@ -28,3 +28,5 @@ uuid = { version = "1.18.1", features = ["serde", "v7"] }
 
 [dev-dependencies]
 similar-asserts = "1.7.0"
+tempfile = "3.27.0"
+which = "8.0.2"
