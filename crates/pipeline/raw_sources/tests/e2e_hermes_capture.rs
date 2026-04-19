@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,7 +8,7 @@ use deer_pipeline_raw_sources::{
 };
 
 #[tokio::test]
-async fn test_hermes_e2e_capture_mock() {
+async fn test_hermes_e2e_capture() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let base_dir = BaseDir::new(temp_dir.path().to_path_buf());
     
@@ -22,37 +21,18 @@ async fn test_hermes_e2e_capture_mock() {
 
     let client = OurAcpClient::new(Arc::clone(&publisher) as Arc<_>, raw_fanout);
 
-    // We'll write a quick bash script that outputs JSON-RPC lines simulating hermes.
-    // The script prints the initialize response and new_session response to satisfy client connection.
-    let script_path = temp_dir.path().join("mock_hermes.sh");
-    std::fs::write(&script_path, r#"#!/bin/bash
-echo '{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2024-11-05","capabilities":{},"serverInfo":{"name":"mock","version":"1.0"}}}'
-echo '{"jsonrpc":"2.0","id":1,"result":{"sessionId":"mock-session-id"}}'
-sleep 0.1
-echo '{"jsonrpc":"2.0","method":"notifications/test","params":{}}'
-sleep 0.1
-"#).unwrap();
-    
-    // make executable
-    std::process::Command::new("chmod")
-        .arg("+x")
-        .arg(&script_path)
-        .status()
-        .unwrap();
+    // Auto-discover the ACP agent binary (uses $ACP_AGENT_BIN or searches PATH)
+    let config = AcpClientSessionConfig::discover()
+        .expect("No ACP agent found. Set $ACP_AGENT_BIN or install hermes.")
+        .with_working_directory(temp_dir.path().to_path_buf());
 
-    let config = AcpClientSessionConfig {
-        executable: script_path,
-        args: vec![],
-        working_directory: temp_dir.path().to_path_buf(), 
-    };
-
-    let session_id_result = tokio::time::timeout(Duration::from_secs(2), client.connect_session(config)).await;
-    // We don't care if the agent-client-protocol strict handshake fails because our mock just echoes
-    // fixed IDs which won't match the dynamic ones. What we care about is that the edge captured it.
-    
-    // The session ID is deterministically hash(first_event) + timestamp + pid.
-    // However, the test can't easily guess it since pid and timestamp are dynamic.
-    // Let's read from the raw_fanout instead to get the session ID.
+    let _session_id = tokio::time::timeout(
+        Duration::from_secs(30),
+        client.connect_session(config),
+    )
+    .await
+    .expect("Hermes connection timed out after 30s")
+    .expect("Hermes connection failed");
 
     // Give some time for fanout messages to arrive and DB writes to sync
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -66,10 +46,10 @@ sleep 0.1
         fanout_messages.push(bytes);
     }
 
-    assert!(!fanout_messages.is_empty(), "Expected fanout messages from Hermes stdout");
+    assert!(!fanout_messages.is_empty(), "Expected fanout messages from Hermes ACP session");
     let session_id = captured_session_id.expect("Expected a session_id from fanout");
 
-    // Phase 4: Replay Verification
+    // Replay Verification: look up raw events by the session ID used in capture
     let replayed_events = publisher.read_session_events(&session_id).await.expect("Failed to replay events");
     assert!(!replayed_events.is_empty(), "Expected replayed events from DB");
 
@@ -79,11 +59,17 @@ sleep 0.1
         "Replay count should match fanout count"
     );
 
-    // Verify contents are valid JSON
+    // Verify contents are valid JSON (allowing trailing newlines, skipping stderr log lines)
     for event in replayed_events {
-        let json_value: serde_json::Value = serde_json::from_slice(&event).expect("Payload should be valid JSON");
+        let s = std::str::from_utf8(&event).expect("Payload should be valid UTF-8");
+        let trimmed = s.trim();
+        if !trimmed.starts_with('{') {
+            continue; // skip stderr log lines
+        }
+        let json_value: serde_json::Value = serde_json::from_str(trimmed)
+            .unwrap_or_else(|e| panic!("Payload should be valid JSON: {:?}\n  raw: {:?}", e, s));
         assert!(json_value.is_object());
     }
 
-    println!("E2E test successfully verified {} raw protocol events.", fanout_messages.len());
+    eprintln!("E2E test successfully verified {} raw protocol events.", fanout_messages.len());
 }
