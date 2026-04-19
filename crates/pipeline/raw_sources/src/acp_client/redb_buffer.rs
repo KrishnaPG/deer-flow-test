@@ -44,9 +44,9 @@ impl RawEventPublisher for RedbRawEventPublisher {
         key.extend_from_slice(&sequence.to_be_bytes());
 
         let db = Arc::clone(&self.db);
-        let raw_bytes_clone = raw_bytes.clone();
 
-        // Perform the blocking DB write on a spawn_blocking thread
+        // spawn_blocking moves the write off the async runtime.
+        // raw_bytes is moved (not cloned) into the blocking task.
         tokio::task::spawn_blocking(move || {
             let write_txn = db.begin_write().map_err(|e| {
                 RawEventPublishError::Transport { message: format!("Failed to begin write txn: {}", e) }
@@ -55,7 +55,7 @@ impl RawEventPublisher for RedbRawEventPublisher {
                 let mut table = write_txn.open_table(EVENTS_TABLE).map_err(|e| {
                     RawEventPublishError::Transport { message: format!("Failed to open table: {}", e) }
                 })?;
-                table.insert(key.as_slice(), raw_bytes_clone.as_ref()).map_err(|e| {
+                table.insert(key.as_slice(), raw_bytes.as_ref()).map_err(|e| {
                     RawEventPublishError::Transport { message: format!("Failed to insert: {}", e) }
                 })?;
             }
