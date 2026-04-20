@@ -51,19 +51,21 @@ The system SHALL create a test harness to validate Rust cookbook examples agains
 - **AND** the system SHALL test error handling and recovery with Dapr failures
 
 ### Requirement: Maintain cookbook compatibility with Python PocketFlow
-The system SHALL ensure Rust cookbook examples produce functionally equivalent results to Python examples.
+The system SHALL ensure Rust cookbook examples produce functionally equivalent results to Python examples, with improvements where beneficial.
 
 #### Scenario: Functional equivalence
 - **WHEN** running the same cookbook example in Python and Rust
 - **THEN** the system SHALL produce functionally equivalent results
 - **AND** the system SHALL handle LLM non-determinism with configurable similarity thresholds
 - **AND** the system SHALL preserve user interaction patterns where applicable
+- **AND** the system MAY produce improved behavior (faster, more reliable) that achieves same outcome
 
 #### Scenario: API compatibility
 - **WHEN** using the Rust example API
 - **THEN** the system SHALL provide similar entry points and configuration as Python examples
 - **AND** the system SHALL document differences due to Rust's type system and Dapr integration
 - **AND** the system SHALL provide migration notes for Python users
+- **AND** the system SHALL prioritize working example over line-by-line Python equivalence
 
 #### Scenario: Documentation compatibility
 - **WHEN** documenting Rust cookbook examples

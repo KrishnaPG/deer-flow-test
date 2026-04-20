@@ -2,6 +2,8 @@
 
 PocketFlow-Rust lacks cookbook examples, while Python PocketFlow has 59 examples covering various patterns. This design creates a porting plan that prioritizes examples, designs a test harness for validation, and establishes a framework for maintaining compatibility. The cookbooks build on the core abstractions, design patterns, and utilities ported in previous changes.
 
+We are taking a **fresh start approach**: use Python PocketFlow examples as inspiration ("in spirit" and "logic"), not as strict line-by-line templates. The Rust implementation should do everything Python examples can do, but better - with Dapr integration, faster execution, and zero-copy where possible. Time to working state is more important than achieving 100% line equality.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -10,12 +12,15 @@ PocketFlow-Rust lacks cookbook examples, while Python PocketFlow has 59 examples
 - Design comprehensive test harness for automated validation
 - Create integration testing framework with Dapr components
 - Provide clear documentation and migration guides
+- Prioritize working implementation over line-by-line Python equivalence
+- Achieve performance improvements over Python examples where possible
 
 **Non-Goals:**
 - Implement the actual porting (this is a plan only)
 - Port every Python feature exactly (some may be simplified for Rust)
 - Create new cookbooks not in Python version
 - Support all Python dependencies in Rust
+- Achieve line-by-line code equivalence (not required)
 
 ## Decisions
 

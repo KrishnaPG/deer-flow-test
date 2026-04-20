@@ -2,6 +2,8 @@
 
 PocketFlow-Rust provides a foundation with Node trait (`prepare → execute → post_process`), Flow struct (state-based transitions), Context (key-value store), and Params (`HashMap<String, serde_json::Value>`). However, it lacks Dapr integration and enterprise features like retry, fallback, and parallel execution. This design maps PocketFlow concepts to Dapr building blocks to achieve durable, scalable, and observable workflows.
 
+We are taking a **fresh start approach**: use Python PocketFlow as inspiration ("in spirit" and "logic"), not as a strict line-by-line template. The Rust implementation should do everything Python can do, but better - faster, lower latency, zero-copy, zero-allocation where possible, with built-in enterprise features that Python lacks.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -12,13 +14,16 @@ PocketFlow-Rust provides a foundation with Node trait (`prepare → execute → 
 - Add retry logic using Dapr retry policies
 - Add fallback mechanisms using Dapr compensation handlers
 - Add parallel execution using Dapr fan-out/fan-in patterns
-- Maintain behavioral compatibility with Python PocketFlow semantics
+- Provide functional equivalence with Python PocketFlow semantics
+- Prioritize getting to working state quickly over nitpicking about 100% line equality
+- Aim for zero-copy, zero-allocation where possible for performance
 
 **Non-Goals:**
 - Implement the actual porting (this is a plan only)
-- Redesign PocketFlow's core semantics
-- Support all Python dynamic features (e.g., runtime graph modification)
+- Redesign PocketFlow's core semantics in ways that break functional equivalence
+- Support all Python dynamic features that don't translate to Rust
 - Replace existing PocketFlow-Rust code wholesale
+- Achieve line-by-line code equivalence with Python (not required)
 
 ## Decisions
 

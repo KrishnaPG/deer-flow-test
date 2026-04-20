@@ -136,16 +136,18 @@ The system SHALL implement caching and rate limiting across all utilities using 
 - **AND** the system SHALL provide rate limit monitoring
 
 ### Requirement: Maintain utility compatibility with Python PocketFlow
-The system SHALL ensure Rust utilities produce identical outputs to Python utilities for identical inputs.
+The system SHALL ensure Rust utilities produce functionally equivalent outputs to Python utilities for identical inputs, with potential improvements.
 
 #### Scenario: Output compatibility
 - **WHEN** processing the same input with Python and Rust utilities
-- **THEN** the system SHALL produce identical or functionally equivalent outputs
-- **AND** the system SHALL handle edge cases and error conditions identically
+- **THEN** the system SHALL produce functionally equivalent outputs
+- **AND** the system SHALL handle edge cases and error conditions equivalently
 - **AND** the system SHALL preserve configuration and option semantics
+- **AND** the system MAY produce improved outputs (faster, more accurate) that are still functionally equivalent
 
 #### Scenario: API compatibility
 - **WHEN** using the Rust utility API
 - **THEN** the system SHALL provide methods matching Python PocketFlow's utility API
 - **AND** the system SHALL maintain similar method signatures where possible
 - **AND** the system SHALL document differences due to Rust's type system
+- **AND** the system SHALL prioritize working utility over nitpicking about exact output matching

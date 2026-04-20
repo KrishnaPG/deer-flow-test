@@ -2,6 +2,8 @@
 
 PocketFlow-Rust lacks design patterns (Agent, Map-Reduce, RAG, Multi-Agent, Supervisor). This design maps each pattern to Dapr building blocks to achieve durable, scalable, and observable pattern implementations. The patterns build on the core abstractions (Node, Flow, SharedStore, Params) ported in the previous change.
 
+We are taking a **fresh start approach**: use Python PocketFlow patterns as inspiration ("in spirit" and "logic"), not as strict line-by-line templates. The Rust implementation should do everything Python patterns can do, but better - with built-in enterprise features that Python lacks.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -10,13 +12,16 @@ PocketFlow-Rust lacks design patterns (Agent, Map-Reduce, RAG, Multi-Agent, Supe
 - Map RAG pattern to Dapr Bindings for vector DB retrieval and Activities for generation
 - Map Multi-Agent pattern to Dapr Actors for agents with Pub/Sub for communication
 - Map Supervisor pattern to Dapr Workflow loops with evaluation activities
-- Maintain behavioral compatibility with Python PocketFlow pattern semantics
+- Provide functional equivalence with Python PocketFlow pattern semantics
+- Prioritize working implementation over nitpicking about 100% line equality
+- Add Dapr-native resilience (retry, circuit breaker, fallback) that Python patterns lack
 
 **Non-Goals:**
 - Implement the actual porting (this is a plan only)
-- Redesign pattern semantics
-- Support all Python dynamic features (e.g., runtime pattern modification)
+- Redesign pattern semantics in ways that break functional equivalence
+- Support all Python dynamic features that don't translate to Rust
 - Replace existing PocketFlow-Rust examples wholesale
+- Achieve line-by-line code equivalence with Python (not required)
 
 ## Decisions
 

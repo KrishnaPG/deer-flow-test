@@ -2,6 +2,8 @@
 
 PocketFlow-Rust has basic utility implementations but lacks Dapr integration and enterprise features. This design maps each utility to Dapr building blocks to achieve cached, rate-limited, and observable operations. The utilities build on the core abstractions and design patterns ported in previous changes.
 
+We are taking a **fresh start approach**: use Python PocketFlow utilities as inspiration ("in spirit" and "logic"), not as strict line-by-line templates. The Rust utilities should do everything Python can do, but better - with caching, rate limiting, and observability built-in.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -13,12 +15,15 @@ PocketFlow-Rust has basic utility implementations but lacks Dapr integration and
 - Implement visualization as pure Rust with Dapr State caching
 - Map text-to-speech to Dapr bindings
 - Add caching, rate limiting, and observability to all utilities
+- Prioritize working implementation over line-by-line Python equivalence
+- Aim for zero-copy where possible for performance
 
 **Non-Goals:**
 - Implement the actual porting (this is a plan only)
 - Replace all Python utility functionality wholesale
 - Support every possible LLM provider or vector database
 - Provide real-time streaming for all utilities
+- Achieve line-by-line code equivalence with Python (not required)
 
 ## Decisions
 

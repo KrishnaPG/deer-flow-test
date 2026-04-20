@@ -92,16 +92,25 @@ The system SHALL implement retry logic and fallback mechanisms using Dapr capabi
 - **AND** the system SHALL allow fallback to trigger alternative workflow paths
 
 ### Requirement: Maintain compatibility with Python PocketFlow semantics
-The system SHALL ensure Rust implementation preserves the exact semantics of Python PocketFlow core abstractions.
+The system SHALL ensure Rust implementation provides functional equivalence with Python PocketFlow core abstractions, improving upon Python where beneficial.
 
 #### Scenario: Behavioral compatibility
 - **WHEN** executing the same workflow in Python and Rust
-- **THEN** the system SHALL produce identical results for identical inputs
-- **AND** the system SHALL handle edge cases (empty shared store, missing parameters, etc.) identically
+- **THEN** the system SHALL produce functionally equivalent results for identical inputs
+- **AND** the system SHALL handle edge cases (empty shared store, missing parameters, etc.) equivalently
 - **AND** the system SHALL preserve warning and error messages where applicable
+- **AND** the system MAY produce different (improved) internal behavior that achieves the same outcome
 
 #### Scenario: API compatibility
 - **WHEN** using the Rust API
 - **THEN** the system SHALL provide methods matching Python PocketFlow's public API
 - **AND** the system SHALL maintain similar method signatures where possible
 - **AND** the system SHALL document differences due to Rust's type system
+- **AND** the system SHALL prioritize getting to working state over 100% line equality
+
+#### Scenario: Performance improvements
+- **WHEN** implementing core abstractions
+- **THEN** the system SHALL aim for zero-copy, zero-allocation where possible
+- **AND** the system SHALL achieve lower latency than Python implementation
+- **AND** the system SHALL leverage Rust's type safety for compile-time error detection
+- **AND** the system SHALL add built-in retry/fallback that Python requires external libraries for
