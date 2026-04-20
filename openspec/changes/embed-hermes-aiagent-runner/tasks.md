@@ -18,7 +18,7 @@
 ## Phase 3: Live Stream Now
 - [x] Implement `AcpResponseStreamEvent` live fanout from ACP-observed events.
 - [x] Keep assistant text fidelity honest and do not fabricate assistant deltas.
-- [ ] Prepare a future hybrid seam for richer Hermes-specific stream adapters.
+- [x] Prepare a future hybrid seam for richer stream adapters via a generic TUI gateway raw-frame transport.
 
 ## Phase 4: Replay and Reliability
 - [x] Implement Redb-backed replay by `ChatSessionId` and `AcpSessionSequenceNumber`.
