@@ -29,8 +29,8 @@ const SHARED_HERMES_ITEMS: &[&str] = &[
     "pastes",
     "sessions",
     "skills",
-    "state.db",
 ];
+const COPIED_HERMES_ITEMS: &[&str] = &["state.db", "state.db-shm", "state.db-wal"];
 
 #[derive(Debug)]
 pub struct HermesSmokeReport {
@@ -178,6 +178,14 @@ fn prepare_hermes_home() -> Result<TempDir, std::io::Error> {
             symlink_dir(&source, &target)?;
         } else {
             symlink_file(&source, &target)?;
+        }
+    }
+
+    for item in COPIED_HERMES_ITEMS {
+        let source = source_home.join(item);
+        let target = hermes_home.path().join(item);
+        if source.exists() {
+            std::fs::copy(source, target)?;
         }
     }
 

@@ -8,7 +8,8 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdout};
-use tokio::task::{spawn_local, LocalSet};
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::spawn_local;
 use tokio::time::{timeout, Duration};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::instrument;
@@ -26,6 +27,15 @@ use crate::acp_client::raw_fanout::RawEventFanout;
 use crate::acp_client::raw_publisher::{NoopRawEventPublisher, RawEventPublisher};
 
 const ACP_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
+
+type AcpSessionCommandSender = mpsc::UnboundedSender<AcpSessionCommand>;
+
+enum AcpSessionCommand {
+    Prompt {
+        prompt_blocks: Vec<acp::ContentBlock>,
+        response: oneshot::Sender<Result<(), std::io::Error>>,
+    },
+}
 
 /// Configuration for establishing an ACP client session.
 ///
@@ -154,7 +164,7 @@ pub struct OurAcpClient {
     capture_contexts: Arc<AcpCaptureContextStore>,
     chat_session_registry: Arc<AcpChatSessionRegistry>,
     chat_run_registry: Arc<AcpChatRunRegistry>,
-    session_connections: Arc<DashMap<ChatSessionId, Arc<acp::ClientSideConnection>>>,
+    session_connections: Arc<DashMap<ChatSessionId, AcpSessionCommandSender>>,
     session_sequences: Arc<DashMap<ChatSessionId, Arc<AtomicU64>>>,
 }
 
@@ -235,20 +245,18 @@ impl OurAcpClient {
             .capture_contexts
             .initialize_for_subprocess(acp_subprocess_id.clone());
 
-        let local_set = LocalSet::new();
-        let acp_session_id = local_set
-            .run_until(perform_acp_handshake(
-                self.fanout.clone(),
-                capture_context,
-                Arc::clone(&self.capture_contexts),
-                self.chat_session_registry.clone(),
-                self.chat_run_registry.clone(),
-                Arc::clone(&self.session_connections),
-                stdin,
-                acp_stdout_rx,
-                child,
-            ))
-            .await?;
+        let acp_session_id = start_acp_session_runtime(
+            self.fanout.clone(),
+            capture_context,
+            Arc::clone(&self.capture_contexts),
+            self.chat_session_registry.clone(),
+            self.chat_run_registry.clone(),
+            Arc::clone(&self.session_connections),
+            stdin,
+            acp_stdout_rx,
+            child,
+        )
+        .await?;
 
         // Derive our canonical ChatSessionId from the ACP session response.
         // This is the same scheme as before: blake3(first_event_content) + pid + timestamp.
@@ -302,20 +310,23 @@ impl OurAcpClient {
         self.capture_contexts
             .assign_run(&acp_subprocess_id, chat_run_id.clone());
 
-        let session_connection = self
+        let session_sender = self
             .session_connections
             .get(chat_session_id)
+            .map(|entry| entry.clone())
             .ok_or_else(|| missing_session_error(chat_session_id))?;
-        let request = acp::PromptRequest::new(chat_session_id.as_str().to_string(), prompt_blocks);
-
         // Intentionally bypassing manual client command capture since it gets captured
         // inside the protocol stream or we'd just tee stdin. We will tee stdin in a real prod path.
         // For now the raw bytes come from the responses.
 
-        session_connection
-            .prompt(request)
-            .await
-            .map_err(io_error_from_acp)?;
+        let (response_tx, response_rx) = oneshot::channel();
+        session_sender
+            .send(AcpSessionCommand::Prompt {
+                prompt_blocks,
+                response: response_tx,
+            })
+            .map_err(|_| connection_closed_error())?;
+        response_rx.await.map_err(|_| connection_closed_error())??;
 
         self.publish_run_started(chat_session_id.clone(), chat_run_id.clone());
         Ok(chat_run_id)
@@ -404,13 +415,58 @@ async fn run_raw_stderr_capture_loop(
     }
 }
 
-async fn perform_acp_handshake(
+async fn start_acp_session_runtime(
     fanout: AcpResponseStreamFanout,
     capture_context: crate::acp_client::AcpCaptureContext,
     capture_contexts: Arc<AcpCaptureContextStore>,
     chat_session_registry: Arc<AcpChatSessionRegistry>,
     chat_run_registry: Arc<AcpChatRunRegistry>,
-    session_connections: Arc<DashMap<ChatSessionId, Arc<acp::ClientSideConnection>>>,
+    session_connections: Arc<DashMap<ChatSessionId, AcpSessionCommandSender>>,
+    stdin: tokio::process::ChildStdin,
+    stdout: tokio::io::DuplexStream,
+    child: Child,
+) -> Result<ChatSessionId, std::io::Error> {
+    let (startup_tx, startup_rx) = oneshot::channel();
+    std::thread::spawn(move || {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                let _ = startup_tx.send(Err(error));
+                return;
+            }
+        };
+        let local_set = tokio::task::LocalSet::new();
+        local_set.block_on(&runtime, async move {
+            let result = run_acp_session_runtime(
+                fanout,
+                capture_context,
+                capture_contexts,
+                chat_session_registry,
+                chat_run_registry,
+                session_connections,
+                stdin,
+                stdout,
+                child,
+            )
+            .await;
+            let _ = startup_tx.send(result);
+            std::future::pending::<()>().await;
+        });
+    });
+
+    startup_rx.await.map_err(|_| connection_closed_error())?
+}
+
+async fn run_acp_session_runtime(
+    fanout: AcpResponseStreamFanout,
+    capture_context: crate::acp_client::AcpCaptureContext,
+    capture_contexts: Arc<AcpCaptureContextStore>,
+    chat_session_registry: Arc<AcpChatSessionRegistry>,
+    chat_run_registry: Arc<AcpChatRunRegistry>,
+    session_connections: Arc<DashMap<ChatSessionId, AcpSessionCommandSender>>,
     stdin: tokio::process::ChildStdin,
     stdout: tokio::io::DuplexStream,
     mut mut_child: Child,
@@ -429,6 +485,7 @@ async fn perform_acp_handshake(
     spawn_local(handle_io);
 
     let connection = Arc::new(connection);
+    let (command_tx, mut command_rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
         let _ = mut_child.wait().await;
@@ -446,7 +503,29 @@ async fn perform_acp_handshake(
         acp_subprocess_id: capture_context.acp_subprocess_id.clone(),
         chat_thread_id: None,
     });
-    session_connections.insert(chat_session_id.clone(), connection);
+    session_connections.insert(chat_session_id.clone(), command_tx);
+
+    let command_connection = Arc::clone(&connection);
+    let acp_session_id = chat_session_id.clone();
+    spawn_local(async move {
+        while let Some(command) = command_rx.recv().await {
+            match command {
+                AcpSessionCommand::Prompt {
+                    prompt_blocks,
+                    response,
+                } => {
+                    let request =
+                        acp::PromptRequest::new(acp_session_id.as_str().to_string(), prompt_blocks);
+                    let result = command_connection
+                        .prompt(request)
+                        .await
+                        .map(|_| ())
+                        .map_err(io_error_from_acp);
+                    let _ = response.send(result);
+                }
+            }
+        }
+    });
 
     Ok(chat_session_id)
 }
@@ -524,6 +603,13 @@ fn missing_session_error(chat_session_id: &ChatSessionId) -> std::io::Error {
     std::io::Error::new(
         std::io::ErrorKind::NotFound,
         format!("missing ACP session connection for {}", chat_session_id),
+    )
+}
+
+fn connection_closed_error() -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::BrokenPipe,
+        "ACP connection closed before request could be sent",
     )
 }
 
