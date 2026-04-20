@@ -45,7 +45,7 @@
 - [x] 2.9 Update tracker
 
 ### Task 3: Core Abstractions Plan
-- [ ] 3.1 Brainstorm Dapr mapping (openspec-explore)
+- [x] 3.1 Brainstorm Dapr mapping (openspec-explore) - completed
 - [ ] 3.2 Explore Dapr capabilities
 - [ ] 3.3 Brainstorm Rust trait design
 - [ ] 3.4 Identify Dapr building blocks
