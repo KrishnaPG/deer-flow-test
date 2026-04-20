@@ -1,14 +1,17 @@
 ## Why
 
-PocketFlow provides utility functions for LLM calls, chunking, embedding, vector DB, web search, visualization, and text-to-speech. The existing PocketFlow-Rust port has basic implementations but lacks Dapr integration and many features. To achieve industrial-grade enterprise deployment with high-performance, reliability, and scalability, we need to port these utilities to Rust using Dapr as the distributed application runtime. This change creates a detailed porting plan that maps each utility to Dapr building blocks (Conversation API, Bindings, State Management) while preserving Python semantics and adding enterprise features like caching, rate limiting, and observability.
+PocketFlow provides utility functions for LLM calls, chunking, embedding, vector DB, web search, visualization, and text-to-speech. The existing PocketFlow-Rust port has basic implementations but lacks Dapr integration and many features. To achieve industrial-grade enterprise deployment with high-performance, reliability, and scalability, we need to port these utilities to Rust using Dapr as the distributed application runtime.
+
+We use Python PocketFlow utilities **"in spirit" and "logic"** - not as strict line-by-line templates. The Rust utilities should do everything Python can do, but better: with built-in caching, rate limiting, and observability that Python requires external libraries for.
 
 ## What Changes
 
 - Create a comprehensive porting plan for PocketFlow utilities to Rust with Dapr integration
 - Define Rust implementations for LLM calls, chunking, embedding, vector DB, web search, visualization, and text-to-speech
 - Specify how to use Dapr Conversation API for LLM calls, Dapr Bindings for external services, Dapr State for caching
-- Establish compatibility requirements with Python PocketFlow utility semantics
+- Establish functional equivalence with Python PocketFlow utility semantics (not line-by-line copying)
 - Provide implementation guidance for crate structure and API design
+- Prioritize working utility over nitpicking about exact Python equivalence
 
 ## Capabilities
 

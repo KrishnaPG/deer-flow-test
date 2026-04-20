@@ -2,6 +2,8 @@
 
 PocketFlow-Rust currently lacks enterprise features needed for production deployment. This design integrates Dapr's enterprise building blocks to add observability, durability, scalability, fail-safety, idempotency, tracability, and security. The integration builds on the core abstractions, design patterns, utilities, and cookbooks ported in previous changes.
 
+We are taking a **fresh start approach**: build enterprise-grade features that Python PocketFlow cannot easily provide. Rust+Dapr enables features that would require external libraries in Python - retry/fallback built-in, native OpenTelemetry, Dapr-sidecar resilience patterns.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -12,12 +14,15 @@ PocketFlow-Rust currently lacks enterprise features needed for production deploy
 - Ensure idempotency through Dapr Workflow guarantees and deduplication
 - Add distributed tracing and audit logging for tracability
 - Integrate Dapr Secret Management and access control for security
+- Provide enterprise features that Python requires external libraries for
+- Aim for zero-copy, zero-allocation where possible for performance
 
 **Non-Goals:**
 - Implement the actual integration (this is a plan only)
 - Replace all existing PocketFlow-Rust code wholesale
 - Support non-Dapr deployment scenarios (focus on Dapr-first)
 - Provide GUI management interfaces
+- Duplicate Python's limitations (we build better, not just different)
 
 ## Decisions
 

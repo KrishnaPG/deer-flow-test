@@ -2,21 +2,25 @@
 
 PocketFlow-Rust requires systematic validation to ensure it matches Python PocketFlow's behavior, meets performance expectations, integrates correctly with Dapr, and satisfies enterprise security and compliance requirements. This design creates a validation framework that automates these checks across multiple dimensions.
 
+We are taking a **fresh start approach**: validate functional equivalence and performance improvement, not line-by-line equality. Python PocketFlow is the functional reference, but the Rust implementation is allowed (encouraged) to differ internally where it achieves better outcomes.
+
 ## Goals / Non-Goals
 
 **Goals:**
-- Validate feature parity between Python and Rust implementations
-- Benchmark performance (execution time, memory, throughput)
+- Validate functional equivalence between Python and Rust implementations
+- Benchmark performance improvements (Rust+Dapr should be faster than Python)
 - Test integration with Dapr components and external dependencies
 - Validate security features (authentication, authorization, encryption)
 - Ensure compliance with enterprise standards (SOC2, GDPR)
 - Provide automated CI/CD integration and reporting
+- Focus on catching regressions, not on achieving identical internal implementation
 
 **Non-Goals:**
 - Implement the actual validation framework (this is a plan only)
 - Validate every possible edge case (focus on critical paths)
 - Replace manual validation entirely (some manual checks needed)
 - Support validation of non-Dapr deployment scenarios
+- Require line-by-line code equivalence (not needed, functional equivalence is sufficient)
 
 ## Decisions
 

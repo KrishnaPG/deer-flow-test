@@ -3,15 +3,16 @@
 - [ ] 1.1 Create crate `crates/berg10/execution-engine` with Cargo.toml
 - [ ] 1.2 Add dependencies: dapr, tokio, serde, serde_json, async-trait, thiserror
 - [ ] 1.3 Define module structure: node, flow, context, params, retry, error, dapr/
-- [ ] 1.4 Create AGENTS.md with coding standards
+- [ ] 1.4 Create AGENTS.md with coding standards (zero-copy, zero-allocation where possible)
 
 ## 2. Core Trait Definitions
 
 - [ ] 2.1 Define Node trait with prep, exec, post methods
 - [ ] 2.2 Define Flow trait with orchestration methods
 - [ ] 2.3 Define SharedStore trait with key-value operations
-- [ ] 2.4 Define Params type as HashMap<String, serde_json::Value>
+- [ ] 2.4 Define Params type as immutable input data (prefer strong typing over HashMap<String, Value>)
 - [ ] 2.5 Define error types (NodeError, FlowError, StoreError)
+- [ ] 2.6 Add high type-safety with generics; avoid "string" or "number" for domain objects
 
 ## 3. Dapr Activity Node Implementation
 

@@ -121,16 +121,18 @@ The system SHALL support composition of design patterns (e.g., Agent inside Map-
 - **AND** the system SHALL validate configuration consistency
 
 ### Requirement: Maintain pattern compatibility with Python PocketFlow
-The system SHALL ensure Rust implementations preserve the exact semantics of Python PocketFlow design patterns.
+The system SHALL ensure Rust implementations provide functional equivalence with Python PocketFlow design patterns, improving upon Python where beneficial.
 
 #### Scenario: Pattern behavior
 - **WHEN** executing the same pattern in Python and Rust
-- **THEN** the system SHALL produce identical results for identical inputs
-- **AND** the system SHALL handle edge cases and error conditions identically
+- **THEN** the system SHALL produce functionally equivalent results for identical inputs
+- **AND** the system SHALL handle edge cases and error conditions equivalently
 - **AND** the system SHALL preserve pattern-specific configuration options
+- **AND** the system MAY produce improved behavior that achieves same outcome faster
 
 #### Scenario: API compatibility
 - **WHEN** using the Rust pattern API
 - **THEN** the system SHALL provide methods matching Python PocketFlow's pattern API
 - **AND** the system SHALL maintain similar method signatures where possible
 - **AND** the system SHALL document differences due to Rust's type system
+- **AND** the system SHALL prioritize working implementation over line-by-line copying

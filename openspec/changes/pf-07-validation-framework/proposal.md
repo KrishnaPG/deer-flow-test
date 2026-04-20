@@ -1,14 +1,17 @@
 ## Why
 
-PocketFlow-Rust needs a comprehensive validation framework to ensure feature parity with Python PocketFlow, performance benchmarks, security compliance, and enterprise readiness. This framework will automate testing across multiple dimensions: functional correctness, performance, security, and compliance. It will enable continuous validation as the porting project progresses and ensure industrial-grade quality.
+PocketFlow-Rust needs a comprehensive validation framework to ensure functional equivalence with Python PocketFlow, performance improvement, security compliance, and enterprise readiness. This framework will automate testing across multiple dimensions: functional correctness, performance (should be faster than Python), security, and compliance. It will enable continuous validation as the porting project progresses and ensure industrial-grade quality.
+
+We validate **functional equivalence and performance improvement**, not line-by-line equality. Python PocketFlow is the functional reference, but differences in internal implementation are allowed where they achieve better outcomes.
 
 ## What Changes
 
 - Create a comprehensive validation framework plan for PocketFlow-Rust
-- Define validation categories: feature parity, performance, integration, security, compliance
+- Define validation categories: functional equivalence, performance improvement, integration, security, compliance
 - Specify testing architecture with test runners, input generators, output comparators
 - Establish automation strategy for CI/CD integration
 - Provide reporting and metrics for validation results
+- Focus on catching regressions and validating improvement over Python, not on achieving identical internal implementation
 
 ## Capabilities
 
