@@ -12,14 +12,14 @@
 | Task Group                   | Status      | Started    | Completed  | Output Change                     | Approval |
 | ---------------------------- | ----------- | ---------- | ---------- | --------------------------------- | -------- |
 | 1. Setup and Initialization  | Completed   | 2026-04-20 | 2026-04-20 | -                                 | -        |
-| 2. Evaluate PocketFlow-Rust  | Completed   | 2026-04-20 | 2026-04-20 | change-01-evaluate-pocketflow-rust| -        |
-| 3. Core Abstractions Plan    | Completed   | 2026-04-20 | 2026-04-20 | change-02-port-core-abstractions  | -        |
-| 4. Design Patterns Plan      | Completed   | 2026-04-20 | 2026-04-20 | change-03-port-design-patterns    | -        |
-| 5. Utilities Plan            | Completed   | 2026-04-20 | 2026-04-20 | change-04-port-utilities          | -        |
-| 6. Cookbooks Plan            | Completed   | 2026-04-20 | 2026-04-20 | change-05-port-cookbooks          | -        |
-| 7. Enterprise Features Plan  | Completed   | 2026-04-20 | 2026-04-20 | change-06-integrate-enterprise-features | -        |
-| 8. Validation Framework Plan | Completed   | 2026-04-20 | 2026-04-20 | change-07-validation-framework    | -        |
-| 9. Tracking Management Plan  | Completed   | 2026-04-20 | 2026-04-20 | change-08-tracking-management     | -        |
+| 2. Evaluate PocketFlow-Rust  | Completed   | 2026-04-20 | 2026-04-20 | pf-01-evaluate-pocketflow-rust    | -        |
+| 3. Core Abstractions Plan    | Completed   | 2026-04-20 | 2026-04-20 | pf-02-port-core-abstractions      | -        |
+| 4. Design Patterns Plan      | Completed   | 2026-04-20 | 2026-04-20 | pf-03-port-design-patterns        | -        |
+| 5. Utilities Plan            | Completed   | 2026-04-20 | 2026-04-20 | pf-04-port-utilities              | -        |
+| 6. Cookbooks Plan            | Completed   | 2026-04-20 | 2026-04-20 | pf-05-port-cookbooks              | -        |
+| 7. Enterprise Features Plan  | Completed   | 2026-04-20 | 2026-04-20 | pf-06-integrate-enterprise-features | -        |
+| 8. Validation Framework Plan | Completed   | 2026-04-20 | 2026-04-20 | pf-07-validation-framework        | -        |
+| 9. Tracking Management Plan  | Completed   | 2026-04-20 | 2026-04-20 | pf-08-tracking-management         | -        |
 | 10. Final Validation         | In Progress | 2026-04-20 | -          | -                                 | -        |
 
 ## Detailed Task Progress
