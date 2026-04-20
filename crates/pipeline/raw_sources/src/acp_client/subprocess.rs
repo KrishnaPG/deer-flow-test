@@ -33,7 +33,7 @@ impl AcpSubprocessCommand {
             working_directory,
         }
     }
-    
+
     pub fn with_args(mut self, args: Vec<String>) -> Self {
         self.args = args;
         self

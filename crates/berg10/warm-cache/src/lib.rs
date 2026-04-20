@@ -1,6 +1,6 @@
-pub mod config;
 pub mod checkout;
+pub mod config;
 
-pub use config::WarmCacheConfig;
-pub use checkout::WarmCache;
 pub use berg10_storage_catalog::{HierarchyCheckoutInfo, HierarchyCheckoutReceipt};
+pub use checkout::WarmCache;
+pub use config::WarmCacheConfig;

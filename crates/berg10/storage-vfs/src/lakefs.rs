@@ -23,13 +23,7 @@ pub struct LakeFsClient {
 }
 
 impl LakeFsClient {
-    pub fn new(
-        host: &str,
-        repo: &str,
-        branch: &str,
-        access_key: &str,
-        _secret_key: &str,
-    ) -> Self {
+    pub fn new(host: &str, repo: &str, branch: &str, access_key: &str, _secret_key: &str) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
@@ -88,9 +82,7 @@ impl LakeFsClient {
             .await?;
 
         if response.status().is_success() {
-            let stats: ObjectStats = response.json().await.map_err(|e| {
-                LakeFsError::Request(e)
-            })?;
+            let stats: ObjectStats = response.json().await.map_err(|e| LakeFsError::Request(e))?;
             Ok(stats)
         } else {
             let status = response.status().as_u16();
@@ -168,7 +160,10 @@ impl LakeFsClient {
     }
 
     pub fn physical_location(&self, key: &str, commit_id: &str) -> String {
-        format!("lakefs://{}/{}/{}/{}", self.repo, self.branch, commit_id, key)
+        format!(
+            "lakefs://{}/{}/{}/{}",
+            self.repo, self.branch, commit_id, key
+        )
     }
 }
 

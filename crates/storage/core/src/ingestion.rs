@@ -1,14 +1,6 @@
 use berg10_storage_catalog::{
-    Berg10Catalog,
-    Berg10DataHierarchy,
-    Berg10DataLevel,
-    Berg10PayloadFormat,
-    Berg10PayloadKind,
-    Berg10StoragePlane,
-    ContentRecord,
-    ContentTag,
-    LineageRef,
-    LogicalFilename,
+    Berg10Catalog, Berg10DataHierarchy, Berg10DataLevel, Berg10PayloadFormat, Berg10PayloadKind,
+    Berg10StoragePlane, ContentRecord, ContentTag, LineageRef, LogicalFilename,
 };
 use berg10_storage_vfs::StorageBackend;
 use chrono::Utc;
@@ -30,14 +22,22 @@ impl IngestionBridge {
 
     pub async fn ingest(&self, request: &AppendDataRequest) -> Result<FileSaved, String> {
         let payload_bytes = match &request.payload {
-            deer_foundation_contracts::StoragePayloadDescriptor::InlineBytes { bytes } => bytes.clone(),
+            deer_foundation_contracts::StoragePayloadDescriptor::InlineBytes { bytes } => {
+                bytes.clone()
+            }
             deer_foundation_contracts::StoragePayloadDescriptor::ExternalRef { uri } => {
-                return Err(format!("External refs not yet supported in direct ingestion: {}", uri));
+                return Err(format!(
+                    "External refs not yet supported in direct ingestion: {}",
+                    uri
+                ));
             }
         };
 
         // Store content in VFS using content-addressed blob storage.
-        let content_hash = self.vfs.put_blob(payload_bytes.clone()).await
+        let content_hash = self
+            .vfs
+            .put_blob(payload_bytes.clone())
+            .await
             .map_err(|e| format!("VFS write failed: {:?}", e))?;
         let hash_str = content_hash.as_str().to_string();
 
@@ -91,7 +91,9 @@ impl IngestionBridge {
             logical_filename: logical_filename.map(LogicalFilename::from),
         };
 
-        self.catalog.register_content(&record).await
+        self.catalog
+            .register_content(&record)
+            .await
             .map_err(|e| format!("Catalog registration failed: {:?}", e))?;
 
         // Emit FileSaved
@@ -99,7 +101,11 @@ impl IngestionBridge {
         let lineage_strings: Vec<String> = request.metadata.lineage.parent_refs.clone();
 
         Ok(make_file_saved(
-            request.metadata.logical_write_id.clone().unwrap_or_else(|| deer_foundation_contracts::LogicalWriteId::new("unknown")),
+            request
+                .metadata
+                .logical_write_id
+                .clone()
+                .unwrap_or_else(|| deer_foundation_contracts::LogicalWriteId::new("unknown")),
             &relative_path,
             request.layout.hierarchy.clone(),
             request.layout.level,
@@ -119,10 +125,14 @@ impl IngestionBridge {
     }
 }
 
-fn map_storage_hierarchy(hierarchy: &deer_foundation_contracts::StorageHierarchyTag) -> Berg10DataHierarchy {
+fn map_storage_hierarchy(
+    hierarchy: &deer_foundation_contracts::StorageHierarchyTag,
+) -> Berg10DataHierarchy {
     match hierarchy.as_str() {
         "orchestration" | "A" | "a" => Berg10DataHierarchy::Orchestration,
-        "artifact_content" | "artifact" | "content" | "B" | "b" => Berg10DataHierarchy::ArtifactContent,
+        "artifact_content" | "artifact" | "content" | "B" | "b" => {
+            Berg10DataHierarchy::ArtifactContent
+        }
         "presentation" | "view" | "C" | "c" => Berg10DataHierarchy::Presentation,
         _ => Berg10DataHierarchy::ArtifactContent,
     }

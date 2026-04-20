@@ -30,6 +30,7 @@
 - [x] Verify current live stream fidelity: live tool/status events and coarse/final assistant text only.
 - [x] Verify multi-session process model assumptions.
 - [x] Verify ACP compatibility boundaries for future non-Hermes agents.
+- [x] Add a Hermes smoke harness that sends `what are your skills?` and prints live, raw, and replay output.
 
 ## Deferred to Future Changes
 - Berg10 ingestion and semantic mapping from raw envelopes.

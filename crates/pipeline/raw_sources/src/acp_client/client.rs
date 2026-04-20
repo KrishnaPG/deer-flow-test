@@ -1,7 +1,7 @@
+use bytes::{Buf, BytesMut};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use bytes::{Buf, BytesMut};
 
 use agent_client_protocol::{self as acp, Agent as _};
 use async_trait::async_trait;
@@ -18,16 +18,12 @@ use crate::acp_client::notification_mapper::map_session_notification_to_live_eve
 use crate::acp_client::registry::{
     AcpChatRunRegistry, AcpChatRunState, AcpChatSessionRegistry, AcpChatSessionState,
 };
-use crate::acp_client::subprocess::{
-    spawn_acp_subprocess, AcpSubprocessCommand,
-};
-use crate::acp_client::{
-    AcpCaptureContextStore, ChatRunId, ChatSessionId,
-};
+use crate::acp_client::subprocess::{spawn_acp_subprocess, AcpSubprocessCommand};
+use crate::acp_client::{AcpCaptureContextStore, ChatRunId, ChatSessionId};
 use crate::acp_client::{AcpResponseStreamEvent, AcpResponseStreamEventKind};
 
-use crate::acp_client::raw_publisher::{RawEventPublisher, NoopRawEventPublisher};
 use crate::acp_client::raw_fanout::RawEventFanout;
+use crate::acp_client::raw_publisher::{NoopRawEventPublisher, RawEventPublisher};
 
 const ACP_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -92,7 +88,11 @@ impl AcpClientSessionConfig {
                 let args: Vec<String> = parts.map(String::from).collect();
                 if path.exists() {
                     let config = Self::new(path).with_provider_name("env-override");
-                    return Ok(if args.is_empty() { config } else { config.with_args(args) });
+                    return Ok(if args.is_empty() {
+                        config
+                    } else {
+                        config.with_args(args)
+                    });
                 }
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::NotFound,
@@ -105,9 +105,14 @@ impl AcpClientSessionConfig {
         let known_providers: &[(&str, &[&str])] = &[("hermes", &["acp"])];
         for (provider, default_args) in known_providers {
             if let Ok(path) = which(provider) {
-                if std::fs::metadata(&path).map(|m| m.is_file()).unwrap_or(false) {
+                if std::fs::metadata(&path)
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+                {
                     let args: Vec<String> = default_args.iter().map(|s| s.to_string()).collect();
-                    return Ok(Self::new(path).with_provider_name(*provider).with_args(args));
+                    return Ok(Self::new(path)
+                        .with_provider_name(*provider)
+                        .with_args(args));
                 }
             }
         }
@@ -186,10 +191,11 @@ impl OurAcpClient {
         &self,
         config: AcpClientSessionConfig,
     ) -> Result<ChatSessionId, std::io::Error> {
-        let command = AcpSubprocessCommand::new(config.executable, config.working_directory).with_args(config.args);
+        let command = AcpSubprocessCommand::new(config.executable, config.working_directory)
+            .with_args(config.args);
         let subprocess = spawn_acp_subprocess(&command).await?;
         let acp_subprocess_id = subprocess.acp_subprocess_id.clone();
-        
+
         let mut child = subprocess.child;
         let stderr = child.stderr.take().ok_or_else(missing_stderr_error)?;
         let stdin = child.stdin.take().ok_or_else(missing_stdin_error)?;
@@ -225,7 +231,9 @@ impl OurAcpClient {
         ));
 
         // Perform the ACP handshake (initialize + new_session)
-        let capture_context = self.capture_contexts.initialize_for_subprocess(acp_subprocess_id.clone());
+        let capture_context = self
+            .capture_contexts
+            .initialize_for_subprocess(acp_subprocess_id.clone());
 
         let local_set = LocalSet::new();
         let acp_session_id = local_set
@@ -246,19 +254,31 @@ impl OurAcpClient {
         // This is the same scheme as before: blake3(first_event_content) + pid + timestamp.
         let pid = std::process::id();
         let timestamp_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
-        let chat_session_id = ChatSessionId::from_first_event(
-            acp_session_id.as_str().as_bytes(),
-            pid,
-            timestamp_ns,
-        );
+        let chat_session_id =
+            ChatSessionId::from_first_event(acp_session_id.as_str().as_bytes(), pid, timestamp_ns);
+
+        if let Some(state) = self.chat_session_registry.remove(&acp_session_id) {
+            self.chat_session_registry.insert(AcpChatSessionState {
+                chat_session_id: chat_session_id.clone(),
+                acp_subprocess_id: state.acp_subprocess_id,
+                chat_thread_id: state.chat_thread_id,
+            });
+        }
+
+        if let Some((_, connection)) = self.session_connections.remove(&acp_session_id) {
+            self.session_connections
+                .insert(chat_session_id.clone(), connection);
+        }
 
         // Promote sequence counter from placeholder to canonical session ID.
         if let Some((_, counter)) = self.session_sequences.remove(&pre_session_id) {
-            self.session_sequences.insert(chat_session_id.clone(), counter);
+            self.session_sequences
+                .insert(chat_session_id.clone(), counter);
         }
 
         // Update capture context to map subprocess → canonical session.
-        self.capture_contexts.assign_session(&acp_subprocess_id, chat_session_id.clone());
+        self.capture_contexts
+            .assign_session(&acp_subprocess_id, chat_session_id.clone());
 
         Ok(chat_session_id)
     }
@@ -346,7 +366,9 @@ async fn run_raw_stdout_capture_loop(
 
         // Publish to durable buffer — redb internally uses spawn_blocking.
         // Clone here is a reference count increment on a shared allocation (O(1)).
-        let _ = publisher.publish_raw_event(&session_id, seq, raw.clone()).await;
+        let _ = publisher
+            .publish_raw_event(&session_id, seq, raw.clone())
+            .await;
         // Fan out the same Bytes — no copy, just another ref count increment.
         fanout.publish(session_id.clone(), seq, raw);
     }
@@ -375,7 +397,9 @@ async fn run_raw_stderr_capture_loop(
 
         let seq = sequence.fetch_add(1, Ordering::Relaxed);
         let raw = buf.copy_to_bytes(buf.len());
-        let _ = publisher.publish_raw_event(&session_id, seq, raw.clone()).await;
+        let _ = publisher
+            .publish_raw_event(&session_id, seq, raw.clone())
+            .await;
         fanout.publish(session_id.clone(), seq, raw);
     }
 }
@@ -412,7 +436,7 @@ async fn perform_acp_handshake(
 
     // Perform handshake: initialize + new_session
     let chat_session_id = initialize_session_connection(Arc::clone(&connection)).await?;
-    
+
     // Update capture context with session info
     capture_contexts.assign_session(&capture_context.acp_subprocess_id, chat_session_id.clone());
     let bootstrap_run_id = ChatRunId::bootstrap_for_session(&chat_session_id);
@@ -508,14 +532,22 @@ fn startup_timeout_error() -> std::io::Error {
 }
 
 fn missing_stderr_error() -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stderr missing")
+    std::io::Error::new(
+        std::io::ErrorKind::BrokenPipe,
+        "ACP subprocess stderr missing",
+    )
 }
 
 fn missing_stdin_error() -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stdin missing")
+    std::io::Error::new(
+        std::io::ErrorKind::BrokenPipe,
+        "ACP subprocess stdin missing",
+    )
 }
 
 fn missing_stdout_error() -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "ACP subprocess stdout missing")
+    std::io::Error::new(
+        std::io::ErrorKind::BrokenPipe,
+        "ACP subprocess stdout missing",
+    )
 }
-
