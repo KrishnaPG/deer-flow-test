@@ -1,21 +1,16 @@
 use std::path::Path;
 
 use berg10_storage_catalog::{
-    Berg10Catalog,
-    CatalogConfig,
-    HierarchyPathSegment,
-    HierarchyStatus,
-    VirtualFolderHierarchy,
+    Berg10Catalog, CatalogConfig, HierarchyPathSegment, HierarchyStatus, VirtualFolderHierarchy,
 };
 use berg10_storage_vfs::{StorageBackend, StorageConfig};
 use berg10_warm_cache::WarmCacheConfig;
 use chrono::Utc;
 use deer_foundation_contracts::{
-    AppendDataRequest, CanonicalLevel, CanonicalPlane, IdempotencyKey, LogicalWriteId,
-    MissionId, RunId, AgentId, ArtifactId, TraceId,
-    StorageCorrelationIds, StorageHierarchyTag, StorageLayout, StorageLineageRefs,
-    StoragePayloadDescriptor, StoragePayloadFormat, StoragePayloadKind,
-    StorageQosPolicy, StorageQosTemplate, StorageRequestMetadata, WriterId,
+    AgentId, AppendDataRequest, ArtifactId, CanonicalLevel, CanonicalPlane, IdempotencyKey,
+    LogicalWriteId, MissionId, RunId, StorageCorrelationIds, StorageHierarchyTag, StorageLayout,
+    StorageLineageRefs, StoragePayloadDescriptor, StoragePayloadFormat, StoragePayloadKind,
+    StorageQosPolicy, StorageQosTemplate, StorageRequestMetadata, TraceId, WriterId,
 };
 use deer_storage_core::ingestion::IngestionBridge;
 
@@ -93,10 +88,17 @@ async fn e2e_single_file_ingest_and_checkout() {
 
     let (catalog, _vfs) = bridge.into_parts();
 
-    let record = catalog.get_content(&file_saved.content_hash).await.unwrap().unwrap();
+    let record = catalog
+        .get_content(&file_saved.content_hash)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(record.content_hash.as_str(), file_saved.content_hash);
     assert_eq!(record.payload_kind.as_str(), "chat-note");
-    assert_eq!(record.logical_filename.as_ref().map(|v| v.as_str()), Some("greeting.jsonl"));
+    assert_eq!(
+        record.logical_filename.as_ref().map(|v| v.as_str()),
+        Some("greeting.jsonl")
+    );
     assert_eq!(record.routing_tags.len(), 1);
     assert_eq!(record.routing_tags[0].key.as_str(), "env");
     assert_eq!(record.routing_tags[0].value.as_str(), "test");
@@ -113,12 +115,19 @@ async fn e2e_single_file_ingest_and_checkout() {
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    catalog.create_virtual_folder_hierarchy(&hierarchy).await.unwrap();
+    catalog
+        .create_virtual_folder_hierarchy(&hierarchy)
+        .await
+        .unwrap();
 
     let warm_config = WarmCacheConfig::with_base_dir(base);
-    let warm_cache = berg10_warm_cache::WarmCache::new(warm_config.clone(), catalog.clone(), vfs_for_checkout);
+    let warm_cache =
+        berg10_warm_cache::WarmCache::new(warm_config.clone(), catalog.clone(), vfs_for_checkout);
 
-    let receipt = warm_cache.checkout_hierarchy("test-hierarchy").await.unwrap();
+    let receipt = warm_cache
+        .checkout_hierarchy("test-hierarchy")
+        .await
+        .unwrap();
     assert_eq!(receipt.file_count, 1);
 
     let checkout_dir = Path::new(&receipt.checkout_path);
@@ -156,7 +165,11 @@ async fn e2e_single_file_ingest_and_checkout() {
             } else {
                 target
             };
-            assert!(absolute_target.exists(), "Symlink target does not exist: {:?}", absolute_target);
+            assert!(
+                absolute_target.exists(),
+                "Symlink target does not exist: {:?}",
+                absolute_target
+            );
             let content = std::fs::read(&absolute_target).unwrap();
             assert_eq!(content, b"hello from e2e single file test");
         }
@@ -183,34 +196,58 @@ async fn e2e_multiple_files_with_tag_filtering_and_hierarchy_ordering() {
     let requests = vec![
         make_test_request(
             b"adele song 2024".to_vec(),
-            "A", CanonicalLevel::L0, CanonicalPlane::AsIs,
-            "mp3", "mp3",
+            "A",
+            CanonicalLevel::L0,
+            CanonicalPlane::AsIs,
+            "mp3",
+            "mp3",
             Some("rolling-in-the-deep.mp3"),
-            vec![("singer".into(), "Adele".into()), ("year".into(), "2024".into())],
+            vec![
+                ("singer".into(), "Adele".into()),
+                ("year".into(), "2024".into()),
+            ],
             "write-adele-2024",
         ),
         make_test_request(
             b"adele song 2023".to_vec(),
-            "A", CanonicalLevel::L0, CanonicalPlane::AsIs,
-            "mp3", "mp3",
+            "A",
+            CanonicalLevel::L0,
+            CanonicalPlane::AsIs,
+            "mp3",
+            "mp3",
             Some("easy-on-me.mp3"),
-            vec![("singer".into(), "Adele".into()), ("year".into(), "2023".into())],
+            vec![
+                ("singer".into(), "Adele".into()),
+                ("year".into(), "2023".into()),
+            ],
             "write-adele-2023",
         ),
         make_test_request(
             b"beyonce song 2024".to_vec(),
-            "A", CanonicalLevel::L0, CanonicalPlane::AsIs,
-            "mp3", "mp3",
+            "A",
+            CanonicalLevel::L0,
+            CanonicalPlane::AsIs,
+            "mp3",
+            "mp3",
             Some("break-my-soul.mp3"),
-            vec![("singer".into(), "Beyonce".into()), ("year".into(), "2024".into())],
+            vec![
+                ("singer".into(), "Beyonce".into()),
+                ("year".into(), "2024".into()),
+            ],
             "write-beyonce-2024",
         ),
         make_test_request(
             b"some transcript".to_vec(),
-            "A", CanonicalLevel::L0, CanonicalPlane::AsIs,
-            "chat-note", "jsonl",
+            "A",
+            CanonicalLevel::L0,
+            CanonicalPlane::AsIs,
+            "chat-note",
+            "jsonl",
             Some("transcript.jsonl"),
-            vec![("singer".into(), "N/A".into()), ("year".into(), "2024".into())],
+            vec![
+                ("singer".into(), "N/A".into()),
+                ("year".into(), "2024".into()),
+            ],
             "write-transcript",
         ),
     ];
@@ -225,28 +262,44 @@ async fn e2e_multiple_files_with_tag_filtering_and_hierarchy_ordering() {
 
     let hierarchy_by_singer = VirtualFolderHierarchy {
         hierarchy_name: "music-by-singer".into(),
-        hierarchy_order: vec![HierarchyPathSegment::Tag("singer".into()), HierarchyPathSegment::Tag("year".into())],
+        hierarchy_order: vec![
+            HierarchyPathSegment::Tag("singer".into()),
+            HierarchyPathSegment::Tag("year".into()),
+        ],
         filter_expr: Some("payload_kind = 'mp3'".to_string()),
         status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    catalog.create_virtual_folder_hierarchy(&hierarchy_by_singer).await.unwrap();
+    catalog
+        .create_virtual_folder_hierarchy(&hierarchy_by_singer)
+        .await
+        .unwrap();
 
     let hierarchy_by_year = VirtualFolderHierarchy {
         hierarchy_name: "music-by-year".into(),
-        hierarchy_order: vec![HierarchyPathSegment::Tag("year".into()), HierarchyPathSegment::Tag("singer".into())],
+        hierarchy_order: vec![
+            HierarchyPathSegment::Tag("year".into()),
+            HierarchyPathSegment::Tag("singer".into()),
+        ],
         filter_expr: Some("payload_kind = 'mp3'".to_string()),
         status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    catalog.create_virtual_folder_hierarchy(&hierarchy_by_year).await.unwrap();
+    catalog
+        .create_virtual_folder_hierarchy(&hierarchy_by_year)
+        .await
+        .unwrap();
 
     let warm_config = WarmCacheConfig::with_base_dir(base);
-    let warm_cache = berg10_warm_cache::WarmCache::new(warm_config.clone(), catalog.clone(), vfs_for_checkout);
+    let warm_cache =
+        berg10_warm_cache::WarmCache::new(warm_config.clone(), catalog.clone(), vfs_for_checkout);
 
-    let singer_receipt = warm_cache.checkout_hierarchy("music-by-singer").await.unwrap();
+    let singer_receipt = warm_cache
+        .checkout_hierarchy("music-by-singer")
+        .await
+        .unwrap();
     assert_eq!(singer_receipt.file_count, 3);
 
     let singer_checkout = Path::new(&singer_receipt.checkout_path);
@@ -276,7 +329,10 @@ async fn e2e_multiple_files_with_tag_filtering_and_hierarchy_ordering() {
     assert!(adele_2023_found, "adele/2023 symlink not found");
     assert!(beyonce_2024_found, "beyonce/2024 symlink not found");
 
-    let year_receipt = warm_cache.checkout_hierarchy("music-by-year").await.unwrap();
+    let year_receipt = warm_cache
+        .checkout_hierarchy("music-by-year")
+        .await
+        .unwrap();
     assert_eq!(year_receipt.file_count, 3);
 
     let year_checkout = Path::new(&year_receipt.checkout_path);
@@ -295,13 +351,25 @@ async fn e2e_multiple_files_with_tag_filtering_and_hierarchy_ordering() {
             }
         }
     }
-    assert!(year_2024_adele_found, "2024/adele symlink not found in year hierarchy");
-    assert!(year_2024_beyonce_found, "2024/beyonce symlink not found in year hierarchy");
+    assert!(
+        year_2024_adele_found,
+        "2024/adele symlink not found in year hierarchy"
+    );
+    assert!(
+        year_2024_beyonce_found,
+        "2024/beyonce symlink not found in year hierarchy"
+    );
 
-    let files = catalog.query_content("payload_kind = 'chat-note'").await.unwrap();
+    let files = catalog
+        .query_content("payload_kind = 'chat-note'")
+        .await
+        .unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].payload_kind.as_str(), "chat-note");
-    assert_eq!(files[0].logical_filename.as_ref().map(|v| v.as_str()), Some("transcript.jsonl"));
+    assert_eq!(
+        files[0].logical_filename.as_ref().map(|v| v.as_str()),
+        Some("transcript.jsonl")
+    );
 }
 
 #[tokio::test]
@@ -324,16 +392,22 @@ async fn e2e_content_deduplication_same_bytes_different_metadata() {
 
     let req1 = make_test_request(
         same_payload.clone(),
-        "A", CanonicalLevel::L0, CanonicalPlane::AsIs,
-        "mp3", "mp3",
+        "A",
+        CanonicalLevel::L0,
+        CanonicalPlane::AsIs,
+        "mp3",
+        "mp3",
         Some("song-a.mp3"),
         vec![("singer".into(), "Adele".into())],
         "write-dedup-1",
     );
     let req2 = make_test_request(
         same_payload.clone(),
-        "B", CanonicalLevel::L1, CanonicalPlane::AsIs,
-        "mp3", "mp3",
+        "B",
+        CanonicalLevel::L1,
+        CanonicalPlane::AsIs,
+        "mp3",
+        "mp3",
         Some("song-b.mp3"),
         vec![("singer".into(), "Beyonce".into())],
         "write-dedup-2",
@@ -342,19 +416,39 @@ async fn e2e_content_deduplication_same_bytes_different_metadata() {
     let saved1 = bridge.ingest(&req1).await.unwrap();
     let saved2 = bridge.ingest(&req2).await.unwrap();
 
-    assert_eq!(saved1.content_hash, saved2.content_hash, "Identical content should produce identical hashes");
+    assert_eq!(
+        saved1.content_hash, saved2.content_hash,
+        "Identical content should produce identical hashes"
+    );
 
     let (catalog, _vfs) = bridge.into_parts();
 
-    let record1 = catalog.get_content(&saved1.content_hash).await.unwrap().unwrap();
-    assert_eq!(record1.logical_filename.as_ref().map(|v| v.as_str()), Some("song-a.mp3"));
+    let record1 = catalog
+        .get_content(&saved1.content_hash)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        record1.logical_filename.as_ref().map(|v| v.as_str()),
+        Some("song-a.mp3")
+    );
 
-    let record2 = catalog.get_content(&saved2.content_hash).await.unwrap().unwrap();
-    assert_eq!(record2.logical_filename.as_ref().map(|v| v.as_str()), Some("song-a.mp3"));
+    let record2 = catalog
+        .get_content(&saved2.content_hash)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        record2.logical_filename.as_ref().map(|v| v.as_str()),
+        Some("song-a.mp3")
+    );
 
     let _blob_path = format!("{}/{}", vfs_root, saved1.content_hash);
     let blob_count = std::fs::read_dir(&vfs_root).unwrap().count();
-    assert_eq!(blob_count, 1, "Only one blob should exist for identical content");
+    assert_eq!(
+        blob_count, 1,
+        "Only one blob should exist for identical content"
+    );
 
     let data = vfs_for_read.read(&saved1.content_hash).await.unwrap();
     assert_eq!(data, same_payload);
@@ -378,24 +472,33 @@ async fn e2e_filter_by_multiple_attributes() {
 
     let req_l0 = make_test_request(
         b"level zero content".to_vec(),
-        "A", CanonicalLevel::L0, CanonicalPlane::AsIs,
-        "chat-note", "jsonl",
+        "A",
+        CanonicalLevel::L0,
+        CanonicalPlane::AsIs,
+        "chat-note",
+        "jsonl",
         Some("l0-note.jsonl"),
         vec![("env".into(), "prod".into())],
         "write-l0",
     );
     let req_l1 = make_test_request(
         b"level one content".to_vec(),
-        "A", CanonicalLevel::L1, CanonicalPlane::AsIs,
-        "chat-note", "jsonl",
+        "A",
+        CanonicalLevel::L1,
+        CanonicalPlane::AsIs,
+        "chat-note",
+        "jsonl",
         Some("l1-note.jsonl"),
         vec![("env".into(), "prod".into())],
         "write-l1",
     );
     let req_l0_chunks = make_test_request(
         b"level zero chunks".to_vec(),
-        "A", CanonicalLevel::L0, CanonicalPlane::Chunks,
-        "chunks", "bin",
+        "A",
+        CanonicalLevel::L0,
+        CanonicalPlane::Chunks,
+        "chunks",
+        "bin",
         Some("l0-chunks.bin"),
         vec![("env".into(), "prod".into())],
         "write-l0-chunks",
@@ -410,9 +513,15 @@ async fn e2e_filter_by_multiple_attributes() {
     let l0_files = catalog.query_content("level = 'L0'").await.unwrap();
     assert_eq!(l0_files.len(), 2);
 
-    let l0_as_is = catalog.query_content("level = 'L0' AND plane = 'as-is'").await.unwrap();
+    let l0_as_is = catalog
+        .query_content("level = 'L0' AND plane = 'as-is'")
+        .await
+        .unwrap();
     assert_eq!(l0_as_is.len(), 1);
-    assert_eq!(l0_as_is[0].logical_filename.as_ref().map(|v| v.as_str()), Some("l0-note.jsonl"));
+    assert_eq!(
+        l0_as_is[0].logical_filename.as_ref().map(|v| v.as_str()),
+        Some("l0-note.jsonl")
+    );
 
     let chunks_files = catalog.query_content("plane = 'chunks'").await.unwrap();
     assert_eq!(chunks_files.len(), 1);
@@ -420,16 +529,23 @@ async fn e2e_filter_by_multiple_attributes() {
 
     let hierarchy = VirtualFolderHierarchy {
         hierarchy_name: "by-level".into(),
-        hierarchy_order: vec![HierarchyPathSegment::DataLevel, HierarchyPathSegment::StoragePlane],
+        hierarchy_order: vec![
+            HierarchyPathSegment::DataLevel,
+            HierarchyPathSegment::StoragePlane,
+        ],
         filter_expr: Some("level = 'L0'".to_string()),
         status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    catalog.create_virtual_folder_hierarchy(&hierarchy).await.unwrap();
+    catalog
+        .create_virtual_folder_hierarchy(&hierarchy)
+        .await
+        .unwrap();
 
     let warm_config = WarmCacheConfig::with_base_dir(base);
-    let warm_cache = berg10_warm_cache::WarmCache::new(warm_config.clone(), catalog.clone(), vfs_for_checkout);
+    let warm_cache =
+        berg10_warm_cache::WarmCache::new(warm_config.clone(), catalog.clone(), vfs_for_checkout);
 
     let receipt = warm_cache.checkout_hierarchy("by-level").await.unwrap();
     assert_eq!(receipt.file_count, 2);

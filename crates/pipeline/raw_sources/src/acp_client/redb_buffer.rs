@@ -18,11 +18,13 @@ impl RedbRawEventPublisher {
     pub fn new(path: &StagingDatabasePath) -> Result<Self, String> {
         let db = Database::create(path.as_path())
             .map_err(|e| format!("Failed to open redb database: {}", e))?;
-        
+
         // Ensure table exists
         let write_txn = db.begin_write().map_err(|e| e.to_string())?;
         {
-            let _ = write_txn.open_table(EVENTS_TABLE).map_err(|e| e.to_string())?;
+            let _ = write_txn
+                .open_table(EVENTS_TABLE)
+                .map_err(|e| e.to_string())?;
         }
         write_txn.commit().map_err(|e| e.to_string())?;
 
@@ -48,24 +50,34 @@ impl RawEventPublisher for RedbRawEventPublisher {
         // spawn_blocking moves the write off the async runtime.
         // raw_bytes is moved (not cloned) into the blocking task.
         tokio::task::spawn_blocking(move || {
-            let write_txn = db.begin_write().map_err(|e| {
-                RawEventPublishError::Transport { message: format!("Failed to begin write txn: {}", e) }
-            })?;
+            let write_txn = db
+                .begin_write()
+                .map_err(|e| RawEventPublishError::Transport {
+                    message: format!("Failed to begin write txn: {}", e),
+                })?;
             {
                 let mut table = write_txn.open_table(EVENTS_TABLE).map_err(|e| {
-                    RawEventPublishError::Transport { message: format!("Failed to open table: {}", e) }
+                    RawEventPublishError::Transport {
+                        message: format!("Failed to open table: {}", e),
+                    }
                 })?;
-                table.insert(key.as_slice(), raw_bytes.as_ref()).map_err(|e| {
-                    RawEventPublishError::Transport { message: format!("Failed to insert: {}", e) }
-                })?;
+                table
+                    .insert(key.as_slice(), raw_bytes.as_ref())
+                    .map_err(|e| RawEventPublishError::Transport {
+                        message: format!("Failed to insert: {}", e),
+                    })?;
             }
-            write_txn.commit().map_err(|e| {
-                RawEventPublishError::Transport { message: format!("Failed to commit: {}", e) }
-            })?;
+            write_txn
+                .commit()
+                .map_err(|e| RawEventPublishError::Transport {
+                    message: format!("Failed to commit: {}", e),
+                })?;
             Ok(())
         })
         .await
-        .map_err(|e| RawEventPublishError::Transport { message: format!("Task panicked: {}", e) })??;
+        .map_err(|e| RawEventPublishError::Transport {
+            message: format!("Task panicked: {}", e),
+        })??;
 
         Ok(())
     }
@@ -91,20 +103,28 @@ impl RawEventReader for RedbRawEventPublisher {
         let db = Arc::clone(&self.db);
 
         tokio::task::spawn_blocking(move || {
-            let read_txn = db.begin_read().map_err(|e| {
-                RawEventPublishError::Transport { message: format!("Failed to begin read txn: {}", e) }
-            })?;
-            let table = read_txn.open_table(EVENTS_TABLE).map_err(|e| {
-                RawEventPublishError::Transport { message: format!("Failed to open table: {}", e) }
-            })?;
+            let read_txn = db
+                .begin_read()
+                .map_err(|e| RawEventPublishError::Transport {
+                    message: format!("Failed to begin read txn: {}", e),
+                })?;
+            let table =
+                read_txn
+                    .open_table(EVENTS_TABLE)
+                    .map_err(|e| RawEventPublishError::Transport {
+                        message: format!("Failed to open table: {}", e),
+                    })?;
 
             let mut events = Vec::new();
             let range = start_key.as_slice()..=end_key.as_slice();
-            for item in table.range(range).map_err(|e| {
-                RawEventPublishError::Transport { message: format!("Failed to read range: {}", e) }
-            })? {
-                let (_, value) = item.map_err(|e| {
-                    RawEventPublishError::Transport { message: format!("Failed to read item: {}", e) }
+            for item in table
+                .range(range)
+                .map_err(|e| RawEventPublishError::Transport {
+                    message: format!("Failed to read range: {}", e),
+                })?
+            {
+                let (_, value) = item.map_err(|e| RawEventPublishError::Transport {
+                    message: format!("Failed to read item: {}", e),
                 })?;
                 events.push(Bytes::copy_from_slice(value.value()));
             }
@@ -112,6 +132,8 @@ impl RawEventReader for RedbRawEventPublisher {
             Ok(events)
         })
         .await
-        .map_err(|e| RawEventPublishError::Transport { message: format!("Task panicked: {}", e) })?
+        .map_err(|e| RawEventPublishError::Transport {
+            message: format!("Task panicked: {}", e),
+        })?
     }
 }

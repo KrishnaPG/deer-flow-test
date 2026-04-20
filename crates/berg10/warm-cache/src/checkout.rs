@@ -5,12 +5,8 @@ use chrono::Utc;
 use tracing;
 
 use berg10_storage_catalog::{
-    Berg10Catalog,
-    ContentRecord,
-    HierarchyCheckoutInfo,
-    HierarchyCheckoutReceipt,
-    HierarchyPathSegment,
-    HierarchyStatus,
+    Berg10Catalog, ContentRecord, HierarchyCheckoutInfo, HierarchyCheckoutReceipt,
+    HierarchyPathSegment, HierarchyStatus,
 };
 use berg10_storage_vfs::StorageBackend;
 
@@ -25,14 +21,29 @@ pub struct WarmCache {
 
 impl WarmCache {
     pub fn new(config: WarmCacheConfig, catalog: Berg10Catalog, vfs: StorageBackend) -> Self {
-        Self { config, catalog, vfs }
+        Self {
+            config,
+            catalog,
+            vfs,
+        }
     }
 
     /// Materialize a virtual folder hierarchy as a symlink tree under base_dir/checkouts/<hierarchy_name>/.
-    pub async fn checkout_hierarchy(&self, hierarchy_name: &str) -> Result<HierarchyCheckoutReceipt> {
-        let files = self.catalog.resolve_virtual_folder_hierarchy(hierarchy_name).await?;
-        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await?;
-        let hierarchy = hierarchies.iter().find(|h| h.hierarchy_name.as_str() == hierarchy_name);
+    pub async fn checkout_hierarchy(
+        &self,
+        hierarchy_name: &str,
+    ) -> Result<HierarchyCheckoutReceipt> {
+        let files = self
+            .catalog
+            .resolve_virtual_folder_hierarchy(hierarchy_name)
+            .await?;
+        let hierarchies = self
+            .catalog
+            .list_virtual_folder_hierarchies(Some(HierarchyStatus::Active))
+            .await?;
+        let hierarchy = hierarchies
+            .iter()
+            .find(|h| h.hierarchy_name.as_str() == hierarchy_name);
 
         let hierarchy_order = match hierarchy {
             Some(v) => v.hierarchy_order.clone(),
@@ -134,7 +145,10 @@ impl WarmCache {
     }
 
     /// Build the symlink path within the checkout directory based on hierarchy order.
-    pub fn build_hierarchy_path(file: &ContentRecord, hierarchy_order: &[HierarchyPathSegment]) -> String {
+    pub fn build_hierarchy_path(
+        file: &ContentRecord,
+        hierarchy_order: &[HierarchyPathSegment],
+    ) -> String {
         let mut parts = Vec::new();
 
         for attr in hierarchy_order {
@@ -174,7 +188,10 @@ impl WarmCache {
 
     /// List all active hierarchy checkouts.
     pub async fn list_checkouts(&self) -> Result<Vec<HierarchyCheckoutInfo>> {
-        let hierarchies = self.catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await?;
+        let hierarchies = self
+            .catalog
+            .list_virtual_folder_hierarchies(Some(HierarchyStatus::Active))
+            .await?;
         let mut infos = Vec::new();
 
         for hierarchy in &hierarchies {
@@ -199,7 +216,9 @@ impl WarmCache {
             std::fs::remove_dir_all(&checkout_path)?;
         }
 
-        self.catalog.update_virtual_folder_hierarchy_status(hierarchy_name, HierarchyStatus::Inactive).await?;
+        self.catalog
+            .update_virtual_folder_hierarchy_status(hierarchy_name, HierarchyStatus::Inactive)
+            .await?;
         tracing::info!(hierarchy_name = %hierarchy_name, "Hierarchy checkout deactivated");
         Ok(())
     }
@@ -207,7 +226,9 @@ impl WarmCache {
     /// Remove a hierarchy checkout: delete symlink tree and remove hierarchy definition.
     pub async fn remove_checkout(&self, hierarchy_name: &str) -> Result<()> {
         self.deactivate_checkout(hierarchy_name).await?;
-        self.catalog.delete_virtual_folder_hierarchy(hierarchy_name).await?;
+        self.catalog
+            .delete_virtual_folder_hierarchy(hierarchy_name)
+            .await?;
         tracing::info!(hierarchy_name = %hierarchy_name, "Hierarchy checkout removed");
         Ok(())
     }
@@ -263,8 +284,14 @@ mod tests {
     #[test]
     fn config_paths_are_correct() {
         let config = WarmCacheConfig::with_base_dir("/base");
-        assert_eq!(config.checkout_path("music-by-year"), "/base/vfs/checkouts/music-by-year");
-        assert_eq!(config.content_path("abc123"), "/base/vfs/content/ab/c1/23.blob");
+        assert_eq!(
+            config.checkout_path("music-by-year"),
+            "/base/vfs/checkouts/music-by-year"
+        );
+        assert_eq!(
+            config.content_path("abc123"),
+            "/base/vfs/content/ab/c1/23.blob"
+        );
     }
 
     #[test]

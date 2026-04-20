@@ -7,24 +7,11 @@ pub mod thread_gateway;
 pub mod upload_gateway;
 
 pub use acp_client::{
-    AcpClientSessionConfig,
-    OurAcpClient,
-    AcpChatRunRegistry,
-    AcpChatSessionRegistry,
-    AcpJsonRpcRequestId,
-    AcpResponseStreamEvent,
-    AcpResponseStreamEventKind,
-    AcpSubprocessCommand,
-    AcpSubprocessEvent,
-    AcpSubprocessId,
-    AcpSubprocessLifecycleKind,
-    ChatRunId,
-    ChatSessionId,
-    ChatThreadId,
-    RawEventPublisher,
-    RawEventReader,
-    RawEventFanout,
-    RedbRawEventPublisher,
+    run_hermes_smoke_prompt, run_hermes_smoke_prompt_with_text, AcpChatRunRegistry,
+    AcpChatSessionRegistry, AcpClientSessionConfig, AcpJsonRpcRequestId, AcpResponseStreamEvent,
+    AcpResponseStreamEventKind, AcpSubprocessCommand, AcpSubprocessEvent, AcpSubprocessId,
+    AcpSubprocessLifecycleKind, ChatRunId, ChatSessionId, ChatThreadId, HermesSmokeReport,
+    OurAcpClient, RawEventFanout, RawEventPublisher, RawEventReader, RedbRawEventPublisher,
 };
 pub use artifact_gateway::{preview_artifact, ArtifactAccess};
 pub use deerflow_driver::DeerFlowDriver;

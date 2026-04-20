@@ -1,14 +1,6 @@
 use berg10_storage_catalog::{
-    Berg10Catalog,
-    Berg10DataHierarchy,
-    Berg10DataLevel,
-    Berg10StoragePlane,
-    CatalogConfig,
-    ContentRecord,
-    ContentTag,
-    HierarchyPathSegment,
-    HierarchyStatus,
-    LineageRef,
+    Berg10Catalog, Berg10DataHierarchy, Berg10DataLevel, Berg10StoragePlane, CatalogConfig,
+    ContentRecord, ContentTag, HierarchyPathSegment, HierarchyStatus, LineageRef,
     VirtualFolderHierarchy,
 };
 use berg10_storage_vfs::ContentHash;
@@ -39,10 +31,17 @@ async fn end_to_end_file_registration_and_query() {
     };
 
     catalog.register_content(&record).await.unwrap();
-    let retrieved = catalog.get_content(record.content_hash.as_str()).await.unwrap().unwrap();
+    let retrieved = catalog
+        .get_content(record.content_hash.as_str())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(retrieved.content_hash, record.content_hash);
     assert_eq!(retrieved.payload_kind.as_str(), "chat-note");
-    assert_eq!(retrieved.logical_filename.as_ref().map(|v| v.as_str()), Some("note.jsonl"));
+    assert_eq!(
+        retrieved.logical_filename.as_ref().map(|v| v.as_str()),
+        Some("note.jsonl")
+    );
 }
 
 #[tokio::test]
@@ -54,21 +53,48 @@ async fn end_to_end_virtual_folder_hierarchy_management() {
 
     let hierarchy = VirtualFolderHierarchy {
         hierarchy_name: "integration-test-hierarchy".into(),
-        hierarchy_order: vec![HierarchyPathSegment::DataLevel, HierarchyPathSegment::PayloadKind],
+        hierarchy_order: vec![
+            HierarchyPathSegment::DataLevel,
+            HierarchyPathSegment::PayloadKind,
+        ],
         filter_expr: Some("payload_kind = 'chat-note'".to_string()),
         status: HierarchyStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
 
-    catalog.create_virtual_folder_hierarchy(&hierarchy).await.unwrap();
+    catalog
+        .create_virtual_folder_hierarchy(&hierarchy)
+        .await
+        .unwrap();
 
-    let hierarchies = catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await.unwrap();
+    let hierarchies = catalog
+        .list_virtual_folder_hierarchies(Some(HierarchyStatus::Active))
+        .await
+        .unwrap();
     assert_eq!(hierarchies.len(), 1);
-    assert_eq!(hierarchies[0].hierarchy_name.as_str(), "integration-test-hierarchy");
-    assert_eq!(hierarchies[0].hierarchy_order, vec![HierarchyPathSegment::DataLevel, HierarchyPathSegment::PayloadKind]);
+    assert_eq!(
+        hierarchies[0].hierarchy_name.as_str(),
+        "integration-test-hierarchy"
+    );
+    assert_eq!(
+        hierarchies[0].hierarchy_order,
+        vec![
+            HierarchyPathSegment::DataLevel,
+            HierarchyPathSegment::PayloadKind
+        ]
+    );
 
-    catalog.update_virtual_folder_hierarchy_status("integration-test-hierarchy", HierarchyStatus::Inactive).await.unwrap();
-    let active = catalog.list_virtual_folder_hierarchies(Some(HierarchyStatus::Active)).await.unwrap();
+    catalog
+        .update_virtual_folder_hierarchy_status(
+            "integration-test-hierarchy",
+            HierarchyStatus::Inactive,
+        )
+        .await
+        .unwrap();
+    let active = catalog
+        .list_virtual_folder_hierarchies(Some(HierarchyStatus::Active))
+        .await
+        .unwrap();
     assert_eq!(active.len(), 0);
 }

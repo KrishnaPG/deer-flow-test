@@ -1,9 +1,9 @@
-use opendal::{Operator, services, layers};
+use opendal::{layers, services, Operator};
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::content_addressing::{hash_content, ContentHash};
 use crate::lakefs::LakeFsClient;
-use crate::content_addressing::{ContentHash, hash_content};
 
 #[derive(Error, Debug)]
 pub enum StorageError {
@@ -112,17 +112,26 @@ impl StorageBackend {
         let operator = Self::build_operator(config)?;
         let lakefs_client = match &config.backend {
             BackendType::LakeFs => {
-                let host = config.lakefs_host.as_deref()
+                let host = config
+                    .lakefs_host
+                    .as_deref()
                     .unwrap_or("http://localhost:8000");
-                let repo = config.lakefs_repo.as_deref()
+                let repo = config
+                    .lakefs_repo
+                    .as_deref()
                     .ok_or(StorageError::MissingConfig("lakefs_repo"))?;
-                let branch = config.lakefs_branch.as_deref()
-                    .unwrap_or("main");
-                let access_key = config.lakefs_access_key.as_deref()
+                let branch = config.lakefs_branch.as_deref().unwrap_or("main");
+                let access_key = config
+                    .lakefs_access_key
+                    .as_deref()
                     .ok_or(StorageError::MissingConfig("lakefs_access_key"))?;
-                let secret_key = config.lakefs_secret_key.as_deref()
+                let secret_key = config
+                    .lakefs_secret_key
+                    .as_deref()
                     .ok_or(StorageError::MissingConfig("lakefs_secret_key"))?;
-                Some(LakeFsClient::new(host, repo, branch, access_key, secret_key))
+                Some(LakeFsClient::new(
+                    host, repo, branch, access_key, secret_key,
+                ))
             }
             _ => None,
         };
@@ -184,9 +193,10 @@ impl StorageBackend {
                     .bucket(config.lakefs_repo.as_deref().unwrap_or("default"))
                     .root(&config.root)
                     .endpoint(
-                        config.lakefs_host
+                        config
+                            .lakefs_host
                             .as_deref()
-                            .unwrap_or("http://localhost:8000")
+                            .unwrap_or("http://localhost:8000"),
                     );
                 if let Some(ak) = &config.lakefs_access_key {
                     builder = builder.access_key_id(ak);
@@ -225,10 +235,13 @@ impl StorageBackend {
 
         match &self.backend_type {
             BackendType::LakeFs => {
-                let client = self.lakefs_client.as_ref()
-                    .ok_or(StorageError::LakeFsApi("LakeFS client not initialized".into()))?;
+                let client = self.lakefs_client.as_ref().ok_or(StorageError::LakeFsApi(
+                    "LakeFS client not initialized".into(),
+                ))?;
                 let data = data.into();
-                client.upload_object(key, data).await
+                client
+                    .upload_object(key, data)
+                    .await
                     .map_err(|e| StorageError::LakeFsApi(e.to_string()))?;
                 Ok(())
             }
@@ -275,9 +288,12 @@ impl StorageBackend {
     pub async fn commit(&self, message: &str) -> Result<Option<String>, StorageError> {
         match &self.backend_type {
             BackendType::LakeFs => {
-                let client = self.lakefs_client.as_ref()
-                    .ok_or(StorageError::LakeFsApi("LakeFS client not initialized".into()))?;
-                let commit = client.commit(message, None).await
+                let client = self.lakefs_client.as_ref().ok_or(StorageError::LakeFsApi(
+                    "LakeFS client not initialized".into(),
+                ))?;
+                let commit = client
+                    .commit(message, None)
+                    .await
                     .map_err(|e| StorageError::LakeFsApi(e.to_string()))?;
                 Ok(Some(commit.commit_id))
             }
@@ -359,9 +375,18 @@ mod tests {
         assert!(matches!("fs".parse::<BackendType>(), Ok(BackendType::Fs)));
         assert!(matches!("s3".parse::<BackendType>(), Ok(BackendType::S3)));
         assert!(matches!("gcs".parse::<BackendType>(), Ok(BackendType::Gcs)));
-        assert!(matches!("azure".parse::<BackendType>(), Ok(BackendType::Azure)));
-        assert!(matches!("lakefs".parse::<BackendType>(), Ok(BackendType::LakeFs)));
-        assert!(matches!("memory".parse::<BackendType>(), Ok(BackendType::Memory)));
+        assert!(matches!(
+            "azure".parse::<BackendType>(),
+            Ok(BackendType::Azure)
+        ));
+        assert!(matches!(
+            "lakefs".parse::<BackendType>(),
+            Ok(BackendType::LakeFs)
+        ));
+        assert!(matches!(
+            "memory".parse::<BackendType>(),
+            Ok(BackendType::Memory)
+        ));
         assert!("unknown".parse::<BackendType>().is_err());
     }
 }

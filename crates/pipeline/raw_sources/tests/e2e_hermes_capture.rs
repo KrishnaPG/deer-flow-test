@@ -3,19 +3,19 @@ use std::time::Duration;
 
 use deer_foundation_paths::BaseDir;
 use deer_pipeline_raw_sources::{
-    AcpClientSessionConfig, OurAcpClient, RawEventFanout, RedbRawEventPublisher,
-    RawEventReader,
+    AcpClientSessionConfig, OurAcpClient, RawEventFanout, RawEventReader, RedbRawEventPublisher,
 };
 
 #[tokio::test]
 async fn test_hermes_e2e_capture() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let base_dir = BaseDir::new(temp_dir.path().to_path_buf());
-    
+
     std::fs::create_dir_all(base_dir.incoming().as_path()).unwrap();
     let staging_db_path = base_dir.incoming().staging_db();
 
-    let publisher = Arc::new(RedbRawEventPublisher::new(&staging_db_path).expect("Failed to open DB"));
+    let publisher =
+        Arc::new(RedbRawEventPublisher::new(&staging_db_path).expect("Failed to open DB"));
     let raw_fanout = RawEventFanout::default();
     let mut rx = raw_fanout.subscribe();
 
@@ -26,13 +26,10 @@ async fn test_hermes_e2e_capture() {
         .expect("No ACP agent found. Set $ACP_AGENT_BIN or install hermes.")
         .with_working_directory(temp_dir.path().to_path_buf());
 
-    let _session_id = tokio::time::timeout(
-        Duration::from_secs(30),
-        client.connect_session(config),
-    )
-    .await
-    .expect("Hermes connection timed out after 30s")
-    .expect("Hermes connection failed");
+    let _session_id = tokio::time::timeout(Duration::from_secs(30), client.connect_session(config))
+        .await
+        .expect("Hermes connection timed out after 30s")
+        .expect("Hermes connection failed");
 
     // Give some time for fanout messages to arrive and DB writes to sync
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -46,12 +43,21 @@ async fn test_hermes_e2e_capture() {
         fanout_messages.push(bytes);
     }
 
-    assert!(!fanout_messages.is_empty(), "Expected fanout messages from Hermes ACP session");
+    assert!(
+        !fanout_messages.is_empty(),
+        "Expected fanout messages from Hermes ACP session"
+    );
     let session_id = captured_session_id.expect("Expected a session_id from fanout");
 
     // Replay Verification: look up raw events by the session ID used in capture
-    let replayed_events = publisher.read_session_events(&session_id).await.expect("Failed to replay events");
-    assert!(!replayed_events.is_empty(), "Expected replayed events from DB");
+    let replayed_events = publisher
+        .read_session_events(&session_id)
+        .await
+        .expect("Failed to replay events");
+    assert!(
+        !replayed_events.is_empty(),
+        "Expected replayed events from DB"
+    );
 
     assert_eq!(
         fanout_messages.len(),
@@ -71,5 +77,8 @@ async fn test_hermes_e2e_capture() {
         assert!(json_value.is_object());
     }
 
-    eprintln!("E2E test successfully verified {} raw protocol events.", fanout_messages.len());
+    eprintln!(
+        "E2E test successfully verified {} raw protocol events.",
+        fanout_messages.len()
+    );
 }

@@ -9,16 +9,22 @@ pub mod raw_fanout;
 pub mod raw_publisher;
 pub mod redb_buffer;
 pub mod registry;
+pub mod smoke;
 pub mod subprocess;
 
-pub use capture_context::{AcpCaptureContext, AcpCaptureContextStore, SharedAcpCaptureContextStore};
+pub use capture_context::{
+    AcpCaptureContext, AcpCaptureContextStore, SharedAcpCaptureContextStore,
+};
 pub use client::{AcpClientSessionConfig, OurAcpClient};
 pub use fanout::AcpResponseStreamFanout;
 pub use ids::{AcpJsonRpcRequestId, AcpSubprocessId, ChatRunId, ChatSessionId, ChatThreadId};
 pub use live_event::{AcpResponseStreamEvent, AcpResponseStreamEventKind};
 pub use notification_mapper::map_session_notification_to_live_event;
 pub use raw_fanout::RawEventFanout;
-pub use raw_publisher::{NoopRawEventPublisher, RawEventPublishError, RawEventPublisher, RawEventReader};
+pub use raw_publisher::{
+    NoopRawEventPublisher, RawEventPublishError, RawEventPublisher, RawEventReader,
+};
 pub use redb_buffer::RedbRawEventPublisher;
 pub use registry::{AcpChatRunRegistry, AcpChatSessionRegistry};
+pub use smoke::{run_hermes_smoke_prompt, run_hermes_smoke_prompt_with_text, HermesSmokeReport};
 pub use subprocess::{AcpSubprocessCommand, AcpSubprocessEvent, AcpSubprocessLifecycleKind};
