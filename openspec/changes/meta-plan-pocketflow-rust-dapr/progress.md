@@ -12,7 +12,7 @@
 | Task Group | Status | Started | Completed | Output Change | Approval |
 |------------|--------|---------|-----------|---------------|----------|
 | 1. Setup and Initialization | Completed | 2026-04-20 | 2026-04-20 | - | - |
-| 2. Evaluate PocketFlow-Rust | Not Started | - | - | - | - |
+| 2. Evaluate PocketFlow-Rust | In Progress | 2026-04-20 | - | evaluate-pocketflow-rust | - |
 | 3. Core Abstractions Plan | Not Started | - | - | - | - |
 | 4. Design Patterns Plan | Not Started | - | - | - | - |
 | 5. Utilities Plan | Not Started | - | - | - | - |
@@ -29,14 +29,17 @@
 - [x] 1.2 Initialize progress tracking system within the change (progress.md created)
 - [x] 1.3 Establish communication protocol for collaborative brainstorming (use openspec-explore for brainstorming, openspec-propose for creation, user approval required)
 - [x] 1.4 Define quality criteria for OpenSpec change outputs (meta-validation criteria in design.md)
+- [ ] 1.5 Create AGENTS.md template for ported package root (`crates/berg10/execution-engine/AGENTS.md`)
+- [ ] 1.6 Create Dapr guidelines skill using skill-creator skill
+- [ ] 1.7 Update all porting task specs to reference AGENTS.md and Dapr skill
 
 ### Task 2: Evaluate PocketFlow-Rust Port
-- [ ] 2.1 Brainstorm evaluation criteria (openspec-explore)
-- [ ] 2.2 Research PocketFlow-Rust repository
-- [ ] 2.3 Compare with Python feature matrix
-- [ ] 2.4 Identify gaps and limitations
-- [ ] 2.5 Brainstorm benchmarking approach
-- [ ] 2.6 Create evaluation OpenSpec change
+- [x] 2.1 Brainstorm evaluation criteria (openspec-explore) - completed
+- [x] 2.2 Research PocketFlow-Rust repository - completed
+- [x] 2.3 Compare with Python feature matrix - completed
+- [x] 2.4 Identify gaps and limitations - completed
+- [x] 2.5 Brainstorm benchmarking approach - completed
+- [x] 2.6 Create evaluation OpenSpec change - completed
 - [ ] 2.7 Review and incorporate feedback
 - [ ] 2.8 Get user approval
 - [ ] 2.9 Update tracker

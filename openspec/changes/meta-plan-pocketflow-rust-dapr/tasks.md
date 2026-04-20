@@ -4,6 +4,9 @@
 - [ ] 1.2 Initialize progress tracking system within the change
 - [ ] 1.3 Establish communication protocol for collaborative brainstorming
 - [ ] 1.4 Define quality criteria for OpenSpec change outputs
+- [ ] 1.5 Create AGENTS.md template for ported package root (`crates/berg10/execution-engine/AGENTS.md`)
+- [ ] 1.6 Create Dapr guidelines skill using skill-creator skill
+- [ ] 1.7 Update all porting task specs to reference AGENTS.md and Dapr skill
 
 ## 2. Task 1: Evaluate Existing PocketFlow-Rust Port
 
