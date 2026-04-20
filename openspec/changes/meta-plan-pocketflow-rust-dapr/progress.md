@@ -124,13 +124,14 @@
 - [ ] 10.5 Archive meta-plan as complete
 - [ ] 10.6 Update tracker
 
-### Task 11: Resolve Open Questions
-- [ ] 11.1 Collect open questions from all change design.md files
-- [ ] 11.2 Present open questions to user for approval
-- [ ] 11.3 Update design.md files with approved answers
-- [ ] 11.4 Update specs if open questions affect requirements
-- [ ] 11.5 Update tasks if open questions affect implementation
-- [ ] 11.6 Update tracker
+### Task 11: Resolve Open Questions & Verify Alignment
+- [x] 11.1 Verify task definitions match spec and design for all changes - completed
+- [x] 11.2 Collect open questions from all change design.md files - completed
+- [ ] 11.3 Present open questions and verification gaps to user for approval
+- [ ] 11.4 Update design.md files with approved answers
+- [ ] 11.5 Update specs if open questions affect requirements
+- [ ] 11.6 Update tasks to address verification gaps
+- [ ] 11.7 Update tracker
 
 ## Quality Metrics
 
