@@ -483,6 +483,125 @@ let supervisor = SupervisorFlow::new(vec![
 **Decision**: Patterns (Agent, Map-Reduce, Supervisor) are generic DAG structures and must not be hardcoded to LLMs. "Map-Reduce" can process images or database rows; "Supervisor" can supervise legacy cron jobs. Any compatible work item must be executed durably through these patterns.
 **Rationale**: Prevents framework lock-in to GenAI use-cases. Ensures the PocketFlow orchestration patterns are enterprise-ready for *any* durable workflow requirement.
 
+### 9. Simplified Configuration via Deployment Profiles
+**Decision**: Provide preset deployment profiles that configure all settings appropriately. Users can start with a preset and customize if needed. Advanced users can use full manual configuration.
+**Rationale**: The original design had 576+ configuration combinations (3 checkpoint policies × 4 batch policies × 3 communication patterns × 4 streaming strategies × 4 sandbox types). This is overwhelming. Presets reduce cognitive load while maintaining flexibility.
+
+**Deployment Profiles**:
+```rust
+pub enum DeploymentProfile {
+    /// Development - zero dependencies, maximum performance
+    /// No Docker, no sidecar, no persistence
+    Dev,
+    
+    /// Local Production - file-based persistence, no Docker
+    /// Single-user, SQLite/ReDB storage
+    LocalProd,
+    
+    /// Cloud - full Dapr features
+    /// Multi-tenant, distributed, Kubernetes-ready
+    Cloud,
+    
+    /// High Throughput - minimal durability
+    /// For recoverable workflows where replay is acceptable
+    HighThroughput,
+    
+    /// Critical Data - maximum durability
+    /// Checkpoint everything, persisted SharedStore
+    CriticalData,
+}
+
+impl DeploymentProfile {
+    /// Convert preset to full configuration
+    pub fn to_config(&self) -> FullConfig {
+        match self {
+            DeploymentProfile::Dev => FullConfig {
+                durability: DurabilityLevel::InMemory,
+                checkpoint_policy: CheckpointPolicy::Disabled,
+                batch_failure_policy: BatchFailurePolicy::Sequential,
+                communication: CommunicationPattern::SharedState,
+                streaming: StreamingPolicy::Complete,
+                sandbox: SandboxType::Seccomp,
+                shared_store_policy: SharedStorePolicy::Ephemeral,
+            },
+            
+            DeploymentProfile::LocalProd => FullConfig {
+                durability: DurabilityLevel::ReDB,
+                checkpoint_policy: CheckpointPolicy::EveryN(5),
+                batch_failure_policy: BatchFailurePolicy::Independent { 
+                    checkpoint_successful: true 
+                },
+                communication: CommunicationPattern::SharedState,
+                streaming: StreamingPolicy::Complete,
+                sandbox: SandboxType::Seccomp,
+                shared_store_policy: SharedStorePolicy::Ephemeral,
+            },
+            
+            DeploymentProfile::Cloud => FullConfig {
+                durability: DurabilityLevel::Dapr,
+                checkpoint_policy: CheckpointPolicy::EveryN(5),
+                batch_failure_policy: BatchFailurePolicy::Independent { 
+                    checkpoint_successful: true 
+                },
+                communication: CommunicationPattern::PubSub,
+                streaming: StreamingPolicy::Direct,
+                sandbox: SandboxType::Docker,
+                shared_store_policy: SharedStorePolicy::Ephemeral,
+            },
+            
+            DeploymentProfile::HighThroughput => FullConfig {
+                durability: DurabilityLevel::Dapr,
+                checkpoint_policy: CheckpointPolicy::Disabled, // No checkpointing
+                batch_failure_policy: BatchFailurePolicy::BestEffort,
+                communication: CommunicationPattern::SharedState,
+                streaming: StreamingPolicy::Direct,
+                sandbox: SandboxType::Seccomp,
+                shared_store_policy: SharedStorePolicy::Ephemeral,
+            },
+            
+            DeploymentProfile::CriticalData => FullConfig {
+                durability: DurabilityLevel::Dapr,
+                checkpoint_policy: CheckpointPolicy::EveryN(1), // Every node
+                batch_failure_policy: BatchFailurePolicy::Semantic,
+                communication: CommunicationPattern::PubSub,
+                streaming: StreamingPolicy::Durable,
+                sandbox: SandboxType::Firecracker,
+                shared_store_policy: SharedStorePolicy::Persisted,
+            },
+        }
+    }
+}
+
+/// Advanced: Full manual configuration (opt-in)
+pub struct FullConfig {
+    pub durability: DurabilityLevel,
+    pub checkpoint_policy: CheckpointPolicy,
+    pub batch_failure_policy: BatchFailurePolicy,
+    pub communication: CommunicationPattern,
+    pub streaming: StreamingPolicy,
+    pub sandbox: SandboxType,
+    pub shared_store_policy: SharedStorePolicy,
+}
+```
+
+**Usage**:
+```rust
+// Simple: Use a preset
+let config = DeploymentProfile::LocalProd.to_config();
+
+// Advanced: Start from preset and customize
+let mut config = DeploymentProfile::Cloud.to_config();
+config.checkpoint_policy = CheckpointPolicy::SafePointsOnly;
+config.batch_failure_policy = BatchFailurePolicy::Sequential;
+```
+
+**Key Benefits**:
+- **5 presets** cover 95% of use cases
+- **No Docker required** for Dev and LocalProd profiles
+- **Sensible defaults** - users don't need to understand all options
+- **Extensible** - advanced users can customize
+- **Type-safe** - invalid combinations caught at compile time
+
 ## Risks / Trade-offs
 
 **Risk**: Custom orchestrator complexity → Mitigation: Start with simple implementation, add features incrementally.

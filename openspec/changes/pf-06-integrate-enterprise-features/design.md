@@ -77,35 +77,88 @@ Custom Orchestrator
 **Decision**: Meet strict enterprise compliance standards (SOC2, GDPR) by enforcing Data Isolation (multi-tenancy via keys/namespaces), Right-to-be-forgotten (State Store TTLs, PII redaction filters before tracing), and Audit trails (Event Sourcing logs on DAG transitions). For benchmarks, measure explicit **Driver Overhead**: compare `berg10-execution-engine` latency running on the `in-memory-driver` vs the `dapr-driver` to isolate exact serialization and network costs.
 **Rationale**: Compliance is mandatory for enterprise adoption. Driver benchmarking objectively proves the efficiency of the implementation.
 
-### 9. Checkpoint Policy: Configurable Frequency
-**Decision**: Configurable checkpoint policy with default every 5 node transitions.
+### 9. Checkpoint Policy: User-Configurable with Opt-In Batch Mode
+**Decision**: User-configurable checkpoint policy with opt-in batch checkpointing for high-throughput scenarios. Default is synchronous checkpointing for maximum durability.
 **Policy Options**:
 ```rust
 pub enum CheckpointPolicy {
     EveryN(usize),      // Default: EveryN(5)
     SafePointsOnly,     // Only at marked safe points
     ExplicitOnly,       // Only explicit checkpoint nodes
+    Disabled,           // No checkpointing (in-memory only)
+}
+
+pub struct CheckpointConfig {
+    pub policy: CheckpointPolicy,
+    pub batch_mode: BatchCheckpointConfig, // Opt-in only
+}
+
+/// Batch checkpointing - OPT-IN for high-throughput scenarios
+/// Trade-off: Up to flush_interval of work may be lost on crash
+pub struct BatchCheckpointConfig {
+    pub enabled: bool,              // Disabled by default
+    pub flush_interval: Duration,   // How often to flush buffer
+    pub max_buffer_size: usize,     // Max buffered checkpoints
+    pub compression: bool,          // Compress checkpoint data
+}
+
+impl Default for BatchCheckpointConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,  // OPT-IN: Disabled by default
+            flush_interval: Duration::from_secs(5),
+            max_buffer_size: 100,
+            compression: true,
+        }
+    }
 }
 ```
-**Rationale**: Balance durability with performance. Long-running workflows (chat, research) need frequent checkpoints; short workflows don't.
+**Rationale**: Different workflows have different durability needs. Batch checkpointing improves performance but risks losing recent work on crash. Users must explicitly opt-in to this trade-off.
 **Use Cases**:
 - **EveryN(5)**: Chat agents, research loops (frequent recovery points)
 - **SafePointsOnly**: Multi-stage pipelines (checkpoint at stage boundaries)
 - **ExplicitOnly**: Developer-controlled checkpoints
+- **Disabled**: High-throughput ETL where replay is acceptable
+- **Batch Mode (Opt-In)**: High-throughput scenarios where losing a few seconds of work is acceptable
 
-### 10. HITL (Human-in-the-Loop) Support
-**Decision**: Implement durable suspension points for human-in-the-loop workflows with timeout handling and resume capabilities.
-**Rationale**: Required for production workflows requiring human approval, review, or input. Must survive process restarts.
+**Batch Checkpointing Flow**:
+```
+Synchronous (Default - Maximum Durability):
+┌─────────┐    ┌─────────────┐    ┌──────────────┐
+│ Execute │───▶│ Checkpoint  │───▶│   Next Node  │
+│  Node   │    │  (sync)     │    │              │
+└─────────┘    └─────────────┘    └──────────────┘
+
+Batch (Opt-In - Higher Performance):
+┌─────────┐    ┌─────────────┐    ┌──────────────┐
+│ Execute │───▶│  Buffer CP  │───▶│   Next Node  │
+│  Node   │    │  (async)    │    │              │
+└─────────┘    └─────────────┘    └──────────────┘
+       │
+       │ (Every N seconds)
+       ▼
+┌──────────────┐
+│  Flush Batch │
+│  to Storage  │
+└──────────────┘
+```
+
+**Warning**: When batch mode is enabled, up to `flush_interval` seconds of work may be lost on unexpected process termination.
+
+### 10. HITL (Human-in-the-Loop) Support - UI Agnostic
+**Decision**: Implement UI-agnostic HITL where the workflow enters a "waiting for human" state and resumes when input arrives from any source (pub/sub, POST, webhook, CLI, etc.). The orchestrator does not know or care how the human provided input.
+**Rationale**: HITL should not be coupled to any specific UI technology. Input could come from a web form, Slack message, email, CLI prompt, or external system webhook. The workflow simply waits for an event.
+
 **Architecture**:
 ```rust
+/// HITL state - workflow is suspended waiting for human input
 pub struct SuspensionPoint {
     pub workflow_id: WorkflowId,
     pub node_id: NodeId,
     pub suspended_at: DateTime<Utc>,
     pub timeout_at: Option<DateTime<Utc>>,
-    pub assigned_to: Option<UserId>,
     pub context: Vec<u8>, // Serialized state for UI rendering
-    pub human_input_schema: JsonSchema, // Expected input format
+    pub expected_input_type: InputType, // What kind of input is expected
     pub status: SuspensionStatus,
 }
 
@@ -116,11 +169,21 @@ pub enum SuspensionStatus {
     Resumed,
 }
 
+/// Input can come from any source - UI agnostic
+pub enum HumanInput {
+    Text(String),
+    Json(Value),
+    Approval { approved: bool, comment: Option<String> },
+    FormData(HashMap<String, String>),
+    Binary(Vec<u8>),
+}
+
+/// UI-agnostic HITL trait
 pub trait HITLDurability {
     /// Suspend workflow, release execution resources
     async fn suspend(&self, point: SuspensionPoint) -> Result<SuspensionId>;
     
-    /// Resume workflow with human input
+    /// Resume workflow with human input (from any source)
     async fn resume(&self, suspension_id: SuspensionId, input: HumanInput) -> Result<()>;
     
     /// Query suspended workflows (for UI/admin)
@@ -128,25 +191,143 @@ pub trait HITLDurability {
     
     /// Cancel suspended workflow
     async fn cancel(&self, suspension_id: SuspensionId, reason: &str) -> Result<()>;
-    
-    /// Handle timeout - automatically resume with fallback
-    async fn handle_timeout(&self, suspension_id: SuspensionId) -> Result<()>;
 }
 
+/// HITL Node - defines what input is needed, not how it's collected
 pub struct HITLNode {
-    pub prompt_template: String,
+    pub prompt_context: String, // Context shown to human
     pub timeout: Option<Duration>,
     pub fallback_action: Option<String>, // Action if timeout
-    pub assigned_users: Vec<UserId>,
-    pub input_schema: JsonSchema,
+    pub expected_input: InputType,
+}
+
+pub enum InputType {
+    Text,
+    Approval,
+    JsonSchema(JsonSchema),
+    Form(Vec<FormField>),
 }
 ```
+
+**Input Sources** (UI Agnostic):
+```rust
+/// Input can arrive via any mechanism
+pub enum InputChannel {
+    /// Pub/Sub message (e.g., from Slack, email)
+    PubSub { topic: String },
+    
+    /// HTTP POST (e.g., webhook, form submission)
+    HttpPost { endpoint: String },
+    
+    /// CLI input (for local/development use)
+    Cli,
+    
+    /// Custom channel (any other source)
+    Custom(Box<dyn InputReceiver>),
+}
+
+/// Trait for receiving input from any source
+pub trait InputReceiver: Send + Sync {
+    async fn receive(&self, suspension_id: SuspensionId) -> Result<HumanInput>;
+}
+```
+
+**Workflow Flow**:
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Execute   │────▶│  HITLNode.exec() │────▶│   Suspend       │
+│   HITLNode  │     │                  │     │   (checkpoint)  │
+└─────────────┘     └──────────────────┘     └────────┬────────┘
+                                                      │
+                                                      ▼
+                                           ┌──────────────────┐
+                                           │  Awaiting Input  │
+                                           │  (UI agnostic)   │
+                                           └────────┬─────────┘
+                                                    │
+              ┌─────────────────────────────────────┼─────────────────────────────────────┐
+              │                                     │                                     │
+              ▼                                     ▼                                     ▼
+    ┌──────────────────┐              ┌──────────────────┐              ┌──────────────────┐
+    │   Pub/Sub        │              │   HTTP POST      │              │   CLI Input      │
+    │   (Slack/email)  │              │   (webhook)      │              │   (local dev)    │
+    └────────┬─────────┘              └────────┬─────────┘              └────────┬─────────┘
+             │                                 │                                  │
+             └─────────────────────────────────┼──────────────────────────────────┘
+                                               │
+                                               ▼
+                                    ┌──────────────────┐
+                                    │  Resume Workflow │
+                                    │  (load from      │
+                                    │   checkpoint)    │
+                                    └──────────────────┘
+```
+
+**Example Implementations**:
+```rust
+/// Webhook input receiver
+pub struct WebhookReceiver {
+    server: HttpServer,
+}
+
+impl InputReceiver for WebhookReceiver {
+    async fn receive(&self, suspension_id: SuspensionId) -> Result<HumanInput> {
+        // Wait for HTTP POST to /resume/{suspension_id}
+        let body = self.server.wait_for_post(&format!("/resume/{}", suspension_id)).await?;
+        Ok(HumanInput::Json(body))
+    }
+}
+
+/// CLI input receiver (for local development)
+pub struct CliReceiver;
+
+impl InputReceiver for CliReceiver {
+    async fn receive(&self, suspension_id: SuspensionId) -> Result<HumanInput> {
+        println!("Workflow {} needs input:", suspension_id);
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        Ok(HumanInput::Text(input.trim().to_string()))
+    }
+}
+
+/// Pub/Sub input receiver
+pub struct PubSubReceiver {
+    subscriber: Subscriber,
+}
+
+impl InputReceiver for PubSubReceiver {
+    async fn receive(&self, suspension_id: SuspensionId) -> Result<HumanInput> {
+        let message = self.subscriber.receive(format!("hitl:{}", suspension_id)).await?;
+        Ok(HumanInput::Json(message.payload))
+    }
+}
+```
+
+**Three-Tier HITL Support**:
+```rust
+pub enum HITLMode {
+    /// File-based suspension state (dev/local)
+    /// Uses local filesystem for storage
+    LocalFile,
+    
+    /// SQLite-based with optional webhook server
+    /// Single-user with web UI support
+    LocalWeb,
+    
+    /// Full Dapr Actor with timeout coordination
+    /// Multi-tenant, distributed, with Actor reminders
+    Distributed,
+}
+```
+
 **Timeout Handling**:
-- If timeout specified and expires, execute fallback_action
-- If no timeout, suspend indefinitely
+- If timeout specified, workflow resumes with fallback after expiration
+- Timeout checks run via:
+  - Local: Background tokio task
+  - Distributed: Dapr Actor reminders
 - Cancellation possible via API
-- Timeout checks run via Dapr Actor reminders or background task
-**Use Cases**: CLI HITL, FastAPI review endpoints, Gradio web forms, Streamlit FSM
+
+**Key Principle**: The orchestrator is completely UI-agnostic. It waits for an input event and doesn't care whether it came from a Slack message, web form, email, or CLI prompt.
 
 ### 11. Chat Session Persistence
 **Decision**: Support durable conversation state that persists across sessions with session affinity.
