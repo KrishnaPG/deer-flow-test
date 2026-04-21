@@ -34,10 +34,10 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 **Rationale**: Ensures functional equivalence, catches regressions.
 **Alternatives Considered**: Manual testing only (rejected - error-prone), unit tests only (rejected - misses integration).
 
-### 3. Dapr Integration: Mock for Testing
-**Decision**: Use Dapr CLI in standalone mode for testing, mock components for unit tests.
-**Rationale**: Enables testing without full Dapr deployment, maintains test speed.
-**Alternatives Considered**: Real Dapr deployment for all tests (rejected - slow, complex), no Dapr in tests (rejected - misses integration issues).
+### 3. Dapr Integration: Mock for Testing & "No-Dapr" Dev Mode
+**Decision**: Provide a zero-dependency "Dev Mode" trait implementation where an in-memory, thread-local runtime completely takes over the Dapr traits. For integration tests, use Dapr CLI in standalone mode or mocks.
+**Rationale**: A "No-Dapr" Dev Mode guarantees sub-second compile-to-run iteration cycles for developer experience (DX) without requiring container startup, while mocks maintain unit test speed.
+**Alternatives Considered**: Real Dapr deployment for all local dev/tests (rejected - slow, complex, high developer friction).
 
 ### 4. Example Structure: One Crate per Category
 **Decision**: Organize examples in crate by category (basic, patterns, integrations, advanced).

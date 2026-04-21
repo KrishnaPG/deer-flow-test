@@ -45,10 +45,10 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 **Rationale**: Provides pluggable backends (Redis, PostgreSQL, etc.), transactional updates, and durability.
 **Alternatives Considered**: In-memory only (rejected - no persistence), custom storage (rejected - reinventing wheel).
 
-### 4. Params: Immutable Workflow Input & Payload Pointers
-**Decision**: Pass `Params` as immutable workflow input data. For large payloads (embeddings, huge document arrays), store them in a Dapr-backed BlobStore and only pass references/pointers through the workflow. Additionally, use binary serialization (like Protocol Buffers or MessagePack via `prost`) over Dapr instead of heavy `serde_json::Value` parsing where possible.
-**Rationale**: Matches Python's immutable params logically while avoiding catastrophic memory and latency spikes caused by sending large JSON blobs through the Dapr sidecar network proxy.
-**Alternatives Considered**: Full JSON serialization of all data (rejected - unacceptable latency and memory overhead), Mutable shared params (rejected - breaks compatibility).
+### 4. Params: Immutable Workflow Input, Payload Pointers, & Zero-Copy
+**Decision**: Pass `Params` as immutable workflow input data. For large payloads (embeddings, huge document arrays), store them in a Dapr-backed BlobStore and only pass references/pointers through the workflow. For local fast-paths, wrap data in `Arc<T>` to ensure zero-copy memory sharing. Additionally, mandate **multiplexed gRPC** for Dapr sidecar communication using binary serialization (like Protocol Buffers or MessagePack via `prost`) instead of HTTP/JSON.
+**Rationale**: Matches Python's immutable params logically while avoiding catastrophic memory and latency spikes. `Arc<T>` gives us zero-copy memory speeds locally, and gRPC + Protobuf minimizes sidecar overhead for distributed steps.
+**Alternatives Considered**: Full JSON over HTTP (rejected - unacceptable latency and memory overhead), Mutable shared params (rejected - breaks compatibility).
 
 ### 5. Retry Logic: Dapr Retry Policies
 **Decision**: Use Dapr Workflow's `ActivityRetryPolicy` for node retries, with custom retry logic in `exec_fallback`.
@@ -100,6 +100,9 @@ Flow:
 - If action not in successors and successors is non-empty: warn and return None (flow ends)
 - If successors is empty: current node is terminal
 
+### 10. Domain-Agnostic Orchestration (Decoupling from LLM)
+**Decision**: The core `Node`, `Flow`, and orchestration mechanisms must be completely abstracted away from LLM-specific logic. A `Node` is a generic unit of durable work (e.g., business logic validation, database update, legacy API request, or LLM call). The `Action` enums returned by nodes dictate control flow irrespective of the domain.
+**Rationale**: An enterprise workflow engine must not be bottlenecked to a single domain. PocketFlow should be capable of orchestrating generic microservices, data pipelines, and legacy systems just as seamlessly as AI agents. This maximizes the reuse of the Rust+Dapr foundation.
 ### 9. Graph Persistence: Dapr State Management
 **Decision**: Store graph structure (nodes and successors relationships) in Dapr State Management for persistence and recovery.
 **Rationale**: Enables workflow restart from persisted state, version history for auditing, and external graph modification tools.

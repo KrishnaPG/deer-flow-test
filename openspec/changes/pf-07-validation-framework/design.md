@@ -29,10 +29,10 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Rationale**: Separation of concerns, allows specialized tools per category.
 **Alternatives Considered**: Single monolithic test suite (rejected - complex), separate frameworks per category (rejected - duplication).
 
-### 2. Feature Parity: Input/Output Comparison with Tolerances
-**Decision**: Compare Python and Rust outputs with configurable tolerances for non-deterministic operations.
-**Rationale**: Handles LLM randomness, timing differences while catching real discrepancies.
-**Alternatives Considered**: Exact match only (rejected - too strict), manual validation only (rejected - not scalable).
+### 2. Feature Parity & Stability: Tolerances + Property-Based Fuzzing
+**Decision**: Compare Python and Rust outputs with configurable tolerances for non-deterministic operations. Additionally, integrate the `proptest` crate for **Property-Based Fuzzing**, feeding thousands of randomized, heavily mutated inputs into the Rust graph to mathematically guarantee it never panics.
+**Rationale**: Tolerances handle LLM randomness. Fuzzing proves the core orchestration engine is fundamentally crash-proof against malformed enterprise data.
+**Alternatives Considered**: Fixed input tests only (rejected - misses obscure edge cases), manual validation only (rejected - not scalable).
 
 ### 3. Performance Benchmarking: Criterion + Custom Metrics
 **Decision**: Use Rust's `criterion` for micro-benchmarks, custom metrics for workflow-level performance.

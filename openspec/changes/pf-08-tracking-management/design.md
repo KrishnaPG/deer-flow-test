@@ -20,10 +20,10 @@ The PocketFlow-Rust porting project consists of 10 task groups across 8 OpenSpec
 
 ## Decisions
 
-### 1. Progress Tracking: Automated Aggregation
-**Decision**: Automatically parse OpenSpec tasks.md files and aggregate progress across changes.
-**Rationale**: Reduces manual effort, ensures accuracy, provides real-time visibility.
-**Alternatives Considered**: Manual progress updates (rejected - error-prone), external project management tool (rejected - adds complexity).
+### 1. Progress Tracking: Event-Driven Git Hooks (Zero Polling)
+**Decision**: Automate progress tracking by integrating directly into Git Hooks (e.g., `pre-commit` or `post-merge`) to aggregate `tasks.md` status, rather than using a polling daemon.
+**Rationale**: Event-driven tracking happens instantaneously and securely without external polling daemons, ensuring real-time accuracy.
+**Alternatives Considered**: Polling cron-jobs (rejected - laggy and unnecessary overhead), Manual progress updates (rejected - error-prone).
 
 ### 2. Risk Management: Integrated Risk Register
 **Decision**: Maintain risk register within tracking system with probability/impact assessment.
