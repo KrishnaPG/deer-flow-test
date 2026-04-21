@@ -61,7 +61,9 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 **Rationale**: Leverages Dapr's security features without custom implementation, while ensuring the execution engine remains completely agnostic of how secrets are fetched.
 **Alternatives Considered**: Custom security (rejected - reinventing wheel), Direct `.env` parsing (rejected - security risk).
 
-## Risks / Trade-offs
+### 8. Compliance & Benchmarking
+**Decision**: Meet strict enterprise compliance standards (SOC2, GDPR) by enforcing Data Isolation (multi-tenancy via keys/namespaces), Right-to-be-forgotten (State Store TTLs, PII redaction filters before tracing), and Audit trails (Event Sourcing logs on DAG transitions). For benchmarks, measure explicit **Driver Overhead**: compare `berg10-execution-engine` latency running on the `in-memory-driver` vs the `dapr-driver` to isolate exact serialization and network costs.
+**Rationale**: Compliance is mandatory for enterprise adoption. Driver benchmarking objectively proves the efficiency of the implementation.
 
 **Risk**: Dapr sidecar adds latency → Mitigation: Optimize Dapr configuration, use local mode for development.
 **Risk**: Dapr configuration complexity → Mitigation: Provide templates and automation.

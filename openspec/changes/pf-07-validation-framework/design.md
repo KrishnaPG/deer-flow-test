@@ -59,7 +59,9 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Rationale**: Popular CI/CD platform, flexible reporting for different stakeholders.
 **Alternatives Considered**: Custom CI/CD (rejected - complex), no automation (rejected - not scalable).
 
-## Risks / Trade-offs
+### 8. CI/CD Integration: GitHub Actions & Ownership
+**Decision**: Integrate with GitHub Actions for zero-cost continuous validation. Micro-benchmarks and fuzzing must run on every PR. Heavy integration and chaos tests run Nightly. The core framework maintainers own the harness infrastructure, while cookbook-specific tests are community-maintained.
+**Rationale**: Popular CI/CD platform, flexible reporting, negligible infrastructure cost. Separating PR checks from Nightly checks preserves developer velocity.
 
 **Risk**: Validation framework complexity → Mitigation: Start with critical paths, expand incrementally.
 **Risk**: Test flakiness due to timing/non-determinism → Mitigation: Use tolerances, retries, deterministic mocks.

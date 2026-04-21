@@ -51,11 +51,12 @@ PocketFlow is a minimalist 100-line Python framework for LLM workflows. An exist
 
 ### 6. Rust Improvement Priorities
 **Decision**: Rust port should exceed Python capabilities in these areas:
-- Performance: Lower latency, higher throughput via Rust + Dapr
-- Reliability: Built-in retry, fallback, idempotency (Python requires external libraries)
-- Observability: Native OpenTelemetry integration
+- Performance: Lower latency, higher throughput via Rust + Dapr. We will measure execution engine overhead, DAG throughput, and zero-copy payload validation speed.
+- Reliability: Built-in retry, fallback, idempotency (Python requires external libraries). Dapr readiness must be proven via state recovery after sidecar failure and deterministic idempotency key verification.
+- Observability: Native OpenTelemetry integration with complete trace continuity across nodes.
 - Type Safety: Compile-time type checking vs Python's runtime errors
 - Memory: Zero-copy, zero-allocation pipelines where possible
+- Quality: 100% test coverage on the core DAG routing logic, with BDD E2E tests for the drivers.
 
 **Non-Goals for Compatibility**:
 - Line-by-line code equivalence (not required)

@@ -40,13 +40,13 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 **Alternatives Considered**: Real Dapr deployment for all local dev/tests (rejected - slow, complex, high developer friction).
 
 ### 4. Example Structure: One Crate per Category
-**Decision**: Organize examples in crate by category (basic, patterns, integrations, advanced).
-**Rationale**: Logical grouping, easier navigation, matches Python structure.
+**Decision**: Organize examples in crate by category (basic, patterns, integrations, advanced). For Python-specific dependencies used in original examples (e.g., `requests`, `BeautifulSoup`), replace them with battle-tested Rust equivalents (e.g., `reqwest`, `scraper`). Where no Rust port exists, wrap the logic in a Dapr Binding.
+**Rationale**: Logical grouping, easier navigation, matches Python structure. Enforcing Rust-native equivalents ensures pure performance without dragging in external Python runtimes unless absolutely necessary via sidecar bindings.
 **Alternatives Considered**: Single flat directory (rejected - messy), one crate per example (rejected - too many crates).
 
-### 5. Documentation: Side-by-Side Comparison
-**Decision**: Provide documentation showing Python and Rust code side-by-side.
-**Rationale**: Helps developers migrate, highlights differences.
+### 5. Documentation and Community Involvement
+**Decision**: Provide documentation showing Python and Rust code side-by-side. Additionally, designate specific cookbooks as "Good First Issue" leveraging the new `berg10-execution-engine` generic traits to encourage community contribution.
+**Rationale**: Side-by-side docs help developers migrate and highlight differences. Open-sourcing porting efforts accelerates completion while stress-testing the generic APIs with external developers.
 **Alternatives Considered**: Separate documentation (rejected - harder to compare), inline comments only (rejected - insufficient).
 
 ## Risks / Trade-offs
