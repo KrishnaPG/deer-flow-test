@@ -73,10 +73,3 @@ The PocketFlow-Rust porting project consists of 10 task groups across 8 OpenSpec
 7. Implement historical tracking and trend analysis
 8. Integrate with existing project management tools
 
-## Open Questions
-
-1. **Automation level**: How much automation vs manual input for risk assessments?
-2. **Tool integration**: Which existing tools (Jira, GitHub Issues) to integrate with?
-3. **Report frequency**: How often should reports be generated and sent?
-4. **Access control**: Who should have access to tracking data and reports?
-5. **Data retention**: How long should historical tracking data be retained?

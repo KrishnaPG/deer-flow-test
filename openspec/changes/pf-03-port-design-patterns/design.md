@@ -77,10 +77,3 @@ We are taking a **fresh start approach**: use Python PocketFlow patterns as insp
 7. Create compatibility test suite
 8. Document migration path from Python PocketFlow patterns
 
-## Open Questions
-
-1. Should we support both Actor and Activity implementations for agents?
-2. How to handle pattern-specific configuration (e.g., parallelism limits, retry policies)?
-3. What serialization format for cross-pattern communication?
-4. How to integrate pattern observability with Dapr's OpenTelemetry?
-5. Should we provide pattern templates for common use cases?

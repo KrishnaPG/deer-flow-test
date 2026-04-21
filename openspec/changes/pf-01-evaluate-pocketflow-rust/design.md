@@ -76,9 +76,3 @@ PocketFlow is a minimalist 100-line Python framework for LLM workflows. An exist
 3. Make decision based on recommendation
 4. Proceed with chosen approach (extend or fresh start)
 
-## Open Questions
-
-1. What performance benchmarks should we use for comparison?
-2. How to measure Dapr integration readiness objectively?
-3. What test coverage threshold is acceptable?
-4. Should we consider community contributions to PocketFlow-Rust?
