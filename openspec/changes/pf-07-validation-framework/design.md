@@ -19,7 +19,6 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 - Implement the actual validation framework (this is a plan only)
 - Validate every possible edge case (focus on critical paths)
 - Replace manual validation entirely (some manual checks needed)
-- Support validation of non-Dapr deployment scenarios
 - Require line-by-line code equivalence (not needed, functional equivalence is sufficient)
 
 ## Decisions
@@ -30,8 +29,40 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Alternatives Considered**: Single monolithic test suite (rejected - complex), separate frameworks per category (rejected - duplication).
 
 ### 2. Feature Parity & Stability: Tolerances + Property-Based Fuzzing
-**Decision**: Compare Python and Rust outputs with configurable tolerances for non-deterministic operations. Additionally, integrate the `proptest` crate for **Property-Based Fuzzing**, feeding thousands of randomized, heavily mutated inputs into the Rust graph to mathematically guarantee it never panics.
-**Rationale**: Tolerances handle LLM randomness. Fuzzing proves the core orchestration engine is fundamentally crash-proof against malformed enterprise data.
+**Decision**: Compare Python and Rust outputs with **explicit ToleranceConfig** for non-deterministic operations. Integrate `proptest` for **Property-Based Fuzzing**.
+**ToleranceConfig Structure**:
+```rust
+pub struct ToleranceConfig {
+    /// Semantic similarity threshold for text (0.0 - 1.0)
+    /// Use case: LLM output comparison
+    pub text_similarity: f64,  // Default: 0.85
+    
+    /// Acceptable timing variance percentage
+    /// Use case: Performance comparison
+    pub timing_variance_percent: f64,  // Default: 20.0
+    
+    /// Floating-point comparison tolerance
+    /// Use case: Numeric embedding comparison
+    pub numeric_precision: f64,  // Default: 0.001
+    
+    /// Statistical confidence for property-based tests
+    /// Use case: Fuzzing success rate
+    pub statistical_confidence: f64,  // Default: 0.99
+    
+    /// BLEU score threshold for generated text
+    /// Use case: Code generation comparison
+    pub bleu_threshold: f64,  // Default: 0.7
+}
+```
+**Comparison Strategies**:
+| Output Type | Strategy | Threshold |
+|-------------|----------|-----------|
+| Free text | Semantic similarity | > 0.85 |
+| JSON | Structural equality | 100% |
+| JSON (numeric) | ± tolerance | ±0.001 |
+| Embeddings | Cosine similarity | > 0.95 |
+| Code | BLEU score | > 0.7 |
+**Rationale**: Explicit tolerances prevent flaky tests. Fuzzing proves crash-resilience.
 **Alternatives Considered**: Fixed input tests only (rejected - misses obscure edge cases), manual validation only (rejected - not scalable).
 
 ### 3. Performance Benchmarking: Criterion + Custom Metrics
@@ -54,6 +85,54 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Rationale**: Declarative policies, reusable across environments, audit trail.
 **Alternatives Considered**: Manual compliance checks (rejected - not scalable), custom compliance engine (rejected - reinventing wheel).
 
+### 9. Checkpoint and Recovery Testing
+**Decision**: Explicitly test checkpoint creation, persistence, and recovery scenarios.
+**Test Cases**:
+```rust
+#[tokio::test]
+async fn test_checkpoint_recovery() {
+    // 1. Start workflow
+    let workflow = create_long_running_workflow();
+    
+    // 2. Run for N steps
+    let partial = run_until_checkpoint(workflow.clone(), 5).await;
+    
+    // 3. Simulate crash (drop workflow)
+    drop(workflow);
+    
+    // 4. Recover from checkpoint
+    let recovered = WorkflowInstance::recover(partial.checkpoint).await;
+    
+    // 5. Complete workflow
+    let result = recovered.run().await;
+    
+    // 6. Verify matches non-interrupted execution
+    assert_outputs_equal(result, uninterrupted_result);
+}
+```
+**Recovery Scenarios**:
+- Crash during node execution
+- Crash between nodes
+- Dapr sidecar restart
+- Network partition during checkpoint save
+**Rationale**: Dapr durability guarantees must be validated.
+
+### 10. State Management Validation
+**Decision**: Test SharedStore trait implementations (Dapr State, Local/SQLite, InMemory).
+**Test Coverage**:
+- State consistency after node failures
+- ETag optimistic concurrency handling
+- Transactional updates (all-or-nothing)
+- State migration between workflow versions
+- Large state handling (>1MB)
+**Test Matrix**:
+| Backend | Persistence | Concurrency | Recovery |
+|---------|-------------|-------------|----------|
+| Dapr State | ✅ | ✅ | ✅ |
+| SQLite | ✅ | ✅ | ✅ |
+| InMemory | ❌ | ✅ | ❌ |
+**Rationale**: State management is critical for durability guarantees.
+
 ### 7. CI/CD Integration: GitHub Actions + Custom Reporters
 **Decision**: Integrate with GitHub Actions, generate validation reports in multiple formats.
 **Rationale**: Popular CI/CD platform, flexible reporting for different stakeholders.
@@ -63,19 +142,34 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Decision**: Integrate with GitHub Actions for zero-cost continuous validation. Micro-benchmarks and fuzzing must run on every PR. Heavy integration and chaos tests run Nightly. The core framework maintainers own the harness infrastructure, while cookbook-specific tests are community-maintained.
 **Rationale**: Popular CI/CD platform, flexible reporting, negligible infrastructure cost. Separating PR checks from Nightly checks preserves developer velocity.
 
+### 11. Action-Based Routing Validation
+**Decision**: Exhaustively test action-based routing (core PocketFlow mechanic).
+**Test Coverage**:
+- Default action routing
+- Custom action routing  
+- Fallback after retry exhaustion
+- Loop termination (back-edges)
+- Missing action handling (flow end)
+**Rationale**: Action-based routing is PocketFlow's defining feature; must be fully validated.
+
 **Risk**: Validation framework complexity → Mitigation: Start with critical paths, expand incrementally.
-**Risk**: Test flakiness due to timing/non-determinism → Mitigation: Use tolerances, retries, deterministic mocks.
+**Risk**: Test flakiness due to timing/non-determinism → Mitigation: Use explicit ToleranceConfig, retries, deterministic mocks.
 **Risk**: Performance overhead of validation → Mitigation: Run validation in parallel, optimize test execution.
 **Risk**: Maintenance burden of test suite → Mitigation: Use reusable components, clear documentation.
+**Risk**: Checkpoint testing adds complexity → Mitigation: Start with simple crash scenarios, expand to complex failures.
 
 ## Migration Plan
 
 1. Create validation framework core infrastructure
-2. Implement feature parity validation for core abstractions
-3. Add performance benchmarking for critical paths
-4. Implement integration testing with Dapr components
-5. Add security testing for Dapr features
-6. Implement compliance policy checks
-7. Integrate with CI/CD pipeline
-8. Create validation dashboards and reports
+2. Define ToleranceConfig with explicit values
+3. Implement feature parity validation for core abstractions
+4. Add performance benchmarking for critical paths
+5. Implement checkpoint/recovery testing scenarios
+6. Add state management validation (Dapr, SQLite, InMemory)
+7. Implement action-based routing validation
+8. Implement integration testing with Dapr components
+9. Add security testing for Dapr features
+10. Implement compliance policy checks
+11. Integrate with CI/CD pipeline
+12. Create validation dashboards and reports
 
