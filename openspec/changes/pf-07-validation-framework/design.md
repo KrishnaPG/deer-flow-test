@@ -39,10 +39,10 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Rationale**: `criterion` provides statistical rigor; custom metrics capture Dapr-specific overhead.
 **Alternatives Considered**: Ad-hoc timing (rejected - unreliable), external benchmarking tools (rejected - complex).
 
-### 4. Integration Testing: Testcontainers + Mock Dapr
-**Decision**: Use testcontainers for real Dapr components, mock Dapr for unit tests.
-**Rationale**: Real components catch integration issues; mocks enable fast unit tests.
-**Alternatives Considered**: Real Dapr for all tests (rejected - slow), no integration tests (rejected - risky).
+### 4. Integration Testing: Automated Chaos Testing
+**Decision**: Use testcontainers for real Dapr components, and build a "Chaos Mock" Dapr component that automatically injects latency, HTTP 500s, and sidecar crashes during integration tests.
+**Rationale**: This mathematically proves that the `pf-06` resiliency policies work under extreme stress. Happy-path testing is insufficient for an enterprise-grade system.
+**Alternatives Considered**: Real Dapr without fault injection (rejected - doesn't prove resilience mechanisms work), Manual chaos testing (rejected - unscalable).
 
 ### 5. Security Testing: OWASP ZAP + Custom Checks
 **Decision**: Use OWASP ZAP for web security, custom checks for Dapr security features.

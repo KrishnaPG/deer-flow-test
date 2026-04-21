@@ -30,10 +30,10 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 
 ## Decisions
 
-### 1. Node Mapping: Activities vs Actors
-**Decision**: Use Dapr Workflow Activities for stateless nodes, Dapr Actors for stateful nodes requiring persistent identity.
-**Rationale**: Activities match the prep→exec→post pipeline; Actors provide turn-based concurrency and state for long-running processes.
-**Alternatives Considered**: Always Activities (rejected - no persistent state), always Actors (rejected - overkill for stateless nodes).
+### 1. Node Mapping: Activities, Actors, and Fast-Paths
+**Decision**: Use Dapr Workflow Activities for stateless nodes and Dapr Actors for stateful nodes requiring persistent identity. Introduce a **"Local Fast-Path" (Node Clustering)** where multiple consecutive purely compute-bound, stateless nodes are executed locally in memory as a single Dapr Activity.
+**Rationale**: Activities match the prep→exec→post pipeline; Actors provide turn-based concurrency. The Fast-Path optimization prevents Dapr orchestration roundtrips for extremely fast, consecutive Rust operations (e.g., chunking, formatting).
+**Alternatives Considered**: Always Activities for everything (rejected - massive distributed overhead for trivial compute steps), always Actors (rejected - overkill for stateless nodes).
 
 ### 2. Flow Mapping: Dapr Workflows
 **Decision**: Map each PocketFlow Flow to a Dapr Workflow definition.
@@ -45,20 +45,20 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 **Rationale**: Provides pluggable backends (Redis, PostgreSQL, etc.), transactional updates, and durability.
 **Alternatives Considered**: In-memory only (rejected - no persistence), custom storage (rejected - reinventing wheel).
 
-### 4. Params: Immutable Workflow Input
-**Decision**: Pass Params as serializable workflow input data, immutable per node.
-**Rationale**: Matches Python's immutable params per node, simplifies serialization.
-**Alternatives Considered**: Mutable shared params (rejected - breaks compatibility), separate param store (rejected - adds complexity).
+### 4. Params: Immutable Workflow Input & Payload Pointers
+**Decision**: Pass `Params` as immutable workflow input data. For large payloads (embeddings, huge document arrays), store them in a Dapr-backed BlobStore and only pass references/pointers through the workflow. Additionally, use binary serialization (like Protocol Buffers or MessagePack via `prost`) over Dapr instead of heavy `serde_json::Value` parsing where possible.
+**Rationale**: Matches Python's immutable params logically while avoiding catastrophic memory and latency spikes caused by sending large JSON blobs through the Dapr sidecar network proxy.
+**Alternatives Considered**: Full JSON serialization of all data (rejected - unacceptable latency and memory overhead), Mutable shared params (rejected - breaks compatibility).
 
 ### 5. Retry Logic: Dapr Retry Policies
 **Decision**: Use Dapr Workflow's `ActivityRetryPolicy` for node retries, with custom retry logic in `exec_fallback`.
 **Rationale**: Leverages Dapr's built-in retry with exponential backoff, jitter, and max attempts.
 **Alternatives Considered**: Custom retry implementation (rejected - reinventing wheel), no retry (rejected - enterprise requirement).
 
-### 6. Fallback: Dapr Compensation Handlers
-**Decision**: Implement node's `exec_fallback` as Dapr Workflow compensation handler.
-**Rationale**: Aligns with Dapr's compensation pattern for error recovery.
-**Alternatives Considered**: Custom error handling (rejected - inconsistent), ignore fallback (rejected - enterprise requirement).
+### 6. Fallback: Action-Based Semantic Fallbacks
+**Decision**: Use Dapr Retries exclusively for *technical* failures (e.g., HTTP 500s, network timeouts). For *semantic* fallbacks (e.g., LLM provider down after max retries, switch to alternative provider), the node catches the error and returns a specific `Action::Fallback` enum. PocketFlow then routes to the backup node naturally.
+**Rationale**: Dapr Compensation Handlers are designed for Saga-style state rollbacks, not forward-moving logic alternatives. Action-based semantic routing accurately maps to PocketFlow's dynamic graph traversal without fighting the orchestrator.
+**Alternatives Considered**: Dapr Compensation Handlers for logic fallbacks (rejected - misuses Dapr primitives), Custom error handling (rejected - inconsistent).
 
 ### 7. Parallel Execution: Dapr Fan-out/Fan-in
 **Decision**: Use Dapr Workflow's `when_all` for parallel activities, `for_each` with parallelism limit for batch processing.

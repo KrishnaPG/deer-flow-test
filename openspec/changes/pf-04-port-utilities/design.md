@@ -62,6 +62,11 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Pluggable TTS providers, caching, rate limiting.
 **Alternatives Considered**: Direct API calls (rejected - lacks enterprise features), custom TTS client (rejected - reinventing wheel).
 
+### 8. Tiered Caching Strategy (L1 + L2)
+**Decision**: Build a tiered cache architecture. Use an in-memory Rust `moka` cache for ultra-low latency L1 caching of frequent utility calls. On an L1 miss, fall back to Dapr State Management (L2 cache).
+**Rationale**: Achieves microsecond latency for hot data (like frequently used embeddings or prompt templates) while maintaining distributed consistency and fault tolerance via the sidecar. Emit OpenTelemetry spans for hit/miss ratios.
+**Alternatives Considered**: Dapr state cache only (rejected - adds sidecar latency to hot-path data), In-memory only (rejected - lacks distributed persistence).
+
 ## Risks / Trade-offs
 
 **Risk**: Dapr Conversation API may not support all LLM providers → Mitigation: Fallback to direct HTTP calls.

@@ -41,10 +41,10 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 **Rationale**: Leverages Dapr's service discovery, load balancing, and Kubernetes orchestration.
 **Alternatives Considered**: Custom scaling logic (rejected - complex), single-node deployment (rejected - not scalable).
 
-### 4. Fail-safety: Dapr Resiliency Policies
-**Decision**: Define Dapr resiliency policies for retry, circuit breaker, timeout, and apply to all Dapr operations.
-**Rationale**: Centralized, configurable fail-safety without code changes.
-**Alternatives Considered**: Custom retry logic (rejected - scattered), no fail-safety (rejected - enterprise requirement).
+### 4. Fail-safety: Technical vs. Semantic Resilience
+**Decision**: Define Dapr resiliency policies (retry, circuit breaker, timeout) exclusively for *technical* failures (e.g., sidecar networking issues, temporary 500s). For *semantic* resilience (e.g., fallback logic, switching LLM providers), handle routing via PocketFlow's dynamic Node Action returns (`Action::Fallback`).
+**Rationale**: Separates infrastructure flakiness from business logic fallbacks. Relying on Dapr Compensation handlers for business logic alternatives is an anti-pattern. Dapr handles the network layer; Rust handles the application logic layer.
+**Alternatives Considered**: Conflating technical and semantic fallbacks (rejected - makes code hard to reason about and misuses Saga compensations), Custom retry logic (rejected - scattered).
 
 ### 5. Idempotency: Workflow Guarantees + Deduplication
 **Decision**: Leverage Dapr Workflow's idempotency guarantees, implement deduplication for external calls.

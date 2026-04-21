@@ -25,10 +25,10 @@ We are taking a **fresh start approach**: use Python PocketFlow patterns as insp
 
 ## Decisions
 
-### 1. Agent Pattern: Actor + Activity
-**Decision**: Implement agents as Dapr Actors (stateful) with actions as Dapr Activities.
-**Rationale**: Actors provide persistent conversation state and identity; activities provide stateless tool execution.
-**Alternatives Considered**: Always Activities (rejected - no persistent state), always Workflows (rejected - overkill for single agent).
+### 1. Agent Pattern: Stateless Routers + Sharded Actors
+**Decision**: Implement agent execution and routing as stateless Dapr Activities (or Workflow logic) to ensure high-throughput fan-in without locking. Use Dapr Actors *only* when strict sequential ordering of state changes is required (e.g., appending to a specific conversation history). For highly concurrent stateful agents, rely on Dapr State with optimistic concurrency control (ETags) or Actor sharding.
+**Rationale**: Defaulting to Dapr Actors for all agents bottlenecks the system due to strict single-threaded (turn-based) concurrency. Stateless routing prevents this bottleneck while maintaining functional equivalence.
+**Alternatives Considered**: Always Actors for agents (rejected - causes severe throughput bottlenecks for popular agents/supervisors), always Activities (rejected - no persistent state).
 
 ### 2. Map-Reduce Pattern: Workflow Fan-out/Fan-in
 **Decision**: Use Dapr Workflow's `for_each` with parallelism limit for map, and activity for reduce.
