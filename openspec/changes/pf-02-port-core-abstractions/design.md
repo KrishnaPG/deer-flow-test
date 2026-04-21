@@ -165,29 +165,38 @@ Architecture split:
     - `DaprDurability`: Distributed enterprise - requires Dapr sidecar, multi-tenant, HA
 *   **`berg10-ai-nodes`**: LLM/AI specific Node implementations
 
-**Three-Tier Deployment Model**:
+**Three-Tier Deployment Model** (No Docker Required for Dev/Local):
 ```
-Development (Default):
+Development (Default - Zero Dependencies):
   cargo run --example hello-world
   → Uses InMemoryDurability
   → Zero setup, instant feedback
+  → No Docker, no sidecar, no external services
+  → CheckpointPolicy::Disabled (max performance)
+  → SharedStorePolicy::Ephemeral
 
-Local Production:
-  → Uses ReDBDurability
-  → File-based persistence
-  → No sidecar needed
+Local Production (Single-User, No Docker):
+  cargo run --example hello-world --features local-prod
+  → Uses ReDBDurability (file-based persistence)
+  → No sidecar needed, no Docker needed
+  → SQLite-compatible storage
+  → CheckpointPolicy::EveryN(5)
+  → Works on any machine with just Rust installed
 
-Distributed/Cloud:
+Distributed/Cloud (Full Enterprise Features):
   dapr run -- cargo run --example hello-world
   → Uses DaprDurability
-  → Full enterprise features
+  → Full enterprise features (retry, circuit breaker, distributed tracing)
   → Kubernetes-ready
+  → Optional: Enable batch checkpointing for high throughput
 ```
 
+**Key Principle**: The same code runs in all three modes. Only the durability implementation changes. No Docker required for development or local production deployment.
+
 **Rationale**: Custom orchestrator enables dynamic graphs. Durability abstraction allows same code to run anywhere: dev (memory) → local prod (ReDB) → cloud (Dapr).
-### 11. Checkpoint and Recovery Strategy (State-Driven)
-**Decision**: Pure state-driven architecture. The State structure contains everything needed for execution. No separate execution stack. Checkpoints persist the entire State after every node transition.
-**Rationale**: Dumb orchestrator pattern. The orchestrator doesn't understand graphs or stacks - it just executes what the State says. State contains current position, shared data, and node-specific checkpoint data.
+### 11. Checkpoint and Recovery Strategy (State-Driven with Configurable Policy)
+**Decision**: Pure state-driven architecture with configurable checkpoint policies. Users select the appropriate policy for their use case - from maximum durability to maximum performance.
+**Rationale**: Different workflows have different durability requirements. A chat agent needs frequent checkpoints; a high-throughput ETL pipeline may prefer batch checkpointing. The policy is user-configurable, not hardcoded.
 
 **State Structure**:
 ```rust
@@ -201,16 +210,55 @@ pub struct State {
 }
 ```
 
-**SharedStore is EPHEMERAL**:
-- Purpose: Communication between nodes during execution
-- Not persisted in checkpoints
-- On crash: Re-run last node, which re-populates SharedStore
-- For durable data: Nodes persist explicitly via durability API
+**Checkpoint Policy** (User-Configurable):
+```rust
+pub enum CheckpointPolicy {
+    /// Checkpoint every N node transitions (default: 5)
+    /// Good for: Chat agents, research loops, long-running workflows
+    EveryN(usize),
+    
+    /// Only checkpoint at developer-marked safe points
+    /// Good for: Multi-stage pipelines, ETL workflows
+    SafePointsOnly,
+    
+    /// Only at explicit CheckpointNode in the graph
+    /// Good for: Developer-controlled durability
+    ExplicitOnly,
+    
+    /// Disable checkpointing (in-memory only)
+    /// Good for: High-throughput, recoverable workflows, dev mode
+    Disabled,
+}
 
-**Checkpoint Policy**:
-- **ALWAYS checkpoint after every node transition** (no configuration)
-- Maximum durability for execution position
-- Simple mental model: every step position is persisted
+pub struct CheckpointConfig {
+    pub policy: CheckpointPolicy,
+    pub async_flush: bool,           // Buffer and flush async (opt-in)
+    pub compression: bool,           // Compress checkpoint data
+    pub max_buffer_size: usize,      // Max buffered checkpoints before forced flush
+}
+```
+
+**SharedStore Persistence Options**:
+```rust
+pub enum SharedStorePolicy {
+    /// Ephemeral - not persisted (default for performance)
+    /// Requires nodes to be idempotent
+    Ephemeral,
+    
+    /// Persisted - saved with checkpoints
+    /// Adds overhead but survives crashes without re-execution
+    Persisted,
+    
+    /// Selective - only persist specific keys marked with #[persist]
+    Selective(HashSet<String>),
+}
+```
+
+**Batch Checkpointing** (Opt-In):
+- Disabled by default for maximum durability
+- Enable via `CheckpointConfig::async_flush = true`
+- Configurable buffer size and flush interval
+- Risk: Up to `flush_interval` of work may be lost on crash
 
 **Checkpoint History**:
 - Checkpoints are append-only
@@ -306,6 +354,111 @@ impl Node for Flow {
 ```
 
 **Key Principle**: Orchestrator is completely agnostic. It just sees nodes and actions. Whether a node is simple or composite is an implementation detail.
+
+### 12a. Node Idempotency Enforcement (Compile-Time)
+**Decision**: All nodes must be either idempotent (safe to re-run) or implement side-effect tracking. This is enforced at compile time via the type system.
+**Rationale**: When a workflow crashes and recovers, the last node must re-execute to repopulate SharedStore. If that node has side effects (API calls, DB writes), idempotency prevents duplicate operations. This is critical for correctness.
+
+**Idempotency Trait System**:
+```rust
+/// Marker trait for idempotent nodes (safe to re-run)
+pub trait Idempotent {}
+
+/// Trait for nodes with side effects (not idempotent)
+pub trait SideEffects {
+    /// Generate deterministic idempotency key
+    fn idempotency_key(&self, workflow_id: &WorkflowId, attempt: u32) -> String;
+}
+
+/// Node trait with compile-time idempotency checking
+pub trait Node {
+    type Input;
+    type Output;
+    
+    async fn exec(&self, input: Self::Input) -> Result<Self::Output>;
+    
+    /// Must return true if node is idempotent
+    fn is_idempotent(&self) -> bool;
+    
+    /// Must provide idempotency key if not idempotent
+    fn idempotency_key(&self, ctx: &ExecutionContext) -> Option<String>;
+}
+
+/// Compile-time enforcement: Node must implement either Idempotent or SideEffects
+pub struct NodeBuilder<T> {
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Idempotent> NodeBuilder<T> {
+    pub fn build(self) -> Box<dyn Node> {
+        // Automatically marked as idempotent
+    }
+}
+
+impl<T: SideEffects> NodeBuilder<T> {
+    pub fn build(self) -> Box<dyn Node> {
+        // Must provide idempotency key generation
+    }
+}
+
+// Example: Idempotent node
+#[derive(Idempotent)]
+pub struct TransformNode {
+    transformation: Transformation,
+}
+
+impl Node for TransformNode {
+    fn is_idempotent(&self) -> bool { true }
+    fn idempotency_key(&self, _ctx: &ExecutionContext) -> Option<String> { None }
+}
+
+// Example: Non-idempotent node with side effects
+pub struct PaymentNode {
+    gateway: PaymentGateway,
+}
+
+impl SideEffects for PaymentNode {
+    fn idempotency_key(&self, workflow_id: &WorkflowId, attempt: u32) -> String {
+        // Deterministic key prevents duplicate charges
+        format!("payment:{}:{}", workflow_id, attempt)
+    }
+}
+
+impl Node for PaymentNode {
+    fn is_idempotent(&self) -> bool { false }
+    fn idempotency_key(&self, ctx: &ExecutionContext) -> Option<String> {
+        Some(self.idempotency_key(&ctx.workflow_id, ctx.attempt))
+    }
+}
+```
+
+**Compile-Time Error Example**:
+```rust
+// This will FAIL to compile:
+pub struct BadNode;
+
+impl Node for BadNode {
+    fn is_idempotent(&self) -> bool { false }
+    // ERROR: Non-idempotent node must implement SideEffects trait
+    //        or mark as Idempotent
+}
+```
+
+**Helper Macros**:
+```rust
+// Derive macro for idempotent nodes
+#[derive(Node, Idempotent)]
+pub struct MyTransform {
+    config: Config,
+}
+
+// Attribute macro for side-effect nodes
+#[derive(Node)]
+#[side_effects(key = "payment:{workflow_id}:{node_id}")]
+pub struct MyPayment {
+    gateway: PaymentGateway,
+}
+```
 
 ### 13. Async-By-Default
 **Decision**: All node operations are async. No sync variants.
