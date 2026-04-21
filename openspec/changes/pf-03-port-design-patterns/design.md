@@ -495,12 +495,17 @@ pub enum DeploymentProfile {
     Dev,
     
     /// Local Production - file-based persistence, no Docker
-    /// Single-user, SQLite/ReDB storage
+    /// Single-user, ReDB + sqlite-vss storage
     LocalProd,
     
+    /// Hybrid - local app + remote Dapr sidecar
+    /// App runs locally without Docker, connects to remote Dapr for distributed features
+    /// (Uses DAPR_HTTP_ENDPOINT / DAPR_GRPC_ENDPOINT env vars)
+    LocalRemoteDapr,    
+
     /// Cloud - full Dapr features
     /// Multi-tenant, distributed, Kubernetes-ready
-    Cloud,
+    Cloud,    
     
     /// High Throughput - minimal durability
     /// For recoverable workflows where replay is acceptable
@@ -596,8 +601,10 @@ config.batch_failure_policy = BatchFailurePolicy::Sequential;
 ```
 
 **Key Benefits**:
-- **5 presets** cover 95% of use cases
+- **6 presets** cover 95% of use cases (including Hybrid for remote sidecar)
 - **No Docker required** for Dev and LocalProd profiles
+- **Local Vector DB** with sqlite-vss for RAG without Dapr
+- **Remote Dapr** support via environment variables
 - **Sensible defaults** - users don't need to understand all options
 - **Extensible** - advanced users can customize
 - **Type-safe** - invalid combinations caught at compile time

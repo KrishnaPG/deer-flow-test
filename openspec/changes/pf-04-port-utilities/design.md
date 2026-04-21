@@ -38,9 +38,104 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Flexibility for offline use and cloud deployment. Connection pooling ensures reliability under high concurrent throughput.
 **Alternatives Considered**: Cloud-only (rejected - no offline support), Unpooled local connections (rejected - crashes under load).
 
-### 3. Vector DB: Dapr Bindings
-**Decision**: Use Dapr Vector bindings for vector database operations.
-**Rationale**: Pluggable backends, consistent API across providers.
+### 3. Vector DB: Pluggable Backends with Local First
+**Decision**: Implement VectorStore trait with pluggable backends. For local production WITHOUT Dapr sidecar, use sqlite-vss. For cloud/distributed, use Dapr Vector bindings.
+**Rationale**: Enables RAG pattern to work without Docker/Dapr. sqlite-vss runs locally without external dependencies. Pluggable design allows swapping backends.
+**Implementation**:
+```rust
+pub trait VectorStore: Send + Sync {
+    /// Insert or update vectors with metadata
+    async fn upsert(&self, id: &str, embedding: &[f32], metadata: Value) -> Result<()>;
+    
+    /// Search for similar vectors
+    async fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<SearchResult>>;
+    
+    /// Delete vectors by ID
+    async fn delete(&self, id: &str) -> Result<()>;
+}
+
+/// Local vector store - no Docker/Dapr required
+/// Uses sqlite-vss (SQLite + vector extension)
+pub struct SqliteVssVectorStore {
+    pool: SqlitePool,
+    table_name: String,
+}
+
+impl VectorStore for SqliteVssVectorStore {
+    async fn upsert(&self, id: &str, embedding: &[f32], metadata: Value) -> Result<()> {
+        let emb_blob = embedding_to_blob(embedding);
+        sqlx::query(&format!(
+            "INSERT OR REPLACE INTO {} (id, embedding, metadata) VALUES (?, ?, ?)",
+            self.table_name
+        ))
+        .bind(id)
+        .bind(emb_blob)
+        .bind(metadata.to_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+    
+    async fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<SearchResult>> {
+        let query_blob = embedding_to_blob(query);
+        let rows = sqlx::query(&format!(
+            "SELECT id, metadata, cosine_distance(embedding, ?) as distance 
+             FROM {} ORDER BY distance LIMIT ?",
+            self.table_name
+        ))
+        .bind(query_blob)
+        .bind(top_k as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        // Parse results...
+        Ok(results)
+    }
+    
+    async fn delete(&self, id: &str) -> Result<()> {
+        sqlx::query(&format!("DELETE FROM {} WHERE id = ?", self.table_name))
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+}
+
+/// Dapr Vector store - for cloud/distributed deployments
+pub struct DaprVectorStore {
+    component_name: String,
+    client: DaprClient,
+}
+
+impl VectorStore for DaprVectorStore {
+    // Uses Dapr Vector binding API
+}
+```
+
+**Local vs Remote Vector DB Decision Tree**:
+```
+┌─────────────────────────────────────────────────────────┐
+│            Vector DB Backend Selection                    │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Is DAPR_HTTP_ENDPOINT set?                            │
+│         │                                             │
+│    YES──┼──NO                                          │
+│         │                                              │
+│         ▼                                              ▼
+│  ┌──────────────┐      ┌──────────────┐              │
+│  │ Dapr Vector  │      │  sqlite-vss  │              │
+│  │  Bindings   │      │  (Local)    │              │
+│  └──────────────┘      └──────────────┘              │
+│         │                     │                      │
+│         └──────────┬──────────┘                      │
+│                    ▼                                  │
+│         ┌─────────────────────┐                     │
+│         │  Same VectorStore   │                     │
+│         │  Trait Interface   │                     │
+│         └─────────────────────┘                     │
+└─────────────────────────────────────────────────────────┘
+```
+
 **Alternatives Considered**: Direct vector DB clients (rejected - more code), custom abstraction (rejected - reinventing wheel).
 
 ### 4. Web Search: Dapr Bindings
