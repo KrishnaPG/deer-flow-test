@@ -34,21 +34,27 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 ## Decisions
 
 ### 1. Custom Orchestrator with Dapr Enterprise Layer
-**Decision**: Implement a custom `Orchestrator` for graph execution (NOT Dapr Workflows). Use Dapr for enterprise features: State Store (persistence), Pub/Sub (messaging), Resiliency (retry/CB), Tracing (observability), Secret Store (security).
+**Decision**: Implement a custom `Orchestrator` for graph execution (NOT Dapr Workflows). Use Dapr ONLY for enterprise durability features: State Store (persistence), Pub/Sub (messaging), Resiliency (retry/CB), Tracing (observability), Secret Store (security). Dapr is NOT used for workflow orchestration.
 **Rationale**: Dapr Workflows require static workflow definitions known at build time. Python PocketFlow supports dynamic graph modification at runtime (nodes can add/remove successors during execution). A custom orchestrator maintains this flexibility while Dapr provides durability and enterprise features.
 **Architecture**:
 ```
-┌─────────────────────────────────────┐
-│     Custom Orchestrator             │
-│  (Dynamic graphs, runtime routing)  │
-├─────────────────────────────────────┤
-│     Durability Trait                │
-│  ┌─────────┐ ┌─────────┐ ┌────────┐ │
-│  │  Dapr   │ │  Local  │ │Memory  │ │
-│  │(dist)   │ │(sqlite) │ │(test)  │ │
-│  └─────────┘ └─────────┘ └────────┘ │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│          Custom Orchestrator                │
+│  (Dynamic graph traversal, action routing)  │
+├─────────────────────────────────────────────┤
+│         Durability Trait                    │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐       │
+│  │ InMemory│ │  ReDB   │ │  Dapr   │       │
+│  │ (default│ │(local   │ │(cloud)  │       │
+│  │  dev)   │ │ prod)   │ │         │       │
+│  └─────────┘ └─────────┘ └─────────┘       │
+└─────────────────────────────────────────────┘
 ```
+**Key Principles**:
+- Dapr is ONLY for durability/state management, NEVER for orchestration
+- Orchestrator is custom-built for dynamic graph support
+- Three-tier durability: InMemory (default) → ReDB → Dapr
+- Auto-detect Dapr sidecar; warn/fail if DaprDurability requested but sidecar missing
 **Alternatives Considered**: Dapr Workflows (rejected - static graphs only), Temporal (rejected - similar static constraint).
 
 ### 2. Flow as Node with Custom Orchestration
@@ -149,43 +155,71 @@ impl Node {
 - Back-edges enable loops: `node_a - "continue" >> node_a`
 
 ### 10. Engine/Driver Separation & Domain-Agnostic Orchestration
-**Decision**: **Dapr is not the engine; it provides enterprise services.** The core `Node`, `Flow`, and orchestration patterns must be completely decoupled from both LLM-specific logic AND the execution environment.
+**Decision**: **Dapr is not the engine; it provides enterprise durability services ONLY.** The core `Node`, `Flow`, and orchestration patterns must be completely decoupled from both LLM-specific logic AND the execution environment.
 
 Architecture split:
 *   **`berg10-execution-engine`**: Core engine with `Node` trait, `Flow` orchestrator, custom `Orchestrator` implementation. Zero AI dependencies. Zero Dapr dependencies.
 *   **`berg10-durability`**: Durability trait and implementations:
-    - `DaprDurability`: Distributed (Dapr sidecar)
-    - `LocalDurability`: Single-user production (SQLite)
-    - `InMemoryDurability`: Development/testing
+    - `InMemoryDurability`: Default for development - zero dependencies, fastest iteration
+    - `ReDBDurability`: Single-user production - file-based persistence using ReDB
+    - `DaprDurability`: Distributed enterprise - requires Dapr sidecar, multi-tenant, HA
 *   **`berg10-ai-nodes`**: LLM/AI specific Node implementations
 
-**Rationale**: Custom orchestrator enables dynamic graphs. Durability abstraction allows same code to run distributed (Dapr) or local (SQLite).
-### 11. Checkpoint and Recovery Strategy
-**Decision**: Configurable checkpoint policy with default every 5 node transitions. Persist workflow state (current node, shared state, graph snapshot) for recovery.
-**Rationale**: Balance durability with performance. Long-running workflows (chat, research) need recovery; short workflows don't.
+**Three-Tier Deployment Model**:
+```
+Development (Default):
+  cargo run --example hello-world
+  → Uses InMemoryDurability
+  → Zero setup, instant feedback
+
+Local Production:
+  → Uses ReDBDurability
+  → File-based persistence
+  → No sidecar needed
+
+Distributed/Cloud:
+  dapr run -- cargo run --example hello-world
+  → Uses DaprDurability
+  → Full enterprise features
+  → Kubernetes-ready
+```
+
+**Rationale**: Custom orchestrator enables dynamic graphs. Durability abstraction allows same code to run anywhere: dev (memory) → local prod (ReDB) → cloud (Dapr).
+### 11. Checkpoint and Recovery Strategy (Stack-Based)
+**Decision**: Stack-based checkpoint system that checkpoints after EVERY node transition. Checkpoints are append-only with history. Recovery loads the latest checkpoint.
+**Rationale**: Maximum durability for production systems. Stack-based approach makes the orchestrator agnostic to nesting depth. Append-only history enables audit trails and debugging.
 
 **Checkpoint Structure**:
 ```rust
-pub struct WorkflowCheckpoint {
+pub struct Checkpoint {
     pub workflow_id: WorkflowId,
-    pub current_node_id: NodeId,
-    pub graph_snapshot: GraphSnapshot,      // Serialized graph structure
-    pub shared_state: Vec<u8>,             // Serialized SharedStore
+    pub execution_stack: Vec<Frame>,     // Current execution stack
+    pub shared_store: HashMap<String, Value>, // Workflow state
     pub timestamp: DateTime<Utc>,
 }
 
-pub enum CheckpointPolicy {
-    EveryN(usize),      // Checkpoint every N transitions (default: 5)
-    SafePointsOnly,     // Only at marked safe points
-    ExplicitOnly,       // Only explicit checkpoint nodes
+pub struct Frame {
+    pub node_id: NodeId,
+    pub state: Option<Vec<u8>>,  // Opaque state for resume
 }
 ```
 
+**Checkpoint Policy**:
+- **ALWAYS checkpoint after every node transition** (no configuration)
+- Maximum durability, no data loss on crash
+- Simple mental model: every step is persisted
+
+**Checkpoint History**:
+- Checkpoints are append-only
+- History retained for audit/debugging
+- Recovery always uses the latest checkpoint
+- Old checkpoints can be garbage collected based on policy
+
 **Recovery Flow**:
-1. Check for existing checkpoint
-2. Rehydrate graph from snapshot + code
-3. Restore shared state
-4. Resume from current_node_id
+1. Load latest checkpoint from durability backend
+2. Restore execution stack
+3. Restore shared store
+4. Resume from top of stack
 
 ### 12. Nested Flow Checkpointing (Hierarchical Checkpoints)
 **Decision**: Support hierarchical checkpoints for Flow-as-Node composition where parent Flow checkpoints include child Flow checkpoints.
@@ -226,56 +260,49 @@ pub enum NestedRecoveryStrategy {
 }
 ```
 
-**Checkpoint Inheritance Rules**:
-1. Parent Flow creates checkpoint → includes all active child Flow checkpoints
-2. Child Flow checkpoints independently during execution
-3. Parent checkpoint references child checkpoint IDs (not full data)
-4. On recovery: Restore parent, then restore each child from its checkpoint
-5. Child can fail independently → parent handles via Action routing
-
-**Scope Isolation**:
-- Child Flow has isolated SharedStore (separate from parent)
-- Child Flow can checkpoint without parent checkpointing
-- Parent can checkpoint without child completion
-- On child completion: Child state merges back to parent
+**Nested Flow Execution** (Stack-Based Agnostic Orchestrator):
+- Each orchestrator manages its own stack
+- Composite nodes (Flows) spawn inner orchestrators
+- Parent orchestrator sees composite node as opaque - just a node that takes time
+- Composite node serializes inner orchestrator state for resumption
+- Recovery: Parent resumes composite node → Composite node resumes inner orchestrator
 
 **Implementation**:
 ```rust
-impl Flow {
-    async fn exec(&self, input: PrepResult, parent_ctx: Option<&ExecutionContext>) -> Result<ExecResult> {
-        let orchestrator = Orchestrator::new(self.durability());
-        let mut local_store = SharedStore::new();
+// Simple Node implementation
+impl Node for SimpleNode {
+    async fn exec(&self, shared: &mut SharedStore) -> Result<Action> {
+        // Do work
+        Ok(Action::Done)
+    }
+    
+    async fn resume(&self, _state: &[u8], shared: &mut SharedStore) -> Result<Action> {
+        // Simple nodes usually don't resume (stateless)
+        self.exec(shared).await
+    }
+}
+
+// Composite Node (Flow) implementation
+impl Node for Flow {
+    async fn exec(&self, shared: &mut SharedStore) -> Result<Action> {
+        // Spawn inner orchestrator with same durability backend
+        let inner = Orchestrator::new(self.durability.clone());
+        inner.run(self.start_node.clone(), shared).await
+    }
+    
+    async fn resume(&self, state: &[u8], shared: &mut SharedStore) -> Result<Action> {
+        // Deserialize inner orchestrator state
+        let inner_state: InnerOrchestratorState = deserialize(state)?;
         
-        // If parent context exists, checkpoint is hierarchical
-        let checkpoint_policy = if let Some(parent) = parent_ctx {
-            CheckpointPolicy::Hierarchical {
-                parent: parent.checkpoint_policy(),
-                independent: self.checkpoint_policy(),
-            }
-        } else {
-            CheckpointPolicy::EveryN(5)
-        };
-        
-        let final_action = orchestrator
-            .with_checkpoint_policy(checkpoint_policy)
-            .run(self.start_node(), &mut local_store)
-            .await?;
-        
-        // Merge child state back to parent if present
-        if let Some(parent) = parent_ctx {
-            parent.shared_store().merge(local_store)?;
-        }
-        
-        Ok(ExecResult::FlowCompleted { action: final_action })
+        // Spawn inner orchestrator and restore state
+        let inner = Orchestrator::new(self.durability.clone())
+            .with_state(inner_state);
+        inner.run(self.start_node.clone(), shared).await
     }
 }
 ```
 
-**Recovery Scenarios**:
-1. **Child fails, parent active**: Parent receives `Action::ChildFailed`, routes accordingly
-2. **Parent fails, child active**: Both restart from checkpoints (child from its checkpoint)
-3. **Atomic failure**: Parent and child restart together (transactional boundary)
-4. **Child suspended (HITL)**: Parent checkpoints waiting for child resume
+**Key Principle**: Orchestrator is completely agnostic. It just sees nodes and actions. Whether a node is simple or composite is an implementation detail.
 
 ### 13. Async-By-Default
 **Decision**: All node operations are async. No sync variants.
@@ -292,9 +319,13 @@ pub struct ExecutionMode {
 }
 
 pub enum DurabilityLevel {
-    Distributed,  // Dapr - multi-tenant, HA
-    Persistent,   // SQLite - single-user production
-    Volatile,     // In-memory - dev/testing
+    InMemory,     // Default - zero dependencies, dev/testing
+    ReDB,         // Single-user production - file-based persistence
+    Dapr,         // Distributed - multi-tenant, HA, requires sidecar
+}
+
+impl Default for DurabilityLevel {
+    fn default() -> Self { DurabilityLevel::InMemory }
 }
 ```
 **Usage**: User specifies mode at workflow start; runtime enforces constraints.

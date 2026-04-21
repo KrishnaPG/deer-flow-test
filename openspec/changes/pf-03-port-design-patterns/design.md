@@ -27,27 +27,82 @@ We are taking a **fresh start approach**: use Python PocketFlow patterns as insp
 
 ## Decisions
 
-### 1. Agent Pattern: Custom Orchestrator + Dapr State
-**Decision**: Implement agent using custom orchestrator with Dapr State for conversation persistence. Agent decision logic runs in standard async Rust (not Dapr Actors/Activities). State (conversation history) is stored in Dapr State Store.
-**Rationale**: Custom orchestrator supports dynamic graph modification needed for agent routing. Dapr State provides durability without Actor turn-based concurrency bottlenecks.
+### 1. Agent Pattern: Agent Trait with Auto-Selection
+**Decision**: Define an `Agent` trait that abstracts agent behavior. Support both simple async implementation (default) and Dapr Actor implementation (for multi-agent scenarios). Auto-select implementation based on configuration via central config module.
+**Rationale**: Single-agent flows don't need Actor overhead. Multi-agent scenarios benefit from Actor isolation. Central config allows runtime selection without code changes.
 **Pattern Structure**:
 ```rust
-pub struct AgentNode {
+/// Core Agent trait - implementation agnostic
+pub trait Agent: Node {
+    async fn decide(&self, context: &Context) -> Result<Decision>;
+    async fn execute_tool(&self, tool_call: ToolCall) -> Result<ToolResult>;
+    fn agent_config(&self) -> AgentConfig;
+}
+
+/// Simple async implementation (default, high performance)
+pub struct SimpleAgent {
     llm_client: Arc<dyn LLMClient>,
     tools: Vec<Box<dyn Tool>>,
 }
 
-impl Node for AgentNode {
-    async fn exec(&self, input: PrepResult) -> Result<ExecResult> {
-        // Call LLM with tools
-        // Return action: "tool_call", "respond", "fallback"
+impl Agent for SimpleAgent {
+    async fn decide(&self, context: &Context) -> Result<Decision> {
+        // Direct LLM call, no Actor overhead
+    }
+}
+
+/// Actor-based implementation (for multi-agent isolation)
+pub struct ActorAgent {
+    actor_id: ActorId,
+    // Dapr Actor handle
+}
+
+impl Agent for ActorAgent {
+    async fn decide(&self, context: &Context) -> Result<Decision> {
+        // Actor turn-based execution
+    }
+}
+
+/// Factory for auto-selection based on config
+pub struct AgentFactory;
+
+impl AgentFactory {
+    pub fn create_agent(config: &AgentConfig) -> Box<dyn Agent> {
+        match config.execution_mode {
+            ExecutionMode::Simple => Box::new(SimpleAgent::new(config)),
+            ExecutionMode::Actor => Box::new(ActorAgent::new(config)),
+            ExecutionMode::Auto => {
+                // Auto-select based on config module settings
+                if config::is_multi_agent_enabled() {
+                    Box::new(ActorAgent::new(config))
+                } else {
+                    Box::new(SimpleAgent::new(config))
+                }
+            }
+        }
     }
 }
 ```
 
-### 2. Map-Reduce Pattern: Async Parallel with Batching & Failure Policies
-**Decision**: Use async `join!` for local parallel execution or Dapr's `when_all` for distributed. Implement **Batched Chunking** to process large datasets in safe chunks (e.g., 100 items at a time). Support user-configurable batch failure policies.
-**Rationale**: Custom orchestrator with async Rust provides parallel execution. Batching prevents memory exhaustion. Failure policies let user decide semantic vs convenience batching.
+**Configuration via Central Config Module**:
+```rust
+// In berg10-config
+pub struct AgentConfiguration {
+    pub execution_mode: ExecutionMode,
+    pub enable_actor_isolation: bool,
+    pub default_max_iterations: usize,
+}
+
+pub enum ExecutionMode {
+    Simple,  // Default - high performance async
+    Actor,   // Dapr Actor - isolation for multi-agent
+    Auto,    // Select based on context
+}
+```
+
+### 2. Map-Reduce Pattern: Async Parallel with Configurable Policies
+**Decision**: Use async `join!` or `join_all` for parallel execution. Support batched chunking for memory safety. Batch failure policies are **optional and configurable** - default to simple sequential semantics matching Python PocketFlow.
+**Rationale**: Python's BatchNode is simple and effective. Advanced policies are opt-in for specific use cases. Default behavior should be intuitive and match Python semantics.
 **Implementation**:
 ```rust
 pub struct MapReduceFlow {
@@ -58,23 +113,30 @@ pub struct MapReduceFlow {
     max_retries_per_item: usize,
 }
 
+/// Batch failure policies - ADVANCED, opt-in features
+/// Default behavior matches Python: sequential processing with simple retry
 pub enum BatchFailurePolicy {
-    /// All items must succeed, or entire batch fails (semantic batching)
+    /// Default - match Python semantics
+    /// Sequential processing, fail on first error
+    Sequential,
+    
+    /// All items must succeed, or entire batch fails
     /// Use case: Transactional operations, related data
-    /// If any item fails, entire batch fails
     Semantic,
     
-    /// Individual items can fail, retry only failed items (convenience batching)
+    /// Individual items can fail, retry only failed items
     /// Use case: Independent operations, bulk processing
-    /// Checkpoint succeeded items, retry only failed
     Independent {
-        checkpoint_successful: bool,  // Save successful items
+        checkpoint_successful: bool,
     },
     
-    /// Continue processing, collect all errors at end (best-effort)
+    /// Continue processing, collect all errors at end
     /// Use case: Reporting, data migration
-    /// Process all items, return results + errors
     BestEffort,
+}
+
+impl Default for BatchFailurePolicy {
+    fn default() -> Self { BatchFailurePolicy::Sequential }
 }
 
 pub struct BatchResult<T> {
@@ -229,64 +291,33 @@ impl StreamingNode for RAGNode {
 }
 ```
 
-### 9. Voice/Audio Streaming Pattern
-**Decision**: Support real-time audio streaming for voice chat applications (pocketflow-voice-chat).
-**Rationale**: Voice interfaces require low-latency bidirectional audio streaming (STT + LLM + TTS pipeline).
-**Architecture**:
+### 4. Multi-Agent Pattern: Flexible Communication with Optional Actor Isolation
+**Decision**: Support multiple multi-agent communication patterns: shared state (simplest), Dapr Pub/Sub (decoupled), and optional Dapr Actor isolation (advanced). Default to shared state for simplicity; escalate to Actors only when isolation is required.
+**Rationale**: Not all multi-agent scenarios need Actor overhead. Shared state is simplest and fastest. Pub/Sub adds decoupling. Actors add isolation when needed.
+**Communication Patterns**:
 ```rust
-pub struct VoiceChatFlow {
-    stt_client: Arc<dyn STTClient>,      // Speech-to-text
-    llm_client: Arc<dyn StreamingLLM>,   // LLM with streaming
-    tts_client: Arc<dyn TTSClient>,      // Text-to-speech
-    audio_config: AudioConfig,
+pub enum MultiAgentCommunication {
+    /// Shared state - fastest, simplest (default)
+    SharedState {
+        shared_store: Arc<RwLock<SharedStore>>,
+    },
+    /// Dapr Pub/Sub - decoupled, async
+    PubSub {
+        topic_prefix: String,
+    },
+    /// Direct channels - for local coordination
+    Channels {
+        message_queues: HashMap<AgentId, Arc<Queue>>,
+    },
 }
 
-pub struct AudioConfig {
-    pub sample_rate: u32,           // 16kHz, 44.1kHz, etc.
-    pub channels: u16,              // Mono=1, Stereo=2
-    pub chunk_duration_ms: u64,     // Audio chunk size
-    pub codec: AudioCodec,          // Opus, PCM, etc.
-}
-
-pub enum AudioCodec {
-    Opus,
-    Pcm16LE,
-    PcmFloat,
-}
-
-impl VoiceChatFlow {
-    async fn run(&self, ctx: &ExecutionContext) -> Result<()> {
-        // Pipeline: Audio Input -> STT -> LLM -> TTS -> Audio Output
-        let audio_input = self.receive_audio_stream(ctx).await?;
-        
-        // STT with streaming transcription
-        let transcription_stream = self.stt_client.transcribe_stream(audio_input);
-        
-        // LLM processes transcription, streams response
-        let llm_stream = self.llm_client.generate_stream(transcription_stream);
-        
-        // TTS converts to audio chunks
-        let audio_output = self.tts_client.synthesize_stream(llm_stream);
-        
-        // Send audio back to user
-        self.send_audio_stream(audio_output).await?;
-        
-        Ok(())
-    }
+pub struct MultiAgentFlow {
+    agents: Vec<Box<dyn Agent>>,
+    communication: MultiAgentCommunication,
+    use_actor_isolation: bool,  // Optional: wrap agents in Dapr Actors
 }
 ```
-**Features**:
-- Real-time audio streaming (STT + LLM + TTS pipeline)
-- Bidirectional WebSocket for audio I/O
-- Audio buffering and jitter handling
-- Silence detection for turn-taking
-- Interrupt handling (user can interrupt TTS)
-**Required For**: pocketflow-voice-chat
-
-### 4. Multi-Agent Pattern: Actors + Pub/Sub
-**Decision**: Implement agents as Dapr Actors, communication via Dapr Pub/Sub topics.
-**Rationale**: Actors maintain agent state; Pub/Sub enables decoupled asynchronous messaging.
-**Alternatives Considered**: Direct workflow calls (rejected - tight coupling), shared state only (rejected - no async communication).
+**Alternatives Considered**: Actors-only (rejected - unnecessary overhead for simple cases), Direct calls (rejected - tight coupling).
 
 ### 5. Supervisor Pattern: Custom Orchestrator Loop
 **Decision**: Implement supervisor using custom orchestrator with evaluation loop and checkpointing.

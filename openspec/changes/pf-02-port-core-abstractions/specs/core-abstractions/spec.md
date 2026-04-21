@@ -1,65 +1,81 @@
 ## ADDED Requirements
 
-### Requirement: Port Node abstraction to Rust with Dapr
-The system SHALL port the PocketFlow Node abstraction to Rust using Dapr Workflow Activities for stateless execution or Dapr Actors for stateful execution.
+### Requirement: Port Node abstraction to Rust with custom orchestrator
+The system SHALL port the PocketFlow Node abstraction to Rust using a custom orchestrator for dynamic graph execution. Dapr is used ONLY for durability/state management, NEVER for orchestration or Node execution.
 
 #### Scenario: Node trait definition
 - **WHEN** defining the Node trait in Rust
-- **THEN** the system SHALL include prep, exec, and post methods matching Python Node behavior
-- **AND** the system SHALL support retry logic with max_retries and wait parameters
-- **AND** the system SHALL support exec_fallback for error handling
+- **THEN** the system SHALL provide `exec()` for fresh execution
+- **AND** the system SHALL provide `resume(state)` for recovery from checkpoint
+- **AND** the system SHALL return `Action` for orchestrator routing
+- **AND** the orchestrator SHALL be agnostic to node internals
 
-#### Scenario: Dapr Activity mapping
-- **WHEN** mapping Node to Dapr Activity
-- **THEN** the system SHALL preserve the prep→exec→post pipeline semantics
-- **AND** the system SHALL use Dapr retry policies for node retries
-- **AND** the system SHALL handle failures through Dapr's built-in error handling
+#### Scenario: Node execution
+- **WHEN** the orchestrator calls `node.exec()`
+- **THEN** the node SHALL execute its logic
+- **AND** the node SHALL have access to SharedStore for state
+- **AND** the node SHALL return an Action for routing
 
-#### Scenario: Dapr Actor mapping
-- **WHEN** mapping Node to Dapr Actor for stateful execution
-- **THEN** the system SHALL maintain actor state across invocations
-- **AND** the system SHALL support actor turn-based concurrency
-- **AND** the system SHALL preserve node identity via actor ID
+#### Scenario: Node resumption
+- **WHEN** the orchestrator calls `node.resume(state)`
+- **THEN** the node SHALL restore from the opaque state blob
+- **AND** the node SHALL continue execution from where it left off
+- **AND** the orchestrator SHALL NOT interpret the state content
 
-### Requirement: Port Flow abstraction to Rust with Dapr
-The system SHALL port the PocketFlow Flow abstraction to Rust using Dapr Workflows for orchestration.
+#### Scenario: Composite nodes (Flow-as-Node)
+- **WHEN** a node is a composite (Flow)
+- **THEN** the node SHALL spawn an inner orchestrator
+- **AND** the inner orchestrator SHALL manage its own execution stack
+- **AND** the node SHALL serialize its inner state for resumption
+- **AND** the outer orchestrator SHALL remain agnostic
+
+#### Scenario: Dapr durability integration
+- **WHEN** using DaprDurability for state persistence
+- **THEN** the system SHALL use Dapr State Store for checkpoint persistence
+- **AND** the system SHALL use Dapr Pub/Sub for multi-agent communication when needed
+- **AND** the system SHALL auto-detect Dapr sidecar presence and fail fast if missing
+
+### Requirement: Port Flow abstraction to Rust with custom orchestrator
+The system SHALL port the PocketFlow Flow abstraction to Rust using the custom orchestrator. Flow is-a Node (implements Node trait) enabling hierarchical composition.
 
 #### Scenario: Flow orchestration
-- **WHEN** orchestrating nodes with Dapr Workflow
-- **THEN** the system SHALL support sequential execution via workflow activities
-- **AND** the system SHALL support conditional transitions via workflow branching
-- **AND** the system SHALL support loops via workflow continue signals
+- **WHEN** orchestrating nodes with the custom orchestrator
+- **THEN** the system SHALL support sequential execution via action-based routing
+- **AND** the system SHALL support conditional transitions via action keys
+- **AND** the system SHALL support loops via back-edges (later node → earlier node)
 
 #### Scenario: Nested flows
 - **WHEN** implementing nested flows
-- **THEN** the system SHALL support sub-workflows in Dapr
+- **THEN** the system SHALL support Flow-as-Node composition
 - **AND** the system SHALL preserve parameter passing between parent and child flows
+- **AND** the system SHALL support hierarchical checkpoints for nested flows
 
 #### Scenario: Parallel execution
 - **WHEN** executing nodes in parallel
-- **THEN** the system SHALL use Dapr Workflow's when_all for fan-out/fan-in
+- **THEN** the system SHALL use Rust async/await with tokio::join! or futures::join_all
 - **AND** the system SHALL support configurable parallelism limits
-- **AND** the system SHALL maintain durability across parallel executions
+- **AND** the system SHALL maintain durability through checkpointing
 
-### Requirement: Port SharedStore to Rust with Dapr State Management
-The system SHALL port the PocketFlow SharedStore to Rust using Dapr State Management for persistence.
+### Requirement: SharedStore with durability
+The system SHALL implement a durable SharedStore for workflow state that persists with every checkpoint.
 
-#### Scenario: State persistence
-- **WHEN** storing shared state
-- **THEN** the system SHALL use Dapr State Management with pluggable backends (Redis, PostgreSQL, etc.)
-- **AND** the system SHALL support concurrent access with appropriate locking mechanisms
-- **AND** the system SHALL preserve the key-value semantics of Python's shared dictionary
+#### Scenario: SharedStore API
+- **WHEN** implementing SharedStore
+- **THEN** the system SHALL provide simple key-value operations: get, put, delete
+- **AND** the system SHALL NOT provide atomic transactions (not needed)
+- **AND** the system SHALL support any serializable value type
 
-#### Scenario: State recovery
-- **WHEN** recovering from failures
-- **THEN** the system SHALL persist state after each node execution
-- **AND** the system SHALL support recovery from the last persisted state
-- **AND** the system SHALL maintain state consistency across workflow retries
+#### Scenario: SharedStore durability
+- **WHEN** checkpointing workflow state
+- **THEN** the SharedStore SHALL be serialized and persisted with the checkpoint
+- **AND** the SharedStore SHALL be restored on recovery
+- **AND** all durability backends SHALL support SharedStore persistence
 
-#### Scenario: Transactional updates
-- **WHEN** updating multiple state keys atomically
-- **THEN** the system SHALL use Dapr's transactional state operations
-- **AND** the system SHALL ensure atomicity across all keys in the transaction
+#### Scenario: SharedStore implementations
+- **WHEN** configuring SharedStore
+- **THEN** InMemoryDurability SHALL use in-memory HashMap
+- **AND** ReDBDurability SHALL use ReDB key-value store
+- **AND** DaprDurability SHALL use Dapr State Management
 
 ### Requirement: Port Params to Rust
 The system SHALL port the PocketFlow Params abstraction to Rust as immutable parameters passed to nodes.
@@ -77,19 +93,27 @@ The system SHALL port the PocketFlow Params abstraction to Rust as immutable par
 - **AND** the system SHALL support cross-language compatibility with Python
 
 ### Requirement: Retry and fallback mechanisms
-The system SHALL implement retry logic and fallback mechanisms using Dapr capabilities.
+The system SHALL implement retry logic and fallback mechanisms with clear separation between technical retries (infrastructure) and semantic fallbacks (business logic).
 
-#### Scenario: Retry with exponential backoff
-- **WHEN** a node fails and max_retries > 0
-- **THEN** the system SHALL retry with exponential backoff using Dapr retry policies
-- **AND** the system SHALL respect the wait parameter between retries
-- **AND** the system SHALL log retry attempts for observability
+#### Scenario: Technical retry (Dapr resiliency)
+- **WHEN** a node encounters technical failures (network, HTTP 5xx, timeouts)
+- **THEN** the system SHALL retry using Dapr resiliency policies when DaprDurability is used
+- **AND** the system SHALL use exponential backoff with jitter
+- **AND** local durability implementations SHALL provide equivalent retry logic
+- **AND** the system SHALL distinguish technical failures from business logic failures
 
-#### Scenario: Fallback execution
-- **WHEN** a node fails after max_retries
+#### Scenario: Semantic fallback (Action-based)
+- **WHEN** a node fails after max_retries or encounters business logic failure
 - **THEN** the system SHALL execute the node's exec_fallback method
-- **AND** the system SHALL treat fallback as a compensation action
-- **AND** the system SHALL allow fallback to trigger alternative workflow paths
+- **AND** exec_fallback SHALL return an Action indicating the fallback path
+- **AND** the orchestrator SHALL route to the appropriate successor based on the Action
+- **AND** fallback SHALL support both recovery paths and alternative workflow branches
+
+#### Scenario: Retry configuration
+- **WHEN** configuring retry behavior
+- **THEN** the system SHALL support max_retries and wait parameters per node
+- **AND** retry policies SHALL be configurable via central config module
+- **AND** the system SHALL expose cur_retry counter for custom retry logic
 
 ### Requirement: Node successors routing
 The system SHALL implement node successor routing where each node tracks possible next nodes via action keys, enabling runtime path selection.
@@ -128,48 +152,62 @@ The system SHALL implement node successor routing where each node tracks possibl
 - **THEN** the system SHALL emit a warning about overwriting the existing successor
 - **AND** the new successor SHALL replace the old one
 
-### Requirement: Flow orchestration mechanics
-The system SHALL implement flow orchestration via a distributed graph structure and an execution loop that iterates through nodes based on action routing.
+### Requirement: Stack-based orchestrator
+The system SHALL implement a stack-based orchestrator that executes nodes using DFS traversal. The orchestrator is agnostic to node types and nesting depth.
 
-#### Scenario: Distributed graph storage
+#### Scenario: Orchestrator execution loop
 - **WHEN** executing a flow
-- **THEN** the flow SHALL only store `start_node_id` as the entry point
-- **AND** each node SHALL store its own successors relationships
-- **AND** the graph traversal SHALL dynamically look up next nodes via successors maps
+- **THEN** the orchestrator SHALL maintain an execution stack of Frames
+- **AND** the loop SHALL: pop Frame → resolve Node → execute/resume → push next Frame
+- **AND** the loop SHALL continue until the stack is empty
+- **AND** the orchestrator SHALL NOT know or care about node semantics (simple vs composite)
 
-#### Scenario: Execution loop (_orch pattern)
-- **WHEN** executing a flow
-- **THEN** the system SHALL iterate: current_node.execute() → returns Action → lookup next node
-- **AND** the loop SHALL continue while current node exists and has successors
-- **AND** the loop SHALL terminate when get_next_node() returns None
-- **AND** the loop SHALL use `copy` semantics to avoid mutating original node state during traversal
+#### Scenario: Frame structure
+- **WHEN** creating a Frame for the execution stack
+- **THEN** the Frame SHALL contain: `node_id` and optional `state` (opaque blob)
+- **AND** if `state` is Some, the orchestrator SHALL call `node.resume(state)`
+- **AND** if `state` is None, the orchestrator SHALL call `node.exec()`
+- **AND** the orchestrator SHALL NOT interpret the state content
+
+#### Scenario: Checkpoint after every transition
+- **WHEN** a node completes execution
+- **THEN** the system SHALL persist a checkpoint BEFORE proceeding to next node
+- **AND** the checkpoint SHALL contain the current stack and SharedStore
+- **AND** checkpoints SHALL be append-only with history
+- **AND** recovery SHALL load the latest checkpoint from history
 
 #### Scenario: Loop via back-edge
 - **WHEN** implementing workflow loops
 - **THEN** the system SHALL support wiring a later node back to an earlier node
-- **AND** the loop edge SHALL be defined at graph construction time (not runtime modification)
-- **AND** the loop SHALL be represented as: `later_node - "action" >> earlier_node`
-- **AND** the loop SHALL continue until a node returns an action that is not wired to the loop
+- **AND** the loop SHALL be represented as: `later_node - Action::Continue >> earlier_node`
+- **AND** the loop SHALL continue until a node returns an action not wired to the loop
 
 #### Scenario: Conditional branching
 - **WHEN** a node has multiple possible next nodes
-- **THEN** the node SHALL support multiple edges with different action keys
-- **AND** the system SHALL select the edge based on the node's return value (action)
-- **AND** the branching SHALL be deterministic for the same input (same action → same edge)
+- **THEN** the node SHALL support multiple edges with different Action keys
+- **AND** the system SHALL select the edge based on the node's return Action
+- **AND** the branching SHALL be deterministic (same Action → same edge)
 
-### Requirement: Action type design
-The system SHALL use a type-safe Action enum for routing decisions, with extensibility for custom actions.
+### Requirement: Action type design (Performance-First)
+The system SHALL use a type-safe Action enum for routing decisions. NO string-based actions are supported - only enum variants for zero-cost performance.
 
-#### Scenario: Action enum with known variants
-- **WHEN** designing the Action type
-- **THEN** the system SHALL define known action variants as enum members (e.g., `Continue`, `Retry`, `Done`, `Search`, `Answer`)
-- **AND** the system SHALL provide a `Custom(&str)` variant for user-defined actions
-- **AND** the system SHALL implement `Into<String>` and `TryFrom<String>` for serialization
+#### Scenario: Action enum definition
+- **WHEN** defining the Action type
+- **THEN** the system SHALL use enum variants only (no strings)
+- **AND** the enum SHALL include: `Default`, `Done`, `Retry`, `Continue`, `Fallback`
+- **AND** the system SHALL provide `Custom(u64)` for user-defined actions
+- **AND** Action SHALL be `#[repr(u8)]` for compact representation
+- **AND** Action SHALL implement `Copy` trait (no allocations)
 
 #### Scenario: Default action
-- **WHEN** a node returns no action or the default action
-- **THEN** the system SHALL treat it as `Action::Continue` or the `"default"` key
-- **AND** the system SHALL lookup `successors.get("default")` for the next node
+- **WHEN** a node completes without explicit action
+- **THEN** the system SHALL use `Action::Default`
+- **AND** the orchestrator SHALL lookup successors using `Action::Default`
+
+#### Scenario: Successors mapping
+- **WHEN** mapping actions to successor nodes
+- **THEN** successors SHALL use `Action` as the key type directly
+- **AND** the map SHALL be `HashMap<Action, NodeId>` for O(1) lookup
 
 ### Requirement: Batch node semantics
 The system SHALL support batch processing where a node processes multiple items sequentially or in parallel.

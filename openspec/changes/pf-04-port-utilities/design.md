@@ -58,33 +58,63 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Visualization is local rendering; caching can be distributed.
 **Alternatives Considered**: Dapr rendering (rejected - overkill), no caching (rejected - performance).
 
-### 7. Text-to-Speech: Dapr Bindings with Streaming
-**Decision**: Use Dapr bindings for TTS services. Support streaming audio chunks for real-time playback.
-**Rationale**: Pluggable TTS providers, caching, rate limiting. Streaming enables responsive voice interfaces.
+### 7. Streaming with Built-in Backpressure Handling
+**Decision**: Implement streaming support with built-in backpressure handling for improved DX. No durable streaming - clients handle their own durability with resend/retry logic.
+**Rationale**: Built-in backpressure prevents overwhelming consumers. No durability guarantees during streaming (out of scope). Clients are responsible for their own reliability.
 **Implementation**:
 ```rust
-pub trait TTSClient {
-    /// Generate complete audio
-    async fn synthesize(&self, text: &str) -> Result<AudioData>;
+pub trait StreamingClient {
+    type Item;
     
-    /// Stream audio chunks for real-time playback
-    fn synthesize_stream(&self, text: &str) -> Pin<Box<dyn Stream<Item = Result<AudioChunk>> + Send>>;
+    /// Stream with backpressure handling
+    fn stream_with_backpressure(
+        &self,
+        request: Request,
+        config: StreamConfig,
+    ) -> Pin<Box<dyn Stream<Item = Result<Self::Item>> + Send>>;
+}
+
+pub struct StreamConfig {
+    /// Buffer size before backpressure kicks in
+    pub buffer_size: usize,
+    /// Timeout for consumer to process item
+    pub consumer_timeout: Duration,
+    /// Backpressure strategy
+    pub backpressure_strategy: BackpressureStrategy,
+    /// Failure policy when buffer overflows
+    pub failure_policy: StreamFailurePolicy,
+}
+
+pub enum BackpressureStrategy {
+    /// Block producer until consumer catches up
+    Block,
+    /// Drop oldest items in buffer
+    DropOldest,
+    /// Drop newest items (reject new)
+    DropNewest,
+}
+
+pub enum StreamFailurePolicy {
+    /// Fail the entire stream
+    Fail,
+    /// Continue streaming, log errors
+    Continue,
+    /// Custom handler
+    Custom(Box<dyn Fn(StreamError) -> StreamAction>),
+}
+
+pub enum StreamAction {
+    Continue,
+    Abort,
+    Retry,
 }
 ```
 
-### 10. Speech-to-Text: Dapr Bindings with Streaming
-**Decision**: Use Dapr bindings for STT services. Support streaming transcription for real-time voice input.
-**Rationale**: Required for `pocketflow-voice-chat` cookbook. Real-time transcription enables conversational voice interfaces.
-**Implementation**:
-```rust
-pub trait STTClient {
-    /// Transcribe complete audio
-    async fn transcribe(&self, audio: &AudioData) -> Result<String>;
-    
-    /// Stream transcription results for real-time voice input
-    fn transcribe_stream(&self) -> Pin<Box<dyn Stream<Item = Result<TranscriptionChunk>> + Send>>;
-}
-```
+**Key Principles**:
+- Built-in backpressure handling (not optional)
+- Configurable buffer sizes and strategies
+- NO durable streaming - clients handle retries
+- Failure policies are configurable per stream
 
 ### 8. Tiered Caching Strategy (L1 + L2)
 **Decision**: Build a tiered cache architecture. Use an in-memory Rust `moka` cache for ultra-low latency L1 caching of frequent utility calls. On an L1 miss, fall back to Dapr State Management (L2 cache).
@@ -183,20 +213,34 @@ connection_pools:
 - pocketflow-fastapi-websocket (WebSocket connection management)
 - All LLM utility clients (API connection pooling)
 
-### 11. Streaming Support Matrix
-**Decision**: Support streaming for utilities where LLM providers support it.
+### 11. Streaming Support Matrix (with Backpressure)
+**Decision**: Support streaming for utilities where LLM providers support it. All streaming includes built-in backpressure handling.
 **Streaming Matrix**:
-| Utility | Streaming Support | Strategy | Notes |
-|---------|------------------|----------|-------|
-| OpenAI Chat | ✅ | Direct stream | Native streaming API |
-| Anthropic Claude | ✅ | Direct stream | Native streaming API |
-| Local LLMs | ✅ | Direct stream | Via generation callbacks |
-| TTS | ✅ | Audio chunk stream | Real-time playback |
-| STT | ✅ | Real-time transcription | Voice input |
-| Embeddings | ❌ | Complete only | Usually not streamed |
-| Web Search | ❌ | Complete only | Atomic results |
+| Utility | Streaming Support | Backpressure | Notes |
+|---------|------------------|--------------|-------|
+| OpenAI Chat | ✅ | Built-in | Native streaming API |
+| Anthropic Claude | ✅ | Built-in | Native streaming API |
+| Local LLMs | ✅ | Built-in | Via generation callbacks |
+| Embeddings | ❌ | N/A | Complete only |
+| Web Search | ❌ | N/A | Atomic results |
 
-**Rationale**: Streaming reduces time-to-first-byte (TTFB) for conversational interfaces. Not all utilities benefit from streaming.
+**Backpressure Configuration**:
+```rust
+// Default backpressure config
+let stream_config = StreamConfig {
+    buffer_size: 100,           // Items
+    consumer_timeout: 30s,      // Per item
+    backpressure_strategy: BackpressureStrategy::Block,
+    failure_policy: StreamFailurePolicy::Fail,
+};
+
+// Custom per-utility
+let llm_stream = llm_client
+    .stream_with_backpressure(request, stream_config)
+    .await?;
+```
+
+**Rationale**: Streaming reduces time-to-first-byte (TTFB). Built-in backpressure improves DX. No durability during streaming (out of scope).
 
 ## Risks / Trade-offs
 
@@ -216,11 +260,10 @@ connection_pools:
 5. Implement Dapr web search binding client
 6. Implement chunking utilities
 7. Implement visualization with Dapr State caching
-8. Implement Dapr TTS binding client with streaming
-9. **Implement Dapr STT binding client with streaming (NEW)**
-10. Implement connection pooling for databases and HTTP services
-11. Add caching layer across all utilities
-12. Create compatibility test suite
-13. Test streaming functionality with voice-chat cookbook
-14. Test connection pooling under high concurrent load
+8. Implement streaming with built-in backpressure handling
+9. Implement connection pooling for databases and HTTP services
+10. Add caching layer across all utilities
+11. Create compatibility test suite
+12. Test streaming functionality with backpressure
+13. Test connection pooling under high concurrent load
 
