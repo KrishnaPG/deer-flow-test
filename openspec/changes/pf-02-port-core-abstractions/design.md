@@ -185,29 +185,32 @@ Distributed/Cloud:
 ```
 
 **Rationale**: Custom orchestrator enables dynamic graphs. Durability abstraction allows same code to run anywhere: dev (memory) → local prod (ReDB) → cloud (Dapr).
-### 11. Checkpoint and Recovery Strategy (Stack-Based)
-**Decision**: Stack-based checkpoint system that checkpoints after EVERY node transition. Checkpoints are append-only with history. Recovery loads the latest checkpoint.
-**Rationale**: Maximum durability for production systems. Stack-based approach makes the orchestrator agnostic to nesting depth. Append-only history enables audit trails and debugging.
+### 11. Checkpoint and Recovery Strategy (State-Driven)
+**Decision**: Pure state-driven architecture. The State structure contains everything needed for execution. No separate execution stack. Checkpoints persist the entire State after every node transition.
+**Rationale**: Dumb orchestrator pattern. The orchestrator doesn't understand graphs or stacks - it just executes what the State says. State contains current position, shared data, and node-specific checkpoint data.
 
-**Checkpoint Structure**:
+**State Structure**:
 ```rust
-pub struct Checkpoint {
+pub struct State {
     pub workflow_id: WorkflowId,
-    pub execution_stack: Vec<Frame>,     // Current execution stack
-    pub shared_store: HashMap<String, Value>, // Workflow state
+    pub current_node: NodeId,              // Where we are now
+    pub action: Action,                    // Where to go next
+    pub shared_store: HashMap<String, Value>, // Ephemeral node communication
+    pub checkpoint_data: Vec<u8>,          // Opaque node-specific state
     pub timestamp: DateTime<Utc>,
-}
-
-pub struct Frame {
-    pub node_id: NodeId,
-    pub state: Option<Vec<u8>>,  // Opaque state for resume
 }
 ```
 
+**SharedStore is EPHEMERAL**:
+- Purpose: Communication between nodes during execution
+- Not persisted in checkpoints
+- On crash: Re-run last node, which re-populates SharedStore
+- For durable data: Nodes persist explicitly via durability API
+
 **Checkpoint Policy**:
 - **ALWAYS checkpoint after every node transition** (no configuration)
-- Maximum durability, no data loss on crash
-- Simple mental model: every step is persisted
+- Maximum durability for execution position
+- Simple mental model: every step position is persisted
 
 **Checkpoint History**:
 - Checkpoints are append-only
@@ -215,89 +218,89 @@ pub struct Frame {
 - Recovery always uses the latest checkpoint
 - Old checkpoints can be garbage collected based on policy
 
-**Recovery Flow**:
-1. Load latest checkpoint from durability backend
-2. Restore execution stack
-3. Restore shared store
-4. Resume from top of stack
+### 12. Nested Flow Execution (State-Driven)
+**Decision**: Composite nodes (Flows) spawn inner orchestrators. State is serialized into `checkpoint_data` for resumption. Parent orchestrator sees composite as opaque - just a node.
+**Rationale**: Pure state-driven architecture. No hierarchical checkpoint structures. Each orchestrator manages its own state independently.
 
-### 12. Nested Flow Checkpointing (Hierarchical Checkpoints)
-**Decision**: Support hierarchical checkpoints for Flow-as-Node composition where parent Flow checkpoints include child Flow checkpoints.
-**Rationale**: When a Flow is used as a Node (nested flows), child Flow state must be recoverable independently or as part of parent recovery. Required for pocketflow-nested-batch, pocketflow-heartbeat.
 **Architecture**:
 ```rust
-pub struct HierarchicalCheckpoint {
+pub struct State {
     pub workflow_id: WorkflowId,
-    pub current_node_id: NodeId,
-    pub graph_snapshot: GraphSnapshot,
-    pub shared_state: Vec<u8>,
+    pub current_node: NodeId,
+    pub action: Action,
+    pub shared_store: HashMap<String, Value>, // EPHEMERAL
+    pub checkpoint_data: Vec<u8>,              // Node-specific opaque state
     pub timestamp: DateTime<Utc>,
-    pub parent_checkpoint: Option<Box<HierarchicalCheckpoint>>, // Parent scope
-    pub child_checkpoints: Vec<ChildCheckpoint>,                // Nested flow checkpoints
-}
-
-pub struct ChildCheckpoint {
-    pub child_workflow_id: WorkflowId,
-    pub child_node_id: NodeId,      // Which node in parent (the Flow-as-Node)
-    pub checkpoint: HierarchicalCheckpoint,
-    pub status: ChildCheckpointStatus,
-}
-
-pub enum ChildCheckpointStatus {
-    InProgress,      // Child flow still running
-    Completed,       // Child flow finished successfully
-    Failed,          // Child flow failed
-    Suspended,       // Child flow suspended (HITL)
-}
-
-pub enum NestedRecoveryStrategy {
-    /// Parent and child recovered together (atomic)
-    Atomic,
-    /// Child recovered independently, parent retries child
-    Independent,
-    /// Child failed, parent handles failure via Action routing
-    ParentHandlesFailure,
 }
 ```
 
-**Nested Flow Execution** (Stack-Based Agnostic Orchestrator):
-- Each orchestrator manages its own stack
-- Composite nodes (Flows) spawn inner orchestrators
-- Parent orchestrator sees composite node as opaque - just a node that takes time
-- Composite node serializes inner orchestrator state for resumption
-- Recovery: Parent resumes composite node → Composite node resumes inner orchestrator
+**Nested Flow Execution**:
+- Parent orchestrator calls `node.run(&state)`
+- Composite node spawns inner orchestrator
+- Composite serializes inner state into `checkpoint_data`
+- Parent checkpoints after composite completes
+- Recovery: Parent resumes composite → Composite restores inner from checkpoint_data
 
 **Implementation**:
 ```rust
-// Simple Node implementation
-impl Node for SimpleNode {
-    async fn exec(&self, shared: &mut SharedStore) -> Result<Action> {
-        // Do work
-        Ok(Action::Done)
+// Node trait with default run() implementation
+pub trait Node {
+    // Default: handle resume vs exec automatically
+    async fn run(&self, state: &State) -> Result<(Action, State)> {
+        if state.checkpoint_data.is_empty() {
+            self.exec(state).await
+        } else {
+            self.resume(state).await
+        }
     }
     
-    async fn resume(&self, _state: &[u8], shared: &mut SharedStore) -> Result<Action> {
-        // Simple nodes usually don't resume (stateless)
-        self.exec(shared).await
+    // Implement these
+    async fn exec(&self, state: &State) -> Result<(Action, State)>;
+    async fn resume(&self, state: &State) -> Result<(Action, State)>;
+}
+
+// Simple Node - stateless
+impl Node for SimpleNode {
+    async fn exec(&self, state: &State) -> Result<(Action, State)> {
+        // Do work
+        let mut new_state = state.clone();
+        new_state.action = Action::Done;
+        Ok((Action::Done, new_state))
+    }
+    
+    async fn resume(&self, state: &State) -> Result<(Action, State)> {
+        // Stateless nodes just re-run exec
+        self.exec(state).await
     }
 }
 
-// Composite Node (Flow) implementation
+// Composite Node (Flow) - stateful
 impl Node for Flow {
-    async fn exec(&self, shared: &mut SharedStore) -> Result<Action> {
-        // Spawn inner orchestrator with same durability backend
-        let inner = Orchestrator::new(self.durability.clone());
-        inner.run(self.start_node.clone(), shared).await
+    async fn exec(&self, state: &State) -> Result<(Action, State)> {
+        // Start fresh - create initial inner state
+        let inner_state = InnerState::new(self.start_node);
+        self.run_inner(state, inner_state).await
     }
     
-    async fn resume(&self, state: &[u8], shared: &mut SharedStore) -> Result<Action> {
-        // Deserialize inner orchestrator state
-        let inner_state: InnerOrchestratorState = deserialize(state)?;
+    async fn resume(&self, state: &State) -> Result<(Action, State)> {
+        // Restore from checkpoint_data
+        let inner_state: InnerState = deserialize(&state.checkpoint_data)?;
+        self.run_inner(state, inner_state).await
+    }
+    
+    async fn run_inner(&self, parent_state: &State, inner_state: InnerState) -> Result<(Action, State)> {
+        // Spawn inner orchestrator
+        let inner = Orchestrator::new(self.durability.clone());
         
-        // Spawn inner orchestrator and restore state
-        let inner = Orchestrator::new(self.durability.clone())
-            .with_state(inner_state);
-        inner.run(self.start_node.clone(), shared).await
+        // Run inner flow (may checkpoint internally)
+        let (action, final_inner_state) = inner.run_with_state(inner_state).await?;
+        
+        // Serialize inner state for parent checkpoint
+        let mut new_state = parent_state.clone();
+        new_state.checkpoint_data = serialize(&final_inner_state)?;
+        new_state.action = action;
+        
+        Ok((action, new_state))
     }
 }
 ```
