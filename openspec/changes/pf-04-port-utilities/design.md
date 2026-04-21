@@ -32,10 +32,10 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Centralized LLM management, caching, rate limiting, observability.
 **Alternatives Considered**: Direct HTTP calls only (rejected - lacks enterprise features), custom LLM client (rejected - reinventing wheel).
 
-### 2. Embedding: Hybrid Approach
-**Decision**: Use Dapr Conversation API for cloud embeddings, local Rust crates for local models.
-**Rationale**: Flexibility for offline use and cloud deployment.
-**Alternatives Considered**: Cloud-only (rejected - no offline support), local-only (rejected - limited model variety).
+### 2. Embedding: Hybrid Approach & Connection Pooling
+**Decision**: Use Dapr Conversation API for cloud embeddings, local Rust crates for local models. For local execution targeting local GPUs (e.g., via `vLLM` or `candle`), mandate a high-performance connection pool (like `deadpool`) to prevent port/connection exhaustion.
+**Rationale**: Flexibility for offline use and cloud deployment. Connection pooling ensures reliability under high concurrent throughput.
+**Alternatives Considered**: Cloud-only (rejected - no offline support), Unpooled local connections (rejected - crashes under load).
 
 ### 3. Vector DB: Dapr Bindings
 **Decision**: Use Dapr Vector bindings for vector database operations.
@@ -47,10 +47,10 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Centralized search API, caching, rate limiting.
 **Alternatives Considered**: Direct API calls (rejected - lacks enterprise features), custom search client (rejected - reinventing wheel).
 
-### 5. Chunking: Pure Rust
-**Decision**: Implement chunking as pure Rust functions using existing crates.
-**Rationale**: Local operation, no need for distributed runtime.
-**Alternatives Considered**: Dapr mapping (rejected - unnecessary complexity), custom implementation (rejected - reinventing wheel).
+### 5. Chunking: SIMD-Accelerated Pure Rust
+**Decision**: Implement chunking as pure Rust functions, heavily relying on **SIMD-optimized crates** (like `memchr` or `aho-corasick`) for text splitting.
+**Rationale**: Local operation without distributed runtime overhead. SIMD reduces gigabyte-scale document chunking from seconds to milliseconds.
+**Alternatives Considered**: Dapr mapping (rejected - unnecessary complexity), Standard string splitting (rejected - leaves massive performance on the table).
 
 ### 6. Visualization: Pure Rust + Dapr State Caching
 **Decision**: Generate visualizations locally, cache results in Dapr State.

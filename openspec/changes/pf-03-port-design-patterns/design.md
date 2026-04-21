@@ -30,15 +30,15 @@ We are taking a **fresh start approach**: use Python PocketFlow patterns as insp
 **Rationale**: Defaulting to Dapr Actors for all agents bottlenecks the system due to strict single-threaded (turn-based) concurrency. Stateless routing prevents this bottleneck while maintaining functional equivalence.
 **Alternatives Considered**: Always Actors for agents (rejected - causes severe throughput bottlenecks for popular agents/supervisors), always Activities (rejected - no persistent state).
 
-### 2. Map-Reduce Pattern: Workflow Fan-out/Fan-in
-**Decision**: Use Dapr Workflow's `for_each` with parallelism limit for map, and activity for reduce.
-**Rationale**: Native Dapr support for parallel execution with durability.
-**Alternatives Considered**: Custom parallel execution (rejected - reinventing wheel), sequential processing (rejected - performance).
+### 2. Map-Reduce Pattern: Batched Workflow Fan-out/Fan-in
+**Decision**: Use Dapr Workflow's `for_each` but strictly implement **Batched Chunking Fan-Out**. If a map operation generates 10,000 sub-tasks, they are processed and aggregated in safe chunks (e.g., 100) to prevent OOM errors in the workflow state.
+**Rationale**: Native Dapr support provides parallel execution with durability, but naive fan-outs of large datasets will crash sidecar memory limits. Batching guarantees high throughput scaling.
+**Alternatives Considered**: Unbounded parallel execution (rejected - causes memory exhaustion), sequential processing (rejected - performance).
 
-### 3. RAG Pattern: Binding + Activity
-**Decision**: Use Dapr vector DB binding for retrieval, LLM activity for generation.
-**Rationale**: Bindings provide pluggable vector stores; activities provide stateless generation.
-**Alternatives Considered**: Custom vector DB client (rejected - reinventing wheel), integrated RAG activity (rejected - less flexible).
+### 3. RAG Pattern: Async Streaming Bindings
+**Decision**: Use Dapr vector DB binding for retrieval, LLM activity for generation, but enforce `Stream` traits. Do not block generation waiting for the entire context to load; stream retrieved chunks directly.
+**Rationale**: Bindings provide pluggable vector stores; streaming reduces time-to-first-byte (TTFB) significantly for heavy RAG workloads.
+**Alternatives Considered**: Blocking retrieval (rejected - unacceptable latency), integrated RAG activity (rejected - less flexible).
 
 ### 4. Multi-Agent Pattern: Actors + Pub/Sub
 **Decision**: Implement agents as Dapr Actors, communication via Dapr Pub/Sub topics.
@@ -54,6 +54,10 @@ We are taking a **fresh start approach**: use Python PocketFlow patterns as insp
 **Decision**: Patterns can be composed (e.g., Agent inside Map-Reduce, Supervisor coordinating Multi-Agent).
 **Rationale**: Real-world workflows combine patterns; Dapr's modular architecture supports composition.
 **Alternatives Considered**: Fixed pattern hierarchy (rejected - inflexible), separate pattern implementations (rejected - duplication).
+
+### 7. Generic Pattern Workloads (Decoupling from LLM)
+**Decision**: Patterns (Agent, Map-Reduce, Supervisor) are generic DAG structures and must not be hardcoded to LLMs. "Map-Reduce" can process images or database rows; "Supervisor" can supervise legacy cron jobs. Any compatible work item must be executed durably through these patterns.
+**Rationale**: Prevents framework lock-in to GenAI use-cases. Ensures the PocketFlow orchestration patterns are enterprise-ready for *any* durable workflow requirement.
 
 ## Risks / Trade-offs
 

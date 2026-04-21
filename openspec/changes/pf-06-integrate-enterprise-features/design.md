@@ -26,10 +26,10 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 
 ## Decisions
 
-### 1. Observability: Dapr + OpenTelemetry
-**Decision**: Use Dapr's built-in observability with OpenTelemetry integration, instrument Rust code with `tracing` crate.
-**Rationale**: Leverages Dapr's automatic trace propagation, metrics collection, and logging.
-**Alternatives Considered**: Custom observability stack (rejected - reinventing wheel), no observability (rejected - enterprise requirement).
+### 1. Observability: Adaptive Telemetry Sampling via OpenTelemetry
+**Decision**: Use Dapr's OpenTelemetry integration and the Rust `tracing` crate, but enforce **Adaptive Head-Based Sampling**. Normal flows sample at a low rate (e.g., 1%), but errors or `Action::Fallback` dynamically bump sampling to 100% for that workflow execution tail.
+**Rationale**: Leverages Dapr's automatic trace propagation while preventing observability overhead from destroying performance at enterprise scale.
+**Alternatives Considered**: 100% tracing (rejected - kills performance), no observability (rejected - enterprise requirement).
 
 ### 2. Durability: Dapr State Management + Workflows
 **Decision**: Store all persistent state in Dapr State Management, use Dapr Workflows for durable execution.
@@ -46,10 +46,10 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 **Rationale**: Separates infrastructure flakiness from business logic fallbacks. Relying on Dapr Compensation handlers for business logic alternatives is an anti-pattern. Dapr handles the network layer; Rust handles the application logic layer.
 **Alternatives Considered**: Conflating technical and semantic fallbacks (rejected - makes code hard to reason about and misuses Saga compensations), Custom retry logic (rejected - scattered).
 
-### 5. Idempotency: Workflow Guarantees + Deduplication
-**Decision**: Leverage Dapr Workflow's idempotency guarantees, implement deduplication for external calls.
-**Rationale**: Dapr activities are idempotent by default; deduplication handles external side effects.
-**Alternatives Considered**: Custom idempotency logic (rejected - error-prone), no idempotency (rejected - reliability risk).
+### 5. Idempotency: Deterministic Keys & Deduplication
+**Decision**: Leverage Dapr Workflow's idempotency, but the Rust core must automatically generate a deterministic UUID (hashed from `Workflow_ID + Node_ID + Attempt_Count`) and inject it into external headers as an Idempotency-Key.
+**Rationale**: Dapr replays activities if they fail. To protect external systems (e.g., charging APIs, database inserts) from double-execution, a cryptographic idempotency key is mathematically required.
+**Alternatives Considered**: Relying solely on Dapr Activity at-least-once guarantees without keys (rejected - causes dangerous side effects).
 
 ### 6. Tracability: Distributed Tracing + Audit Logs
 **Decision**: Use Dapr's distributed tracing with custom audit logs for compliance.
