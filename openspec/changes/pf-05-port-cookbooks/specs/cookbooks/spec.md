@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Port all PocketFlow cookbook examples to Rust with Dapr
-The system SHALL port all 59 PocketFlow cookbook examples to Rust with Dapr integration, organized by priority tiers.
+The system SHALL port all 56 PocketFlow cookbook examples to Rust with Dapr integration, organized by priority tiers.
 
 #### Scenario: Example coverage
 - **WHEN** porting cookbook examples
