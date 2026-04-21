@@ -187,7 +187,97 @@ pub enum CheckpointPolicy {
 3. Restore shared state
 4. Resume from current_node_id
 
-### 12. Async-By-Default
+### 12. Nested Flow Checkpointing (Hierarchical Checkpoints)
+**Decision**: Support hierarchical checkpoints for Flow-as-Node composition where parent Flow checkpoints include child Flow checkpoints.
+**Rationale**: When a Flow is used as a Node (nested flows), child Flow state must be recoverable independently or as part of parent recovery. Required for pocketflow-nested-batch, pocketflow-heartbeat.
+**Architecture**:
+```rust
+pub struct HierarchicalCheckpoint {
+    pub workflow_id: WorkflowId,
+    pub current_node_id: NodeId,
+    pub graph_snapshot: GraphSnapshot,
+    pub shared_state: Vec<u8>,
+    pub timestamp: DateTime<Utc>,
+    pub parent_checkpoint: Option<Box<HierarchicalCheckpoint>>, // Parent scope
+    pub child_checkpoints: Vec<ChildCheckpoint>,                // Nested flow checkpoints
+}
+
+pub struct ChildCheckpoint {
+    pub child_workflow_id: WorkflowId,
+    pub child_node_id: NodeId,      // Which node in parent (the Flow-as-Node)
+    pub checkpoint: HierarchicalCheckpoint,
+    pub status: ChildCheckpointStatus,
+}
+
+pub enum ChildCheckpointStatus {
+    InProgress,      // Child flow still running
+    Completed,       // Child flow finished successfully
+    Failed,          // Child flow failed
+    Suspended,       // Child flow suspended (HITL)
+}
+
+pub enum NestedRecoveryStrategy {
+    /// Parent and child recovered together (atomic)
+    Atomic,
+    /// Child recovered independently, parent retries child
+    Independent,
+    /// Child failed, parent handles failure via Action routing
+    ParentHandlesFailure,
+}
+```
+
+**Checkpoint Inheritance Rules**:
+1. Parent Flow creates checkpoint → includes all active child Flow checkpoints
+2. Child Flow checkpoints independently during execution
+3. Parent checkpoint references child checkpoint IDs (not full data)
+4. On recovery: Restore parent, then restore each child from its checkpoint
+5. Child can fail independently → parent handles via Action routing
+
+**Scope Isolation**:
+- Child Flow has isolated SharedStore (separate from parent)
+- Child Flow can checkpoint without parent checkpointing
+- Parent can checkpoint without child completion
+- On child completion: Child state merges back to parent
+
+**Implementation**:
+```rust
+impl Flow {
+    async fn exec(&self, input: PrepResult, parent_ctx: Option<&ExecutionContext>) -> Result<ExecResult> {
+        let orchestrator = Orchestrator::new(self.durability());
+        let mut local_store = SharedStore::new();
+        
+        // If parent context exists, checkpoint is hierarchical
+        let checkpoint_policy = if let Some(parent) = parent_ctx {
+            CheckpointPolicy::Hierarchical {
+                parent: parent.checkpoint_policy(),
+                independent: self.checkpoint_policy(),
+            }
+        } else {
+            CheckpointPolicy::EveryN(5)
+        };
+        
+        let final_action = orchestrator
+            .with_checkpoint_policy(checkpoint_policy)
+            .run(self.start_node(), &mut local_store)
+            .await?;
+        
+        // Merge child state back to parent if present
+        if let Some(parent) = parent_ctx {
+            parent.shared_store().merge(local_store)?;
+        }
+        
+        Ok(ExecResult::FlowCompleted { action: final_action })
+    }
+}
+```
+
+**Recovery Scenarios**:
+1. **Child fails, parent active**: Parent receives `Action::ChildFailed`, routes accordingly
+2. **Parent fails, child active**: Both restart from checkpoints (child from its checkpoint)
+3. **Atomic failure**: Parent and child restart together (transactional boundary)
+4. **Child suspended (HITL)**: Parent checkpoints waiting for child resume
+
+### 13. Async-By-Default
 **Decision**: All node operations are async. No sync variants.
 **Rationale**: Modern Rust async is the standard. Users can block if needed with `tokio::runtime::Handle::current().block_on()`.
 

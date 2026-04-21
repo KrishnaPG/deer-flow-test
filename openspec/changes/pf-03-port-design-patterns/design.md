@@ -45,47 +45,173 @@ impl Node for AgentNode {
 }
 ```
 
-### 2. Map-Reduce Pattern: Async Parallel with Batching
-**Decision**: Use async `join!` for local parallel execution or Dapr's `when_all` for distributed. Implement **Batched Chunking** to process large datasets in safe chunks (e.g., 100 items at a time).
-**Rationale**: Custom orchestrator with async Rust provides parallel execution. Batching prevents memory exhaustion.
+### 2. Map-Reduce Pattern: Async Parallel with Batching & Failure Policies
+**Decision**: Use async `join!` for local parallel execution or Dapr's `when_all` for distributed. Implement **Batched Chunking** to process large datasets in safe chunks (e.g., 100 items at a time). Support user-configurable batch failure policies.
+**Rationale**: Custom orchestrator with async Rust provides parallel execution. Batching prevents memory exhaustion. Failure policies let user decide semantic vs convenience batching.
 **Implementation**:
 ```rust
 pub struct MapReduceFlow {
     map_node: Arc<dyn Node>,
     reduce_node: Arc<dyn Node>,
     batch_size: usize,
+    failure_policy: BatchFailurePolicy,
+    max_retries_per_item: usize,
+}
+
+pub enum BatchFailurePolicy {
+    /// All items must succeed, or entire batch fails (semantic batching)
+    /// Use case: Transactional operations, related data
+    /// If any item fails, entire batch fails
+    Semantic,
+    
+    /// Individual items can fail, retry only failed items (convenience batching)
+    /// Use case: Independent operations, bulk processing
+    /// Checkpoint succeeded items, retry only failed
+    Independent {
+        checkpoint_successful: bool,  // Save successful items
+    },
+    
+    /// Continue processing, collect all errors at end (best-effort)
+    /// Use case: Reporting, data migration
+    /// Process all items, return results + errors
+    BestEffort,
+}
+
+pub struct BatchResult<T> {
+    pub successful: Vec<T>,
+    pub failed: Vec<(Item, BatchItemError)>,
+    pub partial_checkpoint: Option<CheckpointId>,
 }
 
 impl Flow for MapReduceFlow {
     async fn orchestrate(&self, input: Vec<Item>) -> Result<Output> {
-        // Batch processing
-        for chunk in input.chunks(self.batch_size) {
-            // Parallel map
-            let mapped = futures::future::try_join_all(
-                chunk.iter().map(|item| self.map_node.exec(item))
-            ).await?;
+        match self.failure_policy {
+            BatchFailurePolicy::Semantic => {
+                // All-or-nothing: If any fails, entire batch fails
+                for chunk in input.chunks(self.batch_size) {
+                    let mapped = futures::future::try_join_all(
+                        chunk.iter().map(|item| self.map_with_retry(item))
+                    ).await?; // ? propagates error - entire batch fails
+                    
+                    let reduced = self.reduce_node.exec(mapped).await?;
+                    results.push(reduced);
+                }
+                Ok(aggregate(results))
+            }
             
-            // Reduce
-            let reduced = self.reduce_node.exec(mapped).await?;
-            results.push(reduced);
+            BatchFailurePolicy::Independent { checkpoint_successful } => {
+                // Process individually, checkpoint successful, retry failed
+                let mut results = Vec::new();
+                let mut failed_items = Vec::new();
+                
+                for chunk in input.chunks(self.batch_size) {
+                    // Process items with individual error handling
+                    let chunk_results: Vec<_> = futures::future::join_all(
+                        chunk.iter().map(|item| async {
+                            match self.map_with_retry(item).await {
+                                Ok(result) => Ok(result),
+                                Err(e) => {
+                                    failed_items.push((item.clone(), e));
+                                    Err(e)
+                                }
+                            }
+                        })
+                    ).await;
+                    
+                    // Collect successful results
+                    let successful: Vec<_> = chunk_results.into_iter()
+                        .filter_map(|r| r.ok())
+                        .collect();
+                    
+                    // Checkpoint successful items if enabled
+                    if checkpoint_successful && !successful.is_empty() {
+                        self.checkpoint_successful_items(&successful).await?;
+                    }
+                    
+                    results.extend(successful);
+                }
+                
+                // Retry failed items individually
+                if !failed_items.is_empty() {
+                    for (item, error) in failed_items {
+                        match self.retry_failed_item(item).await {
+                            Ok(result) => results.push(result),
+                            Err(e) => return Err(BatchError::ItemFailed(item, e)),
+                        }
+                    }
+                }
+                
+                self.reduce_node.exec(results).await
+            }
+            
+            BatchFailurePolicy::BestEffort => {
+                // Process all, collect errors
+                let mut successful = Vec::new();
+                let mut errors = Vec::new();
+                
+                for chunk in input.chunks(self.batch_size) {
+                    let results: Vec<_> = futures::future::join_all(
+                        chunk.iter().map(|item| self.map_node.exec(item))
+                    ).await;
+                    
+                    for (item, result) in chunk.iter().zip(results) {
+                        match result {
+                            Ok(r) => successful.push(r),
+                            Err(e) => errors.push((item.clone(), e)),
+                        }
+                    }
+                }
+                
+                // Reduce includes both successful and error summary
+                self.reduce_node.exec(BatchResult {
+                    successful,
+                    failed: errors,
+                    partial_checkpoint: None,
+                }).await
+            }
         }
-        Ok(aggregate(results))
     }
 }
 ```
 
+**Partial Failure Recovery**:
+- **Semantic**: No checkpoint on failure, entire batch retried
+- **Independent**: Checkpoint successful items, resume from failed items
+- **Best Effort**: Continue processing, report all errors at end
+
+**Checkpoint Granularity**:
+- Semantic: Checkpoint after entire batch succeeds
+- Independent: Checkpoint individual items as they succeed
+- Best Effort: Optional checkpointing
+
+**Required For**: pocketflow-map-reduce, pocketflow-batch-flow, pocketflow-parallel-batch-flow
+
 ### 3. RAG Pattern: Streaming Retrieval + Generation
-**Decision**: Use Dapr vector DB binding for retrieval, LLM with streaming support for generation. Support three streaming strategies:
-- **Direct**: Real-time streaming for responsive UIs
+**Decision**: Use Dapr vector DB binding for retrieval, LLM with streaming support for generation. Support four streaming strategies:
+- **Direct**: Real-time streaming for responsive UIs (bypasses Dapr)
+- **WebSocket**: Bidirectional streaming for chat interfaces
 - **Durable**: Chunked via Dapr Pub/Sub for progress tracking
 - **Complete**: Standard non-streaming for batch processing
-**Rationale**: Streaming reduces TTFB. Multiple strategies support different use cases (chat vs batch).
+**Rationale**: Streaming reduces TTFB. Multiple strategies support different use cases (chat vs batch). WebSocket support required for pocketflow-fastapi-websocket.
 **Implementation**:
 ```rust
 pub struct RAGNode {
     retriever: Arc<dyn VectorRetriever>,
     generator: Arc<dyn StreamingLLM>,
     stream_policy: StreamingPolicy,
+}
+
+pub enum StreamingPolicy {
+    Direct,              // Real-time via channels
+    WebSocket {         // Bidirectional WebSocket
+        ws_sender: WebSocketSender,
+        message_queue: Arc<RwLock<Vec<Message>>>,
+    },
+    Durable {           // Chunked via Pub/Sub
+        topic: String,
+        chunk_size: usize,
+    },
+    Complete,           // Non-streaming
 }
 
 impl StreamingNode for RAGNode {
@@ -102,6 +228,60 @@ impl StreamingNode for RAGNode {
     }
 }
 ```
+
+### 9. Voice/Audio Streaming Pattern
+**Decision**: Support real-time audio streaming for voice chat applications (pocketflow-voice-chat).
+**Rationale**: Voice interfaces require low-latency bidirectional audio streaming (STT + LLM + TTS pipeline).
+**Architecture**:
+```rust
+pub struct VoiceChatFlow {
+    stt_client: Arc<dyn STTClient>,      // Speech-to-text
+    llm_client: Arc<dyn StreamingLLM>,   // LLM with streaming
+    tts_client: Arc<dyn TTSClient>,      // Text-to-speech
+    audio_config: AudioConfig,
+}
+
+pub struct AudioConfig {
+    pub sample_rate: u32,           // 16kHz, 44.1kHz, etc.
+    pub channels: u16,              // Mono=1, Stereo=2
+    pub chunk_duration_ms: u64,     // Audio chunk size
+    pub codec: AudioCodec,          // Opus, PCM, etc.
+}
+
+pub enum AudioCodec {
+    Opus,
+    Pcm16LE,
+    PcmFloat,
+}
+
+impl VoiceChatFlow {
+    async fn run(&self, ctx: &ExecutionContext) -> Result<()> {
+        // Pipeline: Audio Input -> STT -> LLM -> TTS -> Audio Output
+        let audio_input = self.receive_audio_stream(ctx).await?;
+        
+        // STT with streaming transcription
+        let transcription_stream = self.stt_client.transcribe_stream(audio_input);
+        
+        // LLM processes transcription, streams response
+        let llm_stream = self.llm_client.generate_stream(transcription_stream);
+        
+        // TTS converts to audio chunks
+        let audio_output = self.tts_client.synthesize_stream(llm_stream);
+        
+        // Send audio back to user
+        self.send_audio_stream(audio_output).await?;
+        
+        Ok(())
+    }
+}
+```
+**Features**:
+- Real-time audio streaming (STT + LLM + TTS pipeline)
+- Bidirectional WebSocket for audio I/O
+- Audio buffering and jitter handling
+- Silence detection for turn-taking
+- Interrupt handling (user can interrupt TTS)
+**Required For**: pocketflow-voice-chat
 
 ### 4. Multi-Agent Pattern: Actors + Pub/Sub
 **Decision**: Implement agents as Dapr Actors, communication via Dapr Pub/Sub topics.
@@ -144,6 +324,103 @@ impl Flow for SupervisorFlow {
     }
 }
 ```
+
+### 10. Heartbeat / Always-On Pattern
+**Decision**: Implement continuous execution pattern with graceful checkpointing between iterations for always-on monitoring agents.
+**Rationale**: pocketflow-heartbeat requires monitoring agents that run continuously, checkpointing state between cycles without requiring full workflow completion.
+**Architecture**:
+```rust
+pub struct HeartbeatFlow {
+    monitor_node: Arc<dyn HeartbeatNode>,
+    interval: Duration,
+    checkpoint_every: usize,  // Checkpoint every N iterations
+}
+
+pub trait HeartbeatNode: Node {
+    /// Execute single heartbeat iteration
+    async fn heartbeat(&self, iteration: u64, state: &mut SharedStore) -> Result<HeartbeatAction>;
+}
+
+pub enum HeartbeatAction {
+    Continue,      // Continue to next iteration
+    Pause,         // Checkpoint and wait for resume signal
+    Shutdown,      // Graceful shutdown
+    Alert(String), // Trigger alert and continue
+}
+
+impl HeartbeatFlow {
+    async fn run(&self, ctx: &ExecutionContext) -> Result<()> {
+        let mut iteration = 0u64;
+        let mut state = SharedStore::new();
+        
+        // Check for recovery from checkpoint
+        if let Some(checkpoint) = ctx.load_checkpoint().await? {
+            iteration = checkpoint.iteration;
+            state = checkpoint.state;
+            log::info!("Resumed heartbeat from iteration {}", iteration);
+        }
+        
+        loop {
+            iteration += 1;
+            
+            // Checkpoint periodically without stopping
+            if iteration % self.checkpoint_every == 0 {
+                ctx.checkpoint(HeartbeatCheckpoint {
+                    iteration,
+                    state: state.clone(),
+                    timestamp: Utc::now(),
+                }).await?;
+            }
+            
+            // Execute heartbeat iteration
+            match self.monitor_node.heartbeat(iteration, &mut state).await? {
+                HeartbeatAction::Continue => {
+                    // Continue after interval
+                    tokio::time::sleep(self.interval).await;
+                }
+                HeartbeatAction::Pause => {
+                    // Checkpoint and wait
+                    ctx.checkpoint_and_pause().await?;
+                    // Wait for resume signal
+                    ctx.wait_for_resume().await?;
+                }
+                HeartbeatAction::Shutdown => {
+                    // Final checkpoint and exit
+                    ctx.checkpoint(HeartbeatCheckpoint {
+                        iteration,
+                        state,
+                        timestamp: Utc::now(),
+                    }).await?;
+                    log::info!("Heartbeat shutdown gracefully at iteration {}", iteration);
+                    break;
+                }
+                HeartbeatAction::Alert(msg) => {
+                    // Send alert but continue
+                    ctx.send_alert(msg).await?;
+                    tokio::time::sleep(self.interval).await;
+                }
+            }
+        }
+        
+        Ok(())
+    }
+}
+```
+
+**Signal Handling**:
+- **SIGTERM**: Graceful shutdown, checkpoint current state
+- **SIGUSR1**: Pause execution (for maintenance)
+- **SIGUSR2**: Resume execution
+- **SIGHUP**: Reload configuration
+
+**Features**:
+- Checkpoint between iterations without workflow completion
+- Graceful shutdown on SIGTERM with state preservation
+- Resume from last iteration on restart
+- Pause/resume capability for maintenance
+- Alert integration for monitoring
+
+**Required For**: pocketflow-heartbeat, pocketflow-deep-research (iterative)
 
 ### 6. Flow-as-Node Composition
 **Decision**: All patterns implement Flow trait, which implements Node trait. Patterns can be used as nodes in other patterns.

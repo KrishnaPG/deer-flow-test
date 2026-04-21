@@ -95,6 +95,94 @@ pub trait STTClient {
 **Decision**: Use **no custom code** where battle-tested open-source packages exist. For example, use `reqwest` for HTTP, `moka` for L1 caching, and `deadpool` for connection pools. Additionally, all API keys and environment parameters must be resolved through a single centralized `config` module backed by the Dapr Secret Store API.
 **Rationale**: Reinforces enterprise stability. Utilities must never manually parse `.env` files or attempt to re-implement complex low-level mechanics like LRU caches or connection pools.
 
+### 12. Connection Pooling for External Services
+**Decision**: Implement connection pooling for database and external service integrations to handle high concurrent load.
+**Rationale**: Tool integrations (pocketflow-tool-database, web crawling) need efficient connection reuse. Prevents connection exhaustion and improves performance.
+**Architecture**:
+```rust
+pub struct ConnectionPoolConfig {
+    pub max_connections: usize,           // Maximum pool size
+    pub min_connections: usize,           // Minimum idle connections
+    pub connection_timeout: Duration,     // Timeout for acquiring connection
+    pub idle_timeout: Duration,           // How long to keep idle connections
+    pub max_lifetime: Duration,           // Maximum connection lifetime
+    pub health_check_interval: Duration,  // How often to check connection health
+}
+
+pub trait PooledConnectionManager {
+    type Connection;
+    
+    /// Acquire connection from pool
+    async fn acquire(&self) -> Result<PooledConnection<Self::Connection>>;
+    
+    /// Return connection to pool
+    fn release(&self, conn: PooledConnection<Self::Connection>);
+    
+    /// Health check all connections
+    async fn health_check(&self) -> Result<PoolHealth>;
+    
+    /// Get pool statistics
+    fn stats(&self) -> PoolStats;
+}
+
+pub struct PoolStats {
+    pub total_connections: usize,
+    pub active_connections: usize,
+    pub idle_connections: usize,
+    pub wait_queue_length: usize,
+    pub total_requests: u64,
+    pub failed_requests: u64,
+}
+
+/// Database connection pooling (SQLx)
+pub struct DatabasePool {
+    pool: sqlx::Pool<Postgres>, // or MySql, Sqlite
+}
+
+/// HTTP connection pooling (reqwest)
+pub struct HttpPool {
+    client: reqwest::Client, // Has built-in pooling
+}
+
+/// Generic connection pooling (deadpool)
+pub struct GenericPool<T> {
+    pool: deadpool::Pool<T>,
+}
+```
+
+**Integration Points**:
+- **Database**: SQLx with connection pooling for pocketflow-tool-database
+- **HTTP/REST**: reqwest client with keep-alive for web crawling
+- **WebSocket**: Dedicated pool for persistent connections
+- **gRPC**: tonic client with channel pooling
+- **LLM APIs**: Connection pool for OpenAI, Anthropic APIs
+
+**Configuration**:
+```yaml
+connection_pools:
+  database:
+    max_connections: 20
+    min_connections: 5
+    connection_timeout: 30s
+    idle_timeout: 600s
+  
+  http:
+    max_connections: 100
+    connection_timeout: 10s
+    idle_timeout: 90s
+    
+  websocket:
+    max_connections: 50
+    connection_timeout: 5s
+    idle_timeout: 300s
+```
+
+**Required For**: 
+- pocketflow-tool-database (DB connection pooling)
+- pocketflow-tool-crawler (HTTP connection reuse)
+- pocketflow-fastapi-websocket (WebSocket connection management)
+- All LLM utility clients (API connection pooling)
+
 ### 11. Streaming Support Matrix
 **Decision**: Support streaming for utilities where LLM providers support it.
 **Streaming Matrix**:
@@ -130,7 +218,9 @@ pub trait STTClient {
 7. Implement visualization with Dapr State caching
 8. Implement Dapr TTS binding client with streaming
 9. **Implement Dapr STT binding client with streaming (NEW)**
-10. Add caching layer across all utilities
-11. Create compatibility test suite
-12. Test streaming functionality with voice-chat cookbook
+10. Implement connection pooling for databases and HTTP services
+11. Add caching layer across all utilities
+12. Create compatibility test suite
+13. Test streaming functionality with voice-chat cookbook
+14. Test connection pooling under high concurrent load
 
