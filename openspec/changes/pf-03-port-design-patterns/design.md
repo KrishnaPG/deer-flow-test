@@ -340,18 +340,18 @@ impl Flow for SupervisorFlow {
             
             // Delegate to agents
             let results = futures::future::try_join_all(
-                self.agents.iter().map(|agent| agent.exec(...))
+                self.agents.iter().map(|agent| agent.exec())
             ).await?;
             
             // Evaluate
             let decision = self.evaluator.exec(results).await?;
             
             if decision.is_complete() {
-                return Ok(Action::Complete);
+                return Ok(Action::Done);
             }
         }
         
-        Ok(Action::MaxIterationsReached)
+        Ok(Action::Custom("max_iterations_reached".to_string()))
     }
 }
 ```
@@ -495,7 +495,7 @@ pub enum DeploymentProfile {
     Dev,
     
     /// Local Production - file-based persistence, no Docker
-    /// Single-user, ReDB + sqlite-vss storage
+    /// Single-user, ReDB + embedvec storage
     LocalProd,
     
     /// Hybrid - local app + remote Dapr sidecar
@@ -603,7 +603,7 @@ config.batch_failure_policy = BatchFailurePolicy::Sequential;
 **Key Benefits**:
 - **6 presets** cover 95% of use cases (including Hybrid for remote sidecar)
 - **No Docker required** for Dev and LocalProd profiles
-- **Local Vector DB** with sqlite-vss for RAG without Dapr
+- **Local Vector DB** with embedvec for RAG without Dapr
 - **Remote Dapr** support via environment variables
 - **Sensible defaults** - users don't need to understand all options
 - **Extensible** - advanced users can customize
