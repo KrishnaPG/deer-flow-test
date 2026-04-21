@@ -48,14 +48,86 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 │  │ (default│ │(local   │ │(cloud)  │       │
 │  │  dev)   │ │ prod)   │ │         │       │
 │  └─────────┘ └─────────┘ └─────────┘       │
-└─────────────────────────────────────────────┘
+└��────────────────────────────────────────────┘
 ```
 **Key Principles**:
 - Dapr is ONLY for durability/state management, NEVER for orchestration
 - Orchestrator is custom-built for dynamic graph support
 - Three-tier durability: InMemory (default) → ReDB → Dapr
 - Auto-detect Dapr sidecar; warn/fail if DaprDurability requested but sidecar missing
+- **Remote Dapr Sidecar**: When `DAPR_HTTP_ENDPOINT` or `DAPR_GRPC_ENDPOINT` environment variable is set, the SDK will connect to a remote Dapr sidecar instead of localhost. This enables running the Dapr sidecar on a different machine while the application runs locally without Docker.
 **Alternatives Considered**: Dapr Workflows (rejected - static graphs only), Temporal (rejected - similar static constraint).
+
+### 1a. Remote Dapr Sidecar Connectivity
+**Decision**: Support connecting to a Dapr sidecar running on a remote machine, not just localhost. This is implemented via environment variables following Dapr v1.12+ specification.
+**Rationale**: Enables hybrid deployments where the application runs locally (without Docker) while optionally connecting to a remote Dapr sidecar for distributed features. The local ReDB + sqlite-vss provides full functionality without requiring Docker at all.
+**Configuration**:
+```rust
+// Environment variables for remote Dapr sidecar connection
+// DAPR_HTTP_ENDPOINT - e.g., https://dapr-api.example.com:3500
+// DAPR_GRPC_ENDPOINT - e.g., https://dapr-grpc.example.com:50001
+// DAPR_API_TOKEN - optional authentication token
+
+pub enum DaprConnectionMode {
+    /// Connect to local sidecar (localhost) - default
+    Local,
+    /// Connect to remote sidecar via environment variables
+    Remote { endpoint: String },
+    /// No Dapr sidecar - use ReDB only for local production
+    None,
+}
+
+impl DaprConnectionMode {
+    pub fn detect() -> Self {
+        if let Ok(endpoint) = std::env::var("DAPR_HTTP_ENDPOINT") {
+            DaprConnectionMode::Remote { endpoint }
+        } else if let Ok(endpoint) = std::env::var("DAPR_GRPC_ENDPOINT") {
+            DaprConnectionMode::Remote { endpoint }
+        } else {
+            DaprConnectionMode::None
+        }
+    }
+}
+```
+
+**Three Deployment Models**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Model 1: Development (No Dapr, No Docker)                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │   Your App   │  │    ReDB      │  │  sqlite-vss  │    │
+│  │  (Rust)      │  │ (Durability)  │  │ (Vector DB)  │    │
+│  └─────────────┘  └──────────────┘  └──────────────┘    │
+│         │              │                   │                   │
+│         └─────────────┴───────────────────┘                   │
+│         (All local, file-based, no network required)          │
+│                                                          │
+├───────────────────────────────────────────────────────────────  │
+│  Model 2: Local + Remote Dapr Sidecar                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │   Your App   │  │    ReDB      │  │  sqlite-vss  │    │
+│  │  (Rust)      │  │ (Durability)  │  │ (Vector DB)  │    │
+│  ��─────────────┘  └──────────────┘  └──────────────┘    │
+│         │                                                  │
+│         │ DAPR_HTTP_ENDPOINT / DAPR_GRPC_ENDPOINT            │
+│         ▼                                                  │
+│  ┌──────────────────────────────────────────────┐        │
+│  │     DAPR SIDE CAR (Remote Machine)              │        │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐         │        │
+│  │  │ State  │ │ Pub/Sub│ │ Secrets│         │        │
+│  │  └───────┘ └───────┘ └───────┘         │        │
+│  └──────────────────────────────────────────────┘        │
+│                                                          │
+├───────────────────────────────────────────────────────────────  │
+│  Model 3: Full Dapr Deployment (Kubernetes)                  │
+│  ┌──────────────────────────────────────────────┐          │
+│  │     Your App + Dapr Sidecar (same pod)         │          │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐         │          │
+│  │  │ State  │ │ Pub/Sub│ │ Secrets│         │          │
+│  │  └───────┘ └───────┘ └───────┘         │          │
+│  └──────────────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────┘
+```
 
 ### 2. Flow as Node with Custom Orchestration
 **Decision**: Flow implements the Node trait (like Python's `class Flow(BaseNode)`). Flow execution creates a sub-orchestrator that runs the flow's internal graph.
@@ -165,7 +237,7 @@ Architecture split:
     - `DaprDurability`: Distributed enterprise - requires Dapr sidecar, multi-tenant, HA
 *   **`berg10-ai-nodes`**: LLM/AI specific Node implementations
 
-**Three-Tier Deployment Model** (No Docker Required for Dev/Local):
+**Four-Tier Deployment Model** (No Docker Required for Dev/Local):
 ```
 Development (Default - Zero Dependencies):
   cargo run --example hello-world
@@ -179,9 +251,16 @@ Local Production (Single-User, No Docker):
   cargo run --example hello-world --features local-prod
   → Uses ReDBDurability (file-based persistence)
   → No sidecar needed, no Docker needed
-  → SQLite-compatible storage
+  → ReDB + sqlite-vss for vector search
   → CheckpointPolicy::EveryN(5)
   → Works on any machine with just Rust installed
+
+Hybrid (Local App + Remote Dapr Sidecar):
+  DAPR_HTTP_ENDPOINT=https://dapr-server:3500 cargo run --example hello-world
+  → Uses DaprRemoteDurability
+  → App runs locally without Docker
+  → Connects to remote Dapr sidecar for distributed features
+  → ReDB + sqlite-vss still available locally for resilience
 
 Distributed/Cloud (Full Enterprise Features):
   dapr run -- cargo run --example hello-world
@@ -478,6 +557,7 @@ pub enum DurabilityLevel {
     InMemory,     // Default - zero dependencies, dev/testing
     ReDB,         // Single-user production - file-based persistence
     Dapr,         // Distributed - multi-tenant, HA, requires sidecar
+    DaprRemote,   // Connect to remote Dapr sidecar via env vars
 }
 
 impl Default for DurabilityLevel {
@@ -485,6 +565,92 @@ impl Default for DurabilityLevel {
 }
 ```
 **Usage**: User specifies mode at workflow start; runtime enforces constraints.
+
+### 14. Python Feature Parity: BatchFlow and AsyncBatchFlow
+**Decision**: Implement all Python PocketFlow flow variants to ensure functional equivalence.
+**Rationale**: Python PocketFlow provides BatchFlow and AsyncBatchFlow which are essential for batch processing workflows.
+**Python Equivalents**:
+```rust
+/// BatchFlow - runs flow with batch parameter sets
+/// (Python: lines 53-57 in pocketflow/__init__.py)
+pub struct BatchFlow {
+    start: Arc<RwLock<Node>>,
+    params: HashMap<String, Value>,
+}
+
+impl BatchFlow {
+    pub fn _run(&self, shared: &SharedStore) -> Option<String> {
+        let prep = self.prep(shared).unwrap_or_default();
+        for bp in prep {
+            self._orch(shared, self.params.clone().merge(bp));
+        }
+        self.post(shared, prep, ())
+    }
+}
+
+/// AsyncBatchFlow - async variant with sequential batch execution
+/// (Python: lines 90-94 in pocketflow/__init__.py)
+pub struct AsyncBatchFlow {
+    start: Arc<RwLock<Node>>,
+    params: HashMap<String, Value>,
+}
+
+impl AsyncBatchFlow {
+    pub async fn _run_async(&self, shared: &SharedStore) -> Option<String> {
+        let prep = self.prep_async(shared).await.unwrap_or_default();
+        for bp in prep {
+            self._orch_async(shared, self.params.clone().merge(bp)).await;
+        }
+        self.post_async(shared, prep, ()).await
+    }
+}
+
+/// AsyncParallelBatchFlow - async variant with parallel batch execution
+/// (Python: lines 96-100 in pocketflow/__init__.py)
+pub struct AsyncParallelBatchFlow {
+    start: Arc<RwLock<Node>>,
+    params: HashMap<String, Value>,
+}
+
+impl AsyncParallelBatchFlow {
+    pub async fn _run_async(&self, shared: &SharedStore) -> Option<String> {
+        let prep = self.prep_async(shared).await.unwrap_or_default();
+        let tasks: Vec<_> = prep.iter()
+            .map(|bp| self._orch_async(shared, self.params.clone().merge(bp.clone())))
+            .collect();
+        futures::future::join_all(tasks).await;
+        self.post_async(shared, prep, ()).await
+    }
+}
+```
+
+### 15. Node Idempotency: Exact Python Semantics
+**Decision**: Match Python's exact retry/fallback behavior for feature parity.
+**Rationale**: Python's exec_fallback is called ONLY after ALL retries are exhausted (line 33 in __init__.py). This must be preserved.
+```rust
+/// Match Python behavior exactly:
+/// for self.cur_retry in range(self.max_retries):
+///     try: return self.exec(prep_res)
+///     except Exception as e:
+///         if self.cur_retry==self.max_retries-1: return self.exec_fallback(prep_res,e)
+///         if self.wait>0: time.sleep(self.wait)
+pub fn _exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+    for self.cur_retry in 0..self.max_retries {
+        match self.exec(prep_res).await {
+            Ok(result) => return Ok(result),
+            Err(e) if self.cur_retry == self.max_retries - 1 => {
+                // Call fallback ONLY after ALL retries exhausted - matches Python
+                return self.exec_fallback(prep_res, e).await;
+            }
+            Err(_) if self.wait > 0 => {
+                tokio::time::sleep(Duration::from_secs(self.wait as u64)).await;
+            }
+            Err(e) => return Err(e), // Shouldn't reach here but handle gracefully
+        }
+    }
+    unreachable!()
+}
+```
 
 ## Risks / Trade-offs
 
@@ -500,9 +666,12 @@ impl Default for DurabilityLevel {
 1. Create crate structure with trait definitions (engine + durability)
 2. Implement custom Orchestrator with dynamic graph support
 3. Implement DaprDurability (state store, pub/sub, tracing, resiliency)
-4. Implement LocalDurability (SQLite backend for single-user)
-5. Implement InMemoryDurability (dev/testing)
-6. Add retry, fallback, parallel execution features
-7. Create compatibility test suite
-8. Document migration path from Python PocketFlow
+4. Implement DaprRemoteDurability (connect to remote sidecar via env vars)
+5. Implement LocalDurability (ReDB/SQLite backend for single-user)
+6. Implement InMemoryDurability (dev/testing)
+7. Add retry, fallback, parallel execution features
+8. Ensure BatchFlow, AsyncBatchFlow, AsyncParallelBatchFlow parity
+9. Implement compile-time idempotency enforcement
+10. Create compatibility test suite
+11. Document migration path from Python PocketFlow
 

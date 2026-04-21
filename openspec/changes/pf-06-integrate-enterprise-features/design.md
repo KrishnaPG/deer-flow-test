@@ -41,11 +41,22 @@ Custom Orchestrator
     │     ├── Dapr State Store (checkpoints)
     │     ├── Dapr Pub/Sub (messaging)
     │     └── Dapr Resiliency (retry/CB)
+    ├── DaprRemoteDurability (hybrid - local app + remote sidecar)
+    │     └── Dapr sidecar via DAPR_HTTP_ENDPOINT
     ├── LocalDurability (single-user)
-    │     └── SQLite (checkpoints)
+    │     └── ReDB/SQLite (checkpoints)
     └── InMemoryDurability (dev)
           └── HashMap (no persistence)
 ```
+**Full Deployment Matrix**:
+| Mode | Dapr Sidecar | Local DB | Use Case |
+|------|-------------|----------|---------|
+| InMemory | None | None | Development |
+| ReDB | None | ReDB file | Local production |
+| DaprRemote | Remote via env var | Optional | Hybrid deployment |
+| Dapr | Local/ Kubernetes | Optional | Full cloud |
+| SqliteVss | None | ReDB + sqlite-vss | Local with Vector |
+
 **Alternatives Considered**: Dapr Workflows (rejected - static graphs only), Custom persistence layer (rejected - reinventing wheel).
 
 ### 3. Scalability: Dapr Sidecar + Kubernetes
