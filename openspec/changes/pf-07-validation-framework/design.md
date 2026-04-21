@@ -39,9 +39,9 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 **Rationale**: `criterion` provides statistical rigor; custom metrics capture Dapr-specific overhead.
 **Alternatives Considered**: Ad-hoc timing (rejected - unreliable), external benchmarking tools (rejected - complex).
 
-### 4. Integration Testing: Automated Chaos Testing
-**Decision**: Use testcontainers for real Dapr components, and build a "Chaos Mock" Dapr component that automatically injects latency, HTTP 500s, and sidecar crashes during integration tests.
-**Rationale**: This mathematically proves that the `pf-06` resiliency policies work under extreme stress. Happy-path testing is insufficient for an enterprise-grade system.
+### 4. Integration Testing: Automated Chaos Testing & OSS
+**Decision**: Use `testcontainers-rs` (battle-tested OSS) for real Dapr components, and build a "Chaos Mock" Dapr component that automatically injects latency, HTTP 500s, and sidecar crashes during integration tests.
+**Rationale**: This mathematically proves that the resiliency policies work under extreme stress. Happy-path testing is insufficient for an enterprise-grade system. `testcontainers-rs` avoids writing custom orchestration bash scripts for tests.
 **Alternatives Considered**: Real Dapr without fault injection (rejected - doesn't prove resilience mechanisms work), Manual chaos testing (rejected - unscalable).
 
 ### 5. Security Testing: OWASP ZAP + Custom Checks
@@ -77,10 +77,3 @@ We are taking a **fresh start approach**: validate functional equivalence and pe
 7. Integrate with CI/CD pipeline
 8. Create validation dashboards and reports
 
-## Open Questions
-
-1. **Scope**: Which features are critical for initial validation?
-2. **Frequency**: How often should full validation runs occur?
-3. **Ownership**: Who maintains the validation framework?
-4. **Cost**: What infrastructure costs are needed for validation?
-5. **Reporting**: What reporting format is needed for different stakeholders?

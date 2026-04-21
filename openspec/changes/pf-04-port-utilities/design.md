@@ -67,6 +67,10 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Achieves microsecond latency for hot data (like frequently used embeddings or prompt templates) while maintaining distributed consistency and fault tolerance via the sidecar. Emit OpenTelemetry spans for hit/miss ratios.
 **Alternatives Considered**: Dapr state cache only (rejected - adds sidecar latency to hot-path data), In-memory only (rejected - lacks distributed persistence).
 
+### 9. Battle-Tested OSS & Centralized Secret Management
+**Decision**: Use **no custom code** where battle-tested open-source packages exist. For example, use `reqwest` for HTTP, `moka` for L1 caching, and `deadpool` for connection pools. Additionally, all API keys and environment parameters must be resolved through a single centralized `config` module backed by the Dapr Secret Store API.
+**Rationale**: Reinforces enterprise stability. Utilities must never manually parse `.env` files or attempt to re-implement complex low-level mechanics like LRU caches or connection pools.
+
 ## Risks / Trade-offs
 
 **Risk**: Dapr Conversation API may not support all LLM providers → Mitigation: Fallback to direct HTTP calls.
@@ -87,10 +91,3 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 9. Add caching layer across all utilities
 10. Create compatibility test suite
 
-## Open Questions
-
-1. How to handle Dapr component configuration for different environments?
-2. What caching strategy to use (LRU, TTL, etc.)?
-3. How to handle authentication for Dapr components?
-4. Should we support custom utility implementations alongside Dapr?
-5. How to test Dapr integration without running actual Dapr sidecar?

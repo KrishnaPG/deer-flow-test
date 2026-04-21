@@ -34,9 +34,9 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 **Rationale**: Ensures functional equivalence, catches regressions.
 **Alternatives Considered**: Manual testing only (rejected - error-prone), unit tests only (rejected - misses integration).
 
-### 3. Dapr Integration: Mock for Testing & "No-Dapr" Dev Mode
-**Decision**: Provide a zero-dependency "Dev Mode" trait implementation where an in-memory, thread-local runtime completely takes over the Dapr traits. For integration tests, use Dapr CLI in standalone mode or mocks.
-**Rationale**: A "No-Dapr" Dev Mode guarantees sub-second compile-to-run iteration cycles for developer experience (DX) without requiring container startup, while mocks maintain unit test speed.
+### 3. Execution Integration: "No-Dapr" Dev Mode
+**Decision**: Provide a zero-dependency "Dev Mode" trait implementation where an `in-memory-driver` thread-local runtime completely takes over the execution engine traits. For integration tests, use Dapr CLI in standalone mode or mocks.
+**Rationale**: An `in-memory-driver` guarantees sub-second compile-to-run iteration cycles for developer experience (DX) without requiring container startup, while mocks maintain unit test speed.
 **Alternatives Considered**: Real Dapr deployment for all local dev/tests (rejected - slow, complex, high developer friction).
 
 ### 4. Example Structure: One Crate per Category
@@ -67,10 +67,3 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 7. Create documentation and migration guides
 8. Establish maintenance process for updates
 
-## Open Questions
-
-1. How to handle Python-specific dependencies (e.g., specific libraries)?
-2. What level of documentation is needed for each example?
-3. How to measure success of porting (coverage, performance, etc.)?
-4. How to involve community in porting efforts?
-5. How to keep examples updated as Python versions evolve?

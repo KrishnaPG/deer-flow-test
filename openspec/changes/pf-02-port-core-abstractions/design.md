@@ -147,10 +147,3 @@ struct NodeState {
 6. Create compatibility test suite
 7. Document migration path from Python PocketFlow
 
-## Open Questions
-
-1. Should we support both Dapr Workflow and Actor models for nodes, or choose one?
-2. How to handle Python's dynamic typing vs Rust's static typing?
-3. What serialization format to use for cross-language compatibility?
-4. How to integrate Dapr's OpenTelemetry with PocketFlow tracing?
-5. Should we support non-Dapr backends for development/testing?

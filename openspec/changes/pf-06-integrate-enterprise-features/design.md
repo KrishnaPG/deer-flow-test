@@ -27,9 +27,9 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 ## Decisions
 
 ### 1. Observability: Adaptive Telemetry Sampling via OpenTelemetry
-**Decision**: Use Dapr's OpenTelemetry integration and the Rust `tracing` crate, but enforce **Adaptive Head-Based Sampling**. Normal flows sample at a low rate (e.g., 1%), but errors or `Action::Fallback` dynamically bump sampling to 100% for that workflow execution tail.
-**Rationale**: Leverages Dapr's automatic trace propagation while preventing observability overhead from destroying performance at enterprise scale.
-**Alternatives Considered**: 100% tracing (rejected - kills performance), no observability (rejected - enterprise requirement).
+**Decision**: Use the battle-tested `tracing` crate in the core engine to emit standard spans. The specific execution driver (e.g., `dapr-driver`) is responsible for W3C TraceContext injection. Enforce **Adaptive Head-Based Sampling** (low normal rate, 100% on error/fallback).
+**Rationale**: Leverages automatic trace propagation without coupling the core engine to OpenTelemetry SDKs, while preventing observability overhead from destroying performance at enterprise scale.
+**Alternatives Considered**: 100% tracing (rejected - kills performance), Custom tracing macros (rejected - reinventing wheel).
 
 ### 2. Durability: Dapr State Management + Workflows
 **Decision**: Store all persistent state in Dapr State Management, use Dapr Workflows for durable execution.
@@ -56,10 +56,10 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 **Rationale**: Automatic trace propagation, custom spans for PocketFlow operations, audit logs for lineage.
 **Alternatives Considered**: Custom tracing (rejected - complex), no tracability (rejected - compliance risk).
 
-### 7. Security: Dapr Security Features
-**Decision**: Use Dapr secret stores for credentials, ACLs for access control, mTLS for encryption.
-**Rationale**: Leverages Dapr's security features without custom implementation.
-**Alternatives Considered**: Custom security (rejected - reinventing wheel), no security (rejected - enterprise requirement).
+### 7. Security: Dapr Security Features & Centralized Config
+**Decision**: Use Dapr secret stores for credentials, ACLs for access control, mTLS for encryption. Enforce that *all* secret retrieval routes exclusively through a centralized `config` module, preventing random `env::var` usage across nodes.
+**Rationale**: Leverages Dapr's security features without custom implementation, while ensuring the execution engine remains completely agnostic of how secrets are fetched.
+**Alternatives Considered**: Custom security (rejected - reinventing wheel), Direct `.env` parsing (rejected - security risk).
 
 ## Risks / Trade-offs
 
@@ -80,10 +80,3 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 8. Create deployment templates for Kubernetes
 9. Establish monitoring and alerting dashboards
 
-## Open Questions
-
-1. How to handle Dapr component configuration across environments (dev, staging, prod)?
-2. What performance benchmarks are needed to validate enterprise features?
-3. How to test enterprise features without full Dapr deployment?
-4. What compliance standards need to be met (SOC2, GDPR, etc.)?
-5. How to provide migration path for existing PocketFlow-Rust deployments?
