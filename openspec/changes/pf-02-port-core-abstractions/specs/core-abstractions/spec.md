@@ -1,39 +1,45 @@
 ## ADDED Requirements
 
-### Requirement: Port Node abstraction to Rust with custom orchestrator
-The system SHALL port the PocketFlow Node abstraction to Rust using a custom orchestrator for dynamic graph execution. Dapr is used ONLY for durability/state management, NEVER for orchestration or Node execution.
+### Requirement: Port Node abstraction to Rust with state-driven orchestrator
+The system SHALL port the PocketFlow Node abstraction to Rust using a state-driven orchestrator. Dapr is used ONLY for durability, NEVER for orchestration.
 
-#### Scenario: Node trait definition
-- **WHEN** defining the Node trait in Rust
-- **THEN** the system SHALL provide `exec()` for fresh execution
-- **AND** the system SHALL provide `resume(state)` for recovery from checkpoint
-- **AND** the system SHALL return `Action` for orchestrator routing
-- **AND** the orchestrator SHALL be agnostic to node internals
+#### Scenario: Node trait with default run() implementation
+- **WHEN** defining the Node trait
+- **THEN** the system SHALL provide `run(&State)` with default implementation
+- **AND** the default run() SHALL call `exec()` if checkpoint_data is empty
+- **AND** the default run() SHALL call `resume()` if checkpoint_data exists
+- **AND** node implementors SHALL implement `exec()` and `resume()` methods
 
-#### Scenario: Node execution
-- **WHEN** the orchestrator calls `node.exec()`
-- **THEN** the node SHALL execute its logic
-- **AND** the node SHALL have access to SharedStore for state
-- **AND** the node SHALL return an Action for routing
+#### Scenario: State-driven execution
+- **WHEN** the orchestrator calls `node.run(&state)`
+- **THEN** the node SHALL return `(Action, State)` tuple
+- **AND** the returned State SHALL contain updated checkpoint_data
+- **AND** the returned Action SHALL indicate routing decision
+- **AND** the orchestrator SHALL NOT interpret checkpoint_data content
+
+#### Scenario: Node execution from scratch
+- **WHEN** checkpoint_data is empty
+- **THEN** the node SHALL start fresh execution via `exec()`
+- **AND** the node SHALL have access to SharedStore (EPHEMERAL)
+- **AND** the node SHALL populate checkpoint_data for potential resumption
 
 #### Scenario: Node resumption
-- **WHEN** the orchestrator calls `node.resume(state)`
-- **THEN** the node SHALL restore from the opaque state blob
-- **AND** the node SHALL continue execution from where it left off
-- **AND** the orchestrator SHALL NOT interpret the state content
+- **WHEN** checkpoint_data is not empty
+- **THEN** the node SHALL restore via `resume()`
+- **AND** the node SHALL continue from where it left off
+- **AND** the node SHALL return updated State
 
 #### Scenario: Composite nodes (Flow-as-Node)
 - **WHEN** a node is a composite (Flow)
 - **THEN** the node SHALL spawn an inner orchestrator
-- **AND** the inner orchestrator SHALL manage its own execution stack
-- **AND** the node SHALL serialize its inner state for resumption
-- **AND** the outer orchestrator SHALL remain agnostic
+- **AND** the node SHALL serialize inner orchestrator state into checkpoint_data
+- **AND** the outer orchestrator SHALL remain agnostic to composition
 
 #### Scenario: Dapr durability integration
-- **WHEN** using DaprDurability for state persistence
-- **THEN** the system SHALL use Dapr State Store for checkpoint persistence
-- **AND** the system SHALL use Dapr Pub/Sub for multi-agent communication when needed
-- **AND** the system SHALL auto-detect Dapr sidecar presence and fail fast if missing
+- **WHEN** using DaprDurability
+- **THEN** the system SHALL persist State after every node transition
+- **AND** the system SHALL use Dapr State Store for checkpoint persistence
+- **AND** the system SHALL auto-detect Dapr sidecar and fail fast if missing
 
 ### Requirement: Port Flow abstraction to Rust with custom orchestrator
 The system SHALL port the PocketFlow Flow abstraction to Rust using the custom orchestrator. Flow is-a Node (implements Node trait) enabling hierarchical composition.
@@ -48,7 +54,7 @@ The system SHALL port the PocketFlow Flow abstraction to Rust using the custom o
 - **WHEN** implementing nested flows
 - **THEN** the system SHALL support Flow-as-Node composition
 - **AND** the system SHALL preserve parameter passing between parent and child flows
-- **AND** the system SHALL support hierarchical checkpoints for nested flows
+- **AND** composite nodes SHALL manage their own state via checkpoint_data
 
 #### Scenario: Parallel execution
 - **WHEN** executing nodes in parallel
@@ -56,26 +62,26 @@ The system SHALL port the PocketFlow Flow abstraction to Rust using the custom o
 - **AND** the system SHALL support configurable parallelism limits
 - **AND** the system SHALL maintain durability through checkpointing
 
-### Requirement: SharedStore with durability
-The system SHALL implement a durable SharedStore for workflow state that persists with every checkpoint.
+### Requirement: SharedStore (Ephemeral)
+The system SHALL implement an ephemeral SharedStore for node-to-node communication during execution. SharedStore is NOT persisted in checkpoints.
 
 #### Scenario: SharedStore API
 - **WHEN** implementing SharedStore
 - **THEN** the system SHALL provide simple key-value operations: get, put, delete
-- **AND** the system SHALL NOT provide atomic transactions (not needed)
+- **AND** the system SHALL NOT provide atomic transactions
 - **AND** the system SHALL support any serializable value type
 
-#### Scenario: SharedStore durability
+#### Scenario: SharedStore is ephemeral
 - **WHEN** checkpointing workflow state
-- **THEN** the SharedStore SHALL be serialized and persisted with the checkpoint
-- **AND** the SharedStore SHALL be restored on recovery
-- **AND** all durability backends SHALL support SharedStore persistence
+- **THEN** the SharedStore SHALL NOT be persisted
+- **AND** on recovery, the SharedStore SHALL be empty
+- **AND** nodes SHALL re-populate SharedStore on re-execution
 
-#### Scenario: SharedStore implementations
-- **WHEN** configuring SharedStore
-- **THEN** InMemoryDurability SHALL use in-memory HashMap
-- **AND** ReDBDurability SHALL use ReDB key-value store
-- **AND** DaprDurability SHALL use Dapr State Management
+#### Scenario: Durable data storage
+- **WHEN** a node needs durable storage
+- **THEN** the node SHALL use the durability API directly
+- **AND** the node SHALL NOT rely on SharedStore for durability
+- **AND** SharedStore SHALL only be used for ephemeral communication
 
 ### Requirement: Port Params to Rust
 The system SHALL port the PocketFlow Params abstraction to Rust as immutable parameters passed to nodes.
@@ -152,35 +158,36 @@ The system SHALL implement node successor routing where each node tracks possibl
 - **THEN** the system SHALL emit a warning about overwriting the existing successor
 - **AND** the new successor SHALL replace the old one
 
-### Requirement: Stack-based orchestrator
-The system SHALL implement a stack-based orchestrator that executes nodes using DFS traversal. The orchestrator is agnostic to node types and nesting depth.
+### Requirement: State-driven orchestrator
+The system SHALL implement a dumb, state-driven orchestrator. The orchestrator does not understand graphs or stacks - it simply executes nodes based on what the State says.
 
 #### Scenario: Orchestrator execution loop
 - **WHEN** executing a flow
-- **THEN** the orchestrator SHALL maintain an execution stack of Frames
-- **AND** the loop SHALL: pop Frame → resolve Node → execute/resume → push next Frame
-- **AND** the loop SHALL continue until the stack is empty
-- **AND** the orchestrator SHALL NOT know or care about node semantics (simple vs composite)
+- **THEN** the orchestrator SHALL load State (from checkpoint or create new)
+- **AND** the loop SHALL: resolve `state.current_node` → call `node.run(&state)` → update State
+- **AND** the loop SHALL continue until `state.action == Action::Done`
+- **AND** the orchestrator SHALL NOT know or care about node internals
 
-#### Scenario: Frame structure
-- **WHEN** creating a Frame for the execution stack
-- **THEN** the Frame SHALL contain: `node_id` and optional `state` (opaque blob)
-- **AND** if `state` is Some, the orchestrator SHALL call `node.resume(state)`
-- **AND** if `state` is None, the orchestrator SHALL call `node.exec()`
-- **AND** the orchestrator SHALL NOT interpret the state content
+#### Scenario: State structure
+- **WHEN** defining the State structure
+- **THEN** it SHALL contain: `current_node`, `action`, `shared_store`, `checkpoint_data`
+- **AND** `current_node` SHALL indicate which node to execute
+- **AND** `action` SHALL indicate routing decision for next iteration
+- **AND** `checkpoint_data` SHALL be opaque blob for node-specific state
+- **AND** `shared_store` SHALL be ephemeral (not persisted)
 
 #### Scenario: Checkpoint after every transition
-- **WHEN** a node completes execution
-- **THEN** the system SHALL persist a checkpoint BEFORE proceeding to next node
-- **AND** the checkpoint SHALL contain the current stack and SharedStore
+- **WHEN** a node completes via `run(&state)`
+- **THEN** the system SHALL persist State BEFORE proceeding
 - **AND** checkpoints SHALL be append-only with history
-- **AND** recovery SHALL load the latest checkpoint from history
+- **AND** recovery SHALL load the latest checkpoint
+- **AND** the orchestrator SHALL use the loaded State to determine next action
 
 #### Scenario: Loop via back-edge
 - **WHEN** implementing workflow loops
-- **THEN** the system SHALL support wiring a later node back to an earlier node
-- **AND** the loop SHALL be represented as: `later_node - Action::Continue >> earlier_node`
-- **AND** the loop SHALL continue until a node returns an action not wired to the loop
+- **THEN** the system SHALL support wiring nodes via Action-based routing
+- **AND** the loop SHALL continue while `state.action` routes to previous nodes
+- **AND** termination SHALL occur when `state.action == Action::Done`
 
 #### Scenario: Conditional branching
 - **WHEN** a node has multiple possible next nodes
