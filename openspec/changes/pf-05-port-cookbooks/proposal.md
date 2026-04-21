@@ -1,11 +1,11 @@
 ## Why
 
-PocketFlow provides 59 cookbook examples covering various patterns and utilities, from basic hello-world to complex multi-agent systems. The existing PocketFlow-Rust port has only a few basic examples. To achieve industrial-grade enterprise deployment with high-performance, reliability, and scalability, we need to port these cookbooks to Rust using Dapr as the distributed application runtime. This change creates a detailed porting plan that prioritizes examples, designs a test harness for validation, and establishes a framework for maintaining compatibility with Python versions.
+PocketFlow provides 56 cookbook examples covering various patterns and utilities, from basic hello-world to complex multi-agent systems. The existing PocketFlow-Rust port has only a few basic examples. To achieve industrial-grade enterprise deployment with high-performance, reliability, and scalability, we need to port these cookbooks to Rust using Dapr as the distributed application runtime. This change creates a detailed porting plan that prioritizes examples, designs a test harness for validation, and establishes a framework for maintaining compatibility with Python versions.
 
 ## What Changes
 
 - Create a comprehensive porting plan for PocketFlow cookbooks to Rust with Dapr integration
-- Define prioritization strategy for porting 59 examples
+- Define prioritization strategy for porting 56 examples
 - Design test harness for functional equivalence validation between Python and Rust
 - Specify integration testing framework with Dapr components
 - Establish compatibility requirements with Python PocketFlow cookbook semantics
@@ -14,7 +14,7 @@ PocketFlow provides 59 cookbook examples covering various patterns and utilities
 ## Capabilities
 
 ### New Capabilities
-- `cookbooks`: Porting plan for 59 PocketFlow cookbook examples to Rust with Dapr integration, including test harness and validation framework
+- `cookbooks`: Porting plan for 56 PocketFlow cookbook examples to Rust with Dapr integration, including test harness and validation framework
 
 ### Modified Capabilities
 - None (this is a new porting plan)

@@ -1,13 +1,13 @@
 ## Context
 
-PocketFlow-Rust lacks cookbook examples, while Python PocketFlow has 59 examples covering various patterns. This design creates a porting plan that prioritizes examples, designs a test harness for validation, and establishes a framework for maintaining compatibility. The cookbooks build on the core abstractions, design patterns, and utilities ported in previous changes.
+PocketFlow-Rust lacks cookbook examples, while Python PocketFlow has 56 examples covering various patterns. This design creates a porting plan that prioritizes examples, designs a test harness for validation, and establishes a framework for maintaining compatibility. The cookbooks build on the core abstractions, design patterns, and utilities ported in previous changes.
 
 We are taking a **fresh start approach**: use Python PocketFlow examples as inspiration ("in spirit" and "logic"), not as strict line-by-line templates. The Rust implementation should do everything Python examples can do, but better - with Dapr integration, faster execution, and zero-copy where possible. Time to working state is more important than achieving 100% line equality.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Port all 59 PocketFlow cookbooks to Rust with Dapr integration
+- Port all 56 PocketFlow cookbooks to Rust with Dapr integration
 - Ensure functional equivalence between Python and Rust implementations
 - Design comprehensive test harness for automated validation
 - Create integration testing framework with Dapr components
@@ -54,7 +54,7 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 **Risk**: Some Python features may not have direct Rust equivalents → Mitigation: Document differences, provide alternatives.
 **Risk**: Test harness may be complex to maintain → Mitigation: Keep harness simple, use existing testing frameworks.
 **Risk**: Dapr mocking may not catch all integration issues → Mitigation: Include integration tests with real Dapr.
-**Risk**: Porting all 59 examples is time-consuming → Mitigation: Prioritize, allow community contributions.
+**Risk**: Porting all 56 examples is time-consuming → Mitigation: Prioritize, allow community contributions.
 
 ## Migration Plan
 
