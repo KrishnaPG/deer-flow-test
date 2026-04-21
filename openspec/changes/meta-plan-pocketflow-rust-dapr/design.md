@@ -156,7 +156,70 @@ The following architectural decisions have been established through design revie
 | Secret management | ❌ | ✅ | Dapr Secret Store |
 | Sub-workflows | ✅ (optional) | ✅ | Complex cases only |
 
-### 8. Non-Durable Deployment (Single-User Production)
+### 8. Checkpoint and Recovery Strategy
+
+**Decision**: Configurable checkpoint policy (Option B)
+- Default: Checkpoint every 5 node transitions
+- Per-workflow configuration: User can specify checkpoint frequency
+- Options: Every N nodes, every safe-point, or explicit checkpoint nodes
+
+**Rationale**: Balance between durability and performance. Every node transition is too slow for high-throughput workflows; explicit only is too risky for long-running flows.
+
+**Implementation**:
+```rust
+pub enum CheckpointPolicy {
+    EveryN(usize),           // Checkpoint every N transitions
+    SafePointsOnly,          // Only at marked safe points
+    ExplicitOnly,            // Only explicit checkpoint nodes
+}
+
+impl Default for CheckpointPolicy {
+    fn default() -> Self {
+        CheckpointPolicy::EveryN(5)
+    }
+}
+```
+
+### 9. Graph Versioning Strategy
+
+**Decision**: No built-in versioning (like Python)
+
+**Rationale**: Python PocketFlow has no versioning. The graph is defined in code and executed. If code changes mid-execution, behavior is undefined. We match this simplicity.
+
+**Implications**:
+- Code updates should wait for workflows to complete
+- Checkpoints include graph structure snapshot
+- Recovery uses saved graph structure (may differ from current code)
+- **Risk**: Code update during active workflow = undefined behavior
+
+**Future Enhancement**: Could add explicit versioning later if needed
+
+### 10. Trait Complexity: Runtime Capability Flags (Option A)
+
+**Decision**: Use runtime flags in `ExecutionMode` struct
+
+**Structure**:
+```rust
+pub struct ExecutionMode {
+    pub durability: DurabilityLevel,    // Distributed/Persistent/Volatile
+    pub streaming: StreamingPolicy,     // Stream/Batch/Complete
+    pub checkpoint_policy: CheckpointPolicy,
+}
+
+impl Default for ExecutionMode {
+    fn default() -> Self {
+        ExecutionMode {
+            durability: DurabilityLevel::Distributed,
+            streaming: StreamingPolicy::Complete,
+            checkpoint_policy: CheckpointPolicy::default(),
+        }
+    }
+}
+```
+
+**Usage**: User specifies mode at call site; runtime enforces constraints
+
+### 11. Non-Durable Deployment (Single-User Production)
 
 **Target**: Desktop apps, single-tenant deployments, edge devices
 

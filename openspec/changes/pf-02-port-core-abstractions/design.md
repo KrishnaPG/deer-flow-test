@@ -7,18 +7,21 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 ## Goals / Non-Goals
 
 **Goals:**
-- Map Node abstraction to Dapr Workflow Activities (stateless) or Actors (stateful)
-- Map Flow abstraction to Dapr Workflows for orchestration
-- Map SharedStore to Dapr State Management with pluggable backends
+- Implement custom orchestrator (NOT Dapr Workflows) for dynamic graph execution
+- Map Node abstraction to executable units with prep→exec→post lifecycle
+- Support runtime graph modification (nodes can add/remove successors dynamically)
+- Map Flow abstraction to orchestrated subgraphs (Flow is a Node)
+- Map SharedStore to Dapr State Management (distributed) or local storage (single-user)
 - Map Params to immutable workflow input data
-- Add retry logic using Dapr retry policies
-- Add fallback mechanisms using Dapr compensation handlers
-- Add parallel execution using Dapr fan-out/fan-in patterns
+- Add retry logic using Dapr resiliency policies (or local equivalents)
+- Add fallback mechanisms via Action-based routing (semantic fallbacks)
+- Add parallel execution using async join! or Dapr fan-out/fan-in
 - Provide functional equivalence with Python PocketFlow semantics
 - Prioritize getting to working state quickly over nitpicking about 100% line equality
 - Aim for zero-copy, zero-allocation where possible for performance
-- Implement action-based routing where nodes return action enums that control graph traversal
+- Implement action-based routing where nodes return action strings that control graph traversal
 - Support loop construction via back-edges (wiring later node back to earlier node)
+- Use Dapr for enterprise features (state, retry, observability), NOT for workflow orchestration
 
 **Non-Goals:**
 - Implement the actual porting (this is a plan only)
@@ -26,19 +29,45 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 - Support all Python dynamic features that don't translate to Rust
 - Replace existing PocketFlow-Rust code wholesale
 - Achieve line-by-line code equivalence with Python (not required)
-- Implement runtime node addition/removal (graph is static at construction, traversal path is dynamic)
+- Use Dapr Workflows for orchestration (rejected - doesn't support dynamic graphs)
 
 ## Decisions
 
-### 1. Node Mapping: Activities, Actors, and Fast-Paths
-**Decision**: Use Dapr Workflow Activities for stateless nodes and Dapr Actors for stateful nodes requiring persistent identity. Introduce a **"Local Fast-Path" (Node Clustering)** where multiple consecutive purely compute-bound, stateless nodes are executed locally in memory as a single Dapr Activity.
-**Rationale**: Activities match the prep→exec→post pipeline; Actors provide turn-based concurrency. The Fast-Path optimization prevents Dapr orchestration roundtrips for extremely fast, consecutive Rust operations (e.g., chunking, formatting).
-**Alternatives Considered**: Always Activities for everything (rejected - massive distributed overhead for trivial compute steps), always Actors (rejected - overkill for stateless nodes).
+### 1. Custom Orchestrator with Dapr Enterprise Layer
+**Decision**: Implement a custom `Orchestrator` for graph execution (NOT Dapr Workflows). Use Dapr for enterprise features: State Store (persistence), Pub/Sub (messaging), Resiliency (retry/CB), Tracing (observability), Secret Store (security).
+**Rationale**: Dapr Workflows require static workflow definitions known at build time. Python PocketFlow supports dynamic graph modification at runtime (nodes can add/remove successors during execution). A custom orchestrator maintains this flexibility while Dapr provides durability and enterprise features.
+**Architecture**:
+```
+┌─────────────────────────────────────┐
+│     Custom Orchestrator             │
+│  (Dynamic graphs, runtime routing)  │
+├─────────────────────────────────────┤
+│     Durability Trait                │
+│  ┌─────────┐ ┌─────────┐ ┌────────┐ │
+│  │  Dapr   │ │  Local  │ │Memory  │ │
+│  │(dist)   │ │(sqlite) │ │(test)  │ │
+│  └─────────┘ └─────────┘ └────────┘ │
+└─────────────────────────────────────┘
+```
+**Alternatives Considered**: Dapr Workflows (rejected - static graphs only), Temporal (rejected - similar static constraint).
 
-### 2. Flow Mapping: Dapr Workflows
-**Decision**: Map each PocketFlow Flow to a Dapr Workflow definition.
-**Rationale**: Dapr Workflows provide durable orchestration, built-in retry, compensation, and parallel execution.
-**Alternatives Considered**: Custom orchestration (rejected - reinventing wheel), external scheduler (rejected - adds complexity).
+### 2. Flow as Node with Custom Orchestration
+**Decision**: Flow implements the Node trait (like Python's `class Flow(BaseNode)`). Flow execution creates a sub-orchestrator that runs the flow's internal graph.
+**Rationale**: Enables hierarchical composition where Flows can be used as nodes in other Flows (`flow_a >> flow_b`). Custom orchestration within Flow maintains dynamic graph capabilities.
+**Execution**:
+```rust
+impl Node for Flow {
+    async fn exec(&self, input: PrepResult) -> Result<ExecResult> {
+        let orchestrator = Orchestrator::new(self.durability());
+        let final_action = orchestrator.run(
+            self.start_node(),
+            &mut local_store
+        ).await?;
+        Ok(ExecResult::FlowCompleted { action: final_action })
+    }
+}
+```
+**Alternatives Considered**: Dapr Workflows for Flow (rejected - static graphs), Flattening Flow into parent graph (rejected - breaks composition).
 
 ### 3. SharedStore: Dapr State Management
 **Decision**: Wrap Dapr State Management API in a `SharedStore` trait with key-value semantics.
@@ -65,85 +94,138 @@ We are taking a **fresh start approach**: use Python PocketFlow as inspiration (
 **Rationale**: Native Dapr support for parallel execution with durability.
 **Alternatives Considered**: Custom thread pool (rejected - no durability), sequential execution (rejected - performance).
 
-### 8. Graph Architecture: Distributed Successors Map
-**Decision**: Model PocketFlow's graph as a distributed structure where each node has a `successors: HashMap<Action, NodeId>` map, with action-based routing at runtime.
-**Rationale**: This captures PocketFlow's core "dynamic" mechanic: the graph structure is static, but which edge is taken is determined at runtime by the node's return value.
+### 8. Dynamic Graph with Shared Successors (Python-Equivalent)
+**Decision**: Replicate Python's shallow copy pattern: Node.successors is wrapped in `Arc<RwLock<HashMap<String, Arc<RwLock<Node>>>>>` enabling runtime graph modification.
+**Rationale**: Python PocketFlow allows dynamic graph modification because `copy.copy()` creates a new node object but shares the successors dict via reference. We replicate this with `Arc` for shared ownership and `RwLock` for thread-safe mutation.
 
-**PocketFlow Internals** (for reference when implementing):
-```
-BaseNode:
-  - params: Dict[str, Any]           # Node parameters
-  - successors: Dict[str, Node]       # action -> next node mapping
-  
-  - next(node, action="default")      # Add edge to successors
-  - __rshift__(other) -> next(other) # Sequential: node >> next_node
-  - __sub__(action) -> _ConditionalTransition  # For conditional: node - "action" >> target
+**Python Internals**:
+```python
+# Shallow copy - successors dict is SHARED
+curr = copy.copy(start_node)  # New object, same successors dict reference
 
-Flow:
-  - start_node: Node                  # Entry point only
-  - get_next_node(curr, action) -> lookup curr.successors.get(action)
-  - _orch():                         # Core loop:
-    while curr:
-        curr.set_params(p)
-        last_action = curr._run(shared)  # prep -> exec -> post, returns action
-        curr = copy(curr.get_next_node(curr, last_action))
+# Runtime modification affects all copies
+self.successors["new_action"] = new_node  # Visible to all node copies!
 ```
 
-**Action Type Decision**: Use `enum Action` with variants for known actions, and a catch-all `Custom(&str)` for extensibility. This provides:
-- Type safety (compile-time checking for known actions)
-- Extensibility (custom actions via `Custom("search")`)
-- Pattern matching for routing decisions
+**Rust Implementation**:
+```rust
+pub struct Node {
+    id: NodeId,
+    params: Arc<RwLock<Params>>,
+    // SHARED successors - enables runtime graph modification
+    successors: Arc<RwLock<HashMap<String, Arc<RwLock<Node>>>>>,
+    implementation: Box<dyn NodeImplementation>,
+}
 
-**Routing Behavior**:
-- `post()` method returns `Action` enum
-- `get_next_node()` does: `node.successors.get(action).cloned()`
-- If action not in successors and successors is non-empty: warn and return None (flow ends)
-- If successors is empty: current node is terminal
+impl Clone for Node {
+    fn clone(&self) -> Self {
+        Node {
+            id: self.id.clone(),
+            params: Arc::clone(&self.params),
+            successors: Arc::clone(&self.successors), // SHARED!
+            implementation: self.implementation.clone(),
+        }
+    }
+}
+
+impl Node {
+    // Runtime graph modification (like Python)
+    pub fn next(&self, action: &str, target: Arc<RwLock<Node>>) {
+        self.successors.write().insert(action.to_string(), target);
+    }
+}
+```
+
+**Dynamic Capabilities**:
+- Add successors at runtime: `node.next("action", target_node)`
+- Remove successors: `node.successors.write().remove("action")`
+- Modify routing dynamically based on execution results
+- Flow-as-Node composition (Flow implements Node trait)
+
+**Action-Based Routing**:
+- `post()` returns `Option<String>` (action name)
+- Orchestrator looks up: `node.successors.read().get(action)`
+- Supports: `"default"`, `"fallback"`, `"retry"`, custom actions
+- Back-edges enable loops: `node_a - "continue" >> node_a`
 
 ### 10. Engine/Driver Separation & Domain-Agnostic Orchestration
-**Decision**: **Dapr is not the engine; it is just a driver.** The core `Node`, `Flow`, and orchestration patterns (the DAG engine) must be completely decoupled from both LLM-specific logic AND the execution environment. 
+**Decision**: **Dapr is not the engine; it provides enterprise services.** The core `Node`, `Flow`, and orchestration patterns must be completely decoupled from both LLM-specific logic AND the execution environment.
 
-To enforce this strict boundary, the architecture is split into independent crates:
-*   **`berg10-execution-engine`**: The core, domain-agnostic engine containing the `Node` trait, `Flow` orchestrator, generic DAG logic, and patterns. Zero AI dependencies. Zero Dapr dependencies.
-*   **Execution Drivers** (`berg10-dapr-driver`, `berg10-in-memory-driver`, `temporal-driver`): Swappable implementations that provide the durability layer for the generic engine.
-*   **`berg10-ai-driver`**: The LLM/AI specific implementations that fulfill the `Node` trait for AI tasks.
+Architecture split:
+*   **`berg10-execution-engine`**: Core engine with `Node` trait, `Flow` orchestrator, custom `Orchestrator` implementation. Zero AI dependencies. Zero Dapr dependencies.
+*   **`berg10-durability`**: Durability trait and implementations:
+    - `DaprDurability`: Distributed (Dapr sidecar)
+    - `LocalDurability`: Single-user production (SQLite)
+    - `InMemoryDurability`: Development/testing
+*   **`berg10-ai-nodes`**: LLM/AI specific Node implementations
 
-**Rationale**: An enterprise workflow engine must not be bottlenecked to a single domain or execution runtime. This separation ensures the engine can orchestrate anything (AI agents, legacy APIs) and run anywhere (Dapr distributed sidecars, or a fast embedded local process via an in-memory driver).
-### 11. Graph Persistence: Dapr State Management
-**Decision**: Store graph structure (nodes and successors relationships) in Dapr State Management for persistence and recovery.
-**Rationale**: Enables workflow restart from persisted state, version history for auditing, and external graph modification tools.
+**Rationale**: Custom orchestrator enables dynamic graphs. Durability abstraction allows same code to run distributed (Dapr) or local (SQLite).
+### 11. Checkpoint and Recovery Strategy
+**Decision**: Configurable checkpoint policy with default every 5 node transitions. Persist workflow state (current node, shared state, graph snapshot) for recovery.
+**Rationale**: Balance durability with performance. Long-running workflows (chat, research) need recovery; short workflows don't.
 
-**Storage Schema** (to be refined in implementation):
+**Checkpoint Structure**:
 ```rust
-struct WorkflowGraph {
-    id: WorkflowId,
-    version: u64,
-    nodes: Vec<NodeState>,      // Each node's state including its successors
-    start_node_id: NodeId,
+pub struct WorkflowCheckpoint {
+    pub workflow_id: WorkflowId,
+    pub current_node_id: NodeId,
+    pub graph_snapshot: GraphSnapshot,      // Serialized graph structure
+    pub shared_state: Vec<u8>,             // Serialized SharedStore
+    pub timestamp: DateTime<Utc>,
 }
 
-struct NodeState {
-    id: NodeId,
-    node_type: NodeType,
-    params: Params,
-    successors: HashMap<Action, NodeId>,  // action -> target node
+pub enum CheckpointPolicy {
+    EveryN(usize),      // Checkpoint every N transitions (default: 5)
+    SafePointsOnly,     // Only at marked safe points
+    ExplicitOnly,       // Only explicit checkpoint nodes
 }
 ```
+
+**Recovery Flow**:
+1. Check for existing checkpoint
+2. Rehydrate graph from snapshot + code
+3. Restore shared state
+4. Resume from current_node_id
+
+### 12. Async-By-Default
+**Decision**: All node operations are async. No sync variants.
+**Rationale**: Modern Rust async is the standard. Users can block if needed with `tokio::runtime::Handle::current().block_on()`.
+
+### 13. Runtime Execution Mode
+**Decision**: Use runtime capability flags in `ExecutionMode` struct.
+**Structure**:
+```rust
+pub struct ExecutionMode {
+    pub durability: DurabilityLevel,      // Distributed/Persistent/Volatile
+    pub streaming: StreamingPolicy,       // Stream/Batch/Complete
+    pub checkpoint_policy: CheckpointPolicy,
+}
+
+pub enum DurabilityLevel {
+    Distributed,  // Dapr - multi-tenant, HA
+    Persistent,   // SQLite - single-user production
+    Volatile,     // In-memory - dev/testing
+}
+```
+**Usage**: User specifies mode at workflow start; runtime enforces constraints.
 
 ## Risks / Trade-offs
 
 **Risk**: Dapr SDK for Rust may be immature → Mitigation: Use stable APIs, contribute upstream if needed.
 **Risk**: Serialization overhead with `serde_json::Value` → Mitigation: Provide type-safe wrappers, optimize hot paths.
 **Risk**: Behavioral differences between Python and Rust/Dapr → Mitigation: Comprehensive compatibility tests.
-**Risk**: Dapr sidecar adds operational complexity → Mitigation: Leverage existing Dapr deployment patterns.
+**Risk**: Dapr sidecar adds operational complexity → Mitigation: Provide LocalDurability for single-user deployments.
+**Risk**: Custom orchestrator complexity → Mitigation: Start simple, add features incrementally.
+**Risk**: Arc<RwLock<>> overhead for successors → Mitigation: Benchmark, optimize if needed.
 
 ## Migration Plan
 
-1. Create crate structure with trait definitions
-2. Implement Dapr Activity node wrapper
-3. Implement Dapr Workflow flow wrapper
-4. Implement Dapr State Management SharedStore
-5. Add retry, fallback, parallel execution features
-6. Create compatibility test suite
-7. Document migration path from Python PocketFlow
+1. Create crate structure with trait definitions (engine + durability)
+2. Implement custom Orchestrator with dynamic graph support
+3. Implement DaprDurability (state store, pub/sub, tracing, resiliency)
+4. Implement LocalDurability (SQLite backend for single-user)
+5. Implement InMemoryDurability (dev/testing)
+6. Add retry, fallback, parallel execution features
+7. Create compatibility test suite
+8. Document migration path from Python PocketFlow
 

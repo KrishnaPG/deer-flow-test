@@ -8,12 +8,14 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 
 **Goals:**
 - Map LLM calls to Dapr Conversation API for centralized LLM management
+- Support streaming LLM responses where providers support it
 - Map embedding to Dapr Conversation API + local Rust implementations
 - Map vector DB operations to Dapr Vector bindings
 - Map web search to Dapr bindings
 - Implement chunking as pure Rust (no Dapr mapping needed)
 - Implement visualization as pure Rust with Dapr State caching
-- Map text-to-speech to Dapr bindings
+- Map text-to-speech to Dapr bindings with streaming support
+- **Add speech-to-text (STT) utility** - required for voice-chat cookbook
 - Add caching, rate limiting, and observability to all utilities
 - Prioritize working implementation over line-by-line Python equivalence
 - Aim for zero-copy where possible for performance
@@ -22,7 +24,6 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 - Implement the actual porting (this is a plan only)
 - Replace all Python utility functionality wholesale
 - Support every possible LLM provider or vector database
-- Provide real-time streaming for all utilities
 - Achieve line-by-line code equivalence with Python (not required)
 
 ## Decisions
@@ -57,10 +58,33 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Visualization is local rendering; caching can be distributed.
 **Alternatives Considered**: Dapr rendering (rejected - overkill), no caching (rejected - performance).
 
-### 7. Text-to-Speech: Dapr Bindings
-**Decision**: Use Dapr bindings for TTS services.
-**Rationale**: Pluggable TTS providers, caching, rate limiting.
-**Alternatives Considered**: Direct API calls (rejected - lacks enterprise features), custom TTS client (rejected - reinventing wheel).
+### 7. Text-to-Speech: Dapr Bindings with Streaming
+**Decision**: Use Dapr bindings for TTS services. Support streaming audio chunks for real-time playback.
+**Rationale**: Pluggable TTS providers, caching, rate limiting. Streaming enables responsive voice interfaces.
+**Implementation**:
+```rust
+pub trait TTSClient {
+    /// Generate complete audio
+    async fn synthesize(&self, text: &str) -> Result<AudioData>;
+    
+    /// Stream audio chunks for real-time playback
+    fn synthesize_stream(&self, text: &str) -> Pin<Box<dyn Stream<Item = Result<AudioChunk>> + Send>>;
+}
+```
+
+### 10. Speech-to-Text: Dapr Bindings with Streaming
+**Decision**: Use Dapr bindings for STT services. Support streaming transcription for real-time voice input.
+**Rationale**: Required for `pocketflow-voice-chat` cookbook. Real-time transcription enables conversational voice interfaces.
+**Implementation**:
+```rust
+pub trait STTClient {
+    /// Transcribe complete audio
+    async fn transcribe(&self, audio: &AudioData) -> Result<String>;
+    
+    /// Stream transcription results for real-time voice input
+    fn transcribe_stream(&self) -> Pin<Box<dyn Stream<Item = Result<TranscriptionChunk>> + Send>>;
+}
+```
 
 ### 8. Tiered Caching Strategy (L1 + L2)
 **Decision**: Build a tiered cache architecture. Use an in-memory Rust `moka` cache for ultra-low latency L1 caching of frequent utility calls. On an L1 miss, fall back to Dapr State Management (L2 cache).
@@ -71,23 +95,42 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Decision**: Use **no custom code** where battle-tested open-source packages exist. For example, use `reqwest` for HTTP, `moka` for L1 caching, and `deadpool` for connection pools. Additionally, all API keys and environment parameters must be resolved through a single centralized `config` module backed by the Dapr Secret Store API.
 **Rationale**: Reinforces enterprise stability. Utilities must never manually parse `.env` files or attempt to re-implement complex low-level mechanics like LRU caches or connection pools.
 
+### 11. Streaming Support Matrix
+**Decision**: Support streaming for utilities where LLM providers support it.
+**Streaming Matrix**:
+| Utility | Streaming Support | Strategy | Notes |
+|---------|------------------|----------|-------|
+| OpenAI Chat | ✅ | Direct stream | Native streaming API |
+| Anthropic Claude | ✅ | Direct stream | Native streaming API |
+| Local LLMs | ✅ | Direct stream | Via generation callbacks |
+| TTS | ✅ | Audio chunk stream | Real-time playback |
+| STT | ✅ | Real-time transcription | Voice input |
+| Embeddings | ❌ | Complete only | Usually not streamed |
+| Web Search | ❌ | Complete only | Atomic results |
+
+**Rationale**: Streaming reduces time-to-first-byte (TTFB) for conversational interfaces. Not all utilities benefit from streaming.
+
 ## Risks / Trade-offs
 
 **Risk**: Dapr Conversation API may not support all LLM providers → Mitigation: Fallback to direct HTTP calls.
 **Risk**: Dapr bindings may have limited feature sets → Mitigation: Allow custom implementations for advanced features.
 **Risk**: Caching may introduce staleness → Mitigation: Configurable TTL and cache invalidation.
 **Risk**: Local embedding models may be large → Mitigation: Provide model downloading and caching.
+**Risk**: Streaming increases complexity → Mitigation: Make streaming opt-in via `StreamingPolicy`.
+**Risk**: STT integration may vary by provider → Mitigation: Abstract with trait, support multiple backends.
 
 ## Migration Plan
 
 1. Create utility trait definitions
-2. Implement Dapr Conversation API LLM client
+2. Implement Dapr Conversation API LLM client with streaming support
 3. Implement hybrid embedding client
 4. Implement Dapr Vector binding client
 5. Implement Dapr web search binding client
 6. Implement chunking utilities
 7. Implement visualization with Dapr State caching
-8. Implement Dapr TTS binding client
-9. Add caching layer across all utilities
-10. Create compatibility test suite
+8. Implement Dapr TTS binding client with streaming
+9. **Implement Dapr STT binding client with streaming (NEW)**
+10. Add caching layer across all utilities
+11. Create compatibility test suite
+12. Test streaming functionality with voice-chat cookbook
 

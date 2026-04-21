@@ -29,15 +29,41 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 **Rationale**: Focuses effort on core examples first, provides incremental value.
 **Alternatives Considered**: Alphabetical order (rejected - no prioritization), random selection (rejected - inefficient).
 
-### 2. Test Harness: Python-Rust Comparator
-**Decision**: Build test harness that runs both Python and Rust implementations and compares outputs.
-**Rationale**: Ensures functional equivalence, catches regressions.
-**Alternatives Considered**: Manual testing only (rejected - error-prone), unit tests only (rejected - misses integration).
+### 2. Test Harness: Multi-Mode Validation
+**Decision**: Build test harness that validates:
+1. **Functional Equivalence**: Run Python and Rust, compare outputs
+2. **Checkpoint/Recovery**: Simulate crashes, verify resumption
+3. **Streaming**: Test real-time output for streaming cookbooks
+4. **Durability Modes**: Test with InMemory, Local (SQLite), and Dapr backends
+**Rationale**: Comprehensive validation of custom orchestrator, not just Dapr integration.
+**Test Strategy**:
+```rust
+#[tokio::test]
+async fn test_chat_with_checkpoint_recovery() {
+    // Run for 3 turns, simulate crash
+    let partial = run_workflow(chat_flow, 3, InMemoryDurability).await;
+    
+    // Recover and resume
+    let recovered = recover_from_checkpoint(partial.checkpoint).await;
+    
+    // Complete workflow
+    let result = continue_workflow(recovered).await;
+    
+    // Verify against Python reference
+    assert_outputs_equal(result, python_reference_output);
+}
+```
 
-### 3. Execution Integration: "No-Dapr" Dev Mode
-**Decision**: Provide a zero-dependency "Dev Mode" trait implementation where an `in-memory-driver` thread-local runtime completely takes over the execution engine traits. For integration tests, use Dapr CLI in standalone mode or mocks.
-**Rationale**: An `in-memory-driver` guarantees sub-second compile-to-run iteration cycles for developer experience (DX) without requiring container startup, while mocks maintain unit test speed.
-**Alternatives Considered**: Real Dapr deployment for all local dev/tests (rejected - slow, complex, high developer friction).
+### 3. Execution Integration: Multiple Durability Modes
+**Decision**: Support three durability modes for cookbooks:
+- **Dev Mode**: `InMemoryDurability` - no persistence, fastest iteration
+- **Local Mode**: `LocalDurability` (SQLite) - single-user production, no Dapr sidecar
+- **Distributed Mode**: `DaprDurability` - full enterprise features with sidecar
+**Rationale**: Matches architecture from PF-02. Enables testing at all levels without forcing Dapr for simple examples.
+**Test Strategy**:
+- Unit tests: Use InMemoryDurability
+- Integration tests: Use LocalDurability (SQLite) or Dapr in standalone mode
+- Production tests: Use full Dapr deployment
 
 ### 4. Example Structure: One Crate per Category
 **Decision**: Organize examples in crate by category (basic, patterns, integrations, advanced). For Python-specific dependencies used in original examples (e.g., `requests`, `BeautifulSoup`), replace them with battle-tested Rust equivalents (e.g., `reqwest`, `scraper`). Where no Rust port exists, wrap the logic in a Dapr Binding.
@@ -49,21 +75,35 @@ We are taking a **fresh start approach**: use Python PocketFlow examples as insp
 **Rationale**: Side-by-side docs help developers migrate and highlight differences. Open-sourcing porting efforts accelerates completion while stress-testing the generic APIs with external developers.
 **Alternatives Considered**: Separate documentation (rejected - harder to compare), inline comments only (rejected - insufficient).
 
+### 6. Streaming Cookbook Support
+**Decision**: Include streaming test cases for cookbooks that use streaming (voice-chat, llm-streaming).
+**Rationale**: Streaming is first-class feature. Test harness must validate streaming behavior.
+**Test Approach**:
+- Measure time-to-first-byte (TTFB)
+- Verify chunk ordering
+- Test backpressure handling
+- Compare against Python streaming behavior
+
 ## Risks / Trade-offs
 
 **Risk**: Some Python features may not have direct Rust equivalents → Mitigation: Document differences, provide alternatives.
 **Risk**: Test harness may be complex to maintain → Mitigation: Keep harness simple, use existing testing frameworks.
 **Risk**: Dapr mocking may not catch all integration issues → Mitigation: Include integration tests with real Dapr.
 **Risk**: Porting all 56 examples is time-consuming → Mitigation: Prioritize, allow community contributions.
+**Risk**: Checkpoint testing adds complexity → Mitigation: Start with simple cases, add recovery scenarios incrementally.
+**Risk**: Streaming test validation may be flaky → Mitigation: Use tolerance-based comparison, not exact matching.
 
 ## Migration Plan
 
-1. Create test harness framework
-2. Port Tier 1 examples (hello-world, flow, batch, chat)
-3. Validate with test harness
-4. Port Tier 2 examples (agent, RAG, coding-agent)
-5. Port Tier 3 examples (fastapi, integrations)
-6. Port Tier 4 examples (advanced patterns)
-7. Create documentation and migration guides
-8. Establish maintenance process for updates
+1. Create test harness framework with Python-Rust comparator
+2. Create checkpoint/recovery test utilities
+3. Port Tier 1 examples (hello-world, flow, batch, chat)
+4. Validate functional equivalence with test harness
+5. Port Tier 2 examples (agent, RAG, coding-agent)
+6. Test checkpoint/recovery for long-running examples
+7. Port Tier 3 examples (fastapi, integrations, voice-chat)
+8. Test streaming functionality (voice-chat, llm-streaming)
+9. Port Tier 4 examples (advanced patterns)
+10. Create documentation and migration guides
+11. Establish maintenance process for updates
 

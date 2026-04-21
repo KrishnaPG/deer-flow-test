@@ -8,19 +8,19 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 
 **Goals:**
 - Integrate Dapr OpenTelemetry for distributed tracing and metrics
-- Integrate Dapr State Management for durable workflow state
+- Integrate Dapr State Management for durable workflow state (custom orchestrator uses Dapr)
 - Leverage Dapr sidecar model for horizontal scaling and service discovery
 - Implement Dapr Resiliency policies for fail-safety (retry, circuit breaker, timeout)
-- Ensure idempotency through Dapr Workflow guarantees and deduplication
+- Ensure idempotency through deterministic keys and deduplication
 - Add distributed tracing and audit logging for tracability
 - Integrate Dapr Secret Management and access control for security
 - Provide enterprise features that Python requires external libraries for
+- Support non-Dapr deployments via LocalDurability (SQLite) for single-user production
 - Aim for zero-copy, zero-allocation where possible for performance
 
 **Non-Goals:**
 - Implement the actual integration (this is a plan only)
 - Replace all existing PocketFlow-Rust code wholesale
-- Support non-Dapr deployment scenarios (focus on Dapr-first)
 - Provide GUI management interfaces
 - Duplicate Python's limitations (we build better, not just different)
 
@@ -31,10 +31,22 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 **Rationale**: Leverages automatic trace propagation without coupling the core engine to OpenTelemetry SDKs, while preventing observability overhead from destroying performance at enterprise scale.
 **Alternatives Considered**: 100% tracing (rejected - kills performance), Custom tracing macros (rejected - reinventing wheel).
 
-### 2. Durability: Dapr State Management + Workflows
-**Decision**: Store all persistent state in Dapr State Management, use Dapr Workflows for durable execution.
-**Rationale**: Provides pluggable backends, transactional updates, and automatic recovery.
-**Alternatives Considered**: Custom persistence layer (rejected - reinventing wheel), file-based persistence (rejected - not scalable).
+### 2. Durability: Dapr State Management + Custom Orchestrator
+**Decision**: Custom orchestrator uses Dapr State Management for checkpoints and recovery. Dapr provides persistence layer, not workflow engine.
+**Rationale**: Custom orchestrator enables dynamic graphs (not possible with Dapr Workflows). Dapr State provides durability.
+**Architecture**:
+```
+Custom Orchestrator
+    ├── DaprDurability (distributed)
+    │     ├── Dapr State Store (checkpoints)
+    │     ├── Dapr Pub/Sub (messaging)
+    │     └── Dapr Resiliency (retry/CB)
+    ├── LocalDurability (single-user)
+    │     └── SQLite (checkpoints)
+    └── InMemoryDurability (dev)
+          └── HashMap (no persistence)
+```
+**Alternatives Considered**: Dapr Workflows (rejected - static graphs only), Custom persistence layer (rejected - reinventing wheel).
 
 ### 3. Scalability: Dapr Sidecar + Kubernetes
 **Decision**: Deploy PocketFlow workflows as Dapr-enabled services on Kubernetes.
@@ -65,20 +77,39 @@ We are taking a **fresh start approach**: build enterprise-grade features that P
 **Decision**: Meet strict enterprise compliance standards (SOC2, GDPR) by enforcing Data Isolation (multi-tenancy via keys/namespaces), Right-to-be-forgotten (State Store TTLs, PII redaction filters before tracing), and Audit trails (Event Sourcing logs on DAG transitions). For benchmarks, measure explicit **Driver Overhead**: compare `berg10-execution-engine` latency running on the `in-memory-driver` vs the `dapr-driver` to isolate exact serialization and network costs.
 **Rationale**: Compliance is mandatory for enterprise adoption. Driver benchmarking objectively proves the efficiency of the implementation.
 
-**Risk**: Dapr sidecar adds latency → Mitigation: Optimize Dapr configuration, use local mode for development.
+### 9. Checkpoint Policy: Configurable Frequency
+**Decision**: Configurable checkpoint policy with default every 5 node transitions.
+**Policy Options**:
+```rust
+pub enum CheckpointPolicy {
+    EveryN(usize),      // Default: EveryN(5)
+    SafePointsOnly,     // Only at marked safe points
+    ExplicitOnly,       // Only explicit checkpoint nodes
+}
+```
+**Rationale**: Balance durability with performance. Long-running workflows (chat, research) need frequent checkpoints; short workflows don't.
+**Use Cases**:
+- **EveryN(5)**: Chat agents, research loops (frequent recovery points)
+- **SafePointsOnly**: Multi-stage pipelines (checkpoint at stage boundaries)
+- **ExplicitOnly**: Developer-controlled checkpoints
+
+**Risk**: Dapr sidecar adds latency → Mitigation: Optimize Dapr configuration, use LocalDurability for development.
 **Risk**: Dapr configuration complexity → Mitigation: Provide templates and automation.
-**Risk**: Kubernetes operational overhead → Mitigation: Use managed Kubernetes services.
-**Risk**: Vendor lock-in to Dapr → Mitigation: Abstract Dapr interfaces, allow alternative implementations.
+**Risk**: Kubernetes operational overhead → Mitigation: Use managed Kubernetes services or LocalDurability for simpler deployments.
+**Risk**: Vendor lock-in to Dapr → Mitigation: Durability trait abstracts Dapr, supports LocalDurability (SQLite) alternative.
 
 ## Migration Plan
 
-1. Create Dapr component configurations for each building block
-2. Integrate OpenTelemetry instrumentation in Rust code
-3. Migrate state storage to Dapr State Management
-4. Define and apply Dapr resiliency policies
-5. Implement idempotency and deduplication
-6. Set up distributed tracing and audit logging
-7. Configure Dapr security features
-8. Create deployment templates for Kubernetes
-9. Establish monitoring and alerting dashboards
+1. Create Durability trait with DaprDurability implementation
+2. Create Dapr component configurations for each building block
+3. Integrate OpenTelemetry instrumentation in Rust code
+4. Implement custom orchestrator with Dapr State Management for checkpoints
+5. Implement LocalDurability with SQLite for single-user production
+6. Define and apply Dapr resiliency policies
+7. Implement configurable checkpoint policy (EveryN, SafePointsOnly, ExplicitOnly)
+8. Implement idempotency with deterministic keys and deduplication
+9. Set up distributed tracing and audit logging
+10. Configure Dapr security features
+11. Create deployment templates for Kubernetes (Dapr) and standalone (LocalDurability)
+12. Establish monitoring and alerting dashboards
 
