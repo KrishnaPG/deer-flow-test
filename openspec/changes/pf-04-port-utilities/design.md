@@ -38,9 +38,9 @@ We are taking a **fresh start approach**: use Python PocketFlow utilities as ins
 **Rationale**: Flexibility for offline use and cloud deployment. Connection pooling ensures reliability under high concurrent throughput.
 **Alternatives Considered**: Cloud-only (rejected - no offline support), Unpooled local connections (rejected - crashes under load).
 
-### 3. Vector DB: Pluggable Backends with Local First
-**Decision**: Implement VectorStore trait with pluggable backends. For local production WITHOUT Dapr sidecar, use sqlite-vss. For cloud/distributed, use Dapr Vector bindings.
-**Rationale**: Enables RAG pattern to work without Docker/Dapr. sqlite-vss runs locally without external dependencies. Pluggable design allows swapping backends.
+### 3. Vector DB: Pluggable Backends with Pure-Rust Local First
+**Decision**: Implement VectorStore trait with pluggable backends. For local production WITHOUT Dapr sidecar, use `embedvec`. For cloud/distributed, use Dapr Vector bindings.
+**Rationale**: Enables RAG pattern to work without Docker/Dapr and without C++ heavy dependencies like sqlite-vss. `embedvec` runs locally in pure Rust with SIMD acceleration and `sled` persistence. Pluggable design allows swapping backends.
 **Implementation**:
 ```rust
 pub trait VectorStore: Send + Sync {
@@ -54,48 +54,25 @@ pub trait VectorStore: Send + Sync {
     async fn delete(&self, id: &str) -> Result<()>;
 }
 
-/// Local vector store - no Docker/Dapr required
-/// Uses sqlite-vss (SQLite + vector extension)
-pub struct SqliteVssVectorStore {
-    pool: SqlitePool,
-    table_name: String,
+/// Local vector store - pure Rust, no C++ dependencies
+/// Uses embedvec with sled persistence
+pub struct EmbedVecStore {
+    db: embedvec::EmbedVec,
 }
 
-impl VectorStore for SqliteVssVectorStore {
+impl VectorStore for EmbedVecStore {
     async fn upsert(&self, id: &str, embedding: &[f32], metadata: Value) -> Result<()> {
-        let emb_blob = embedding_to_blob(embedding);
-        sqlx::query(&format!(
-            "INSERT OR REPLACE INTO {} (id, embedding, metadata) VALUES (?, ?, ?)",
-            self.table_name
-        ))
-        .bind(id)
-        .bind(emb_blob)
-        .bind(metadata.to_string())
-        .execute(&self.pool)
-        .await?;
+        // ... embedvec insert logic ...
         Ok(())
     }
     
     async fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<SearchResult>> {
-        let query_blob = embedding_to_blob(query);
-        let rows = sqlx::query(&format!(
-            "SELECT id, metadata, cosine_distance(embedding, ?) as distance 
-             FROM {} ORDER BY distance LIMIT ?",
-            self.table_name
-        ))
-        .bind(query_blob)
-        .bind(top_k as i64)
-        .fetch_all(&self.pool)
-        .await?;
-        // Parse results...
+        // ... embedvec search logic ...
         Ok(results)
     }
     
     async fn delete(&self, id: &str) -> Result<()> {
-        sqlx::query(&format!("DELETE FROM {} WHERE id = ?", self.table_name))
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        // ... embedvec delete logic ...
         Ok(())
     }
 }
@@ -123,8 +100,8 @@ impl VectorStore for DaprVectorStore {
 │         │                                              │
 │         ▼                                              ▼
 │  ┌──────────────┐      ┌──────────────┐              │
-│  │ Dapr Vector  │      │  sqlite-vss  │              │
-│  │  Bindings   │      │  (Local)    │              │
+│  │ Dapr Vector  │      │   embedvec   │              │
+│  │  Bindings    │      │  (Local)     │              │
 │  └──────────────┘      └──────────────┘              │
 │         │                     │                      │
 │         └──────────┬──────────┘                      │

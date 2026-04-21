@@ -23,22 +23,22 @@ The system SHALL port the PocketFlow Agent pattern to Rust using Dapr Actors for
 
 #### Scenario: Agent action-based routing
 - **WHEN** an agent node completes its execution
-- **THEN** the agent SHALL return an `Action` enum value (e.g., `Action::Custom("search")` or `Action::Custom("answer")`)
-- **AND** the returned action SHALL be used by the Flow to lookup the next node via `node.successors.get(action)`
+- **THEN** the agent SHALL return an `Action` enum value (e.g., `Action::Custom("search".to_string())` or `Action::Custom("answer".to_string())`)
+- **AND** the returned action SHALL be used by the Flow's immutable routing table to lookup the next node
 - **AND** the agent's decision logic SHALL be implemented in the node's `post()` method
 - **AND** the agent SHALL store any intermediate results in SharedStore for use by downstream nodes
 
 #### Scenario: Agent decision node pattern
 - **WHEN** implementing a DecideAction node (agent's decision point)
 - **THEN** the node SHALL have a `post()` method that calls LLM to decide next action
-- **AND** the node SHALL return `Action::Custom("search")` if LLM decides search is needed
-- **AND** the node SHALL return `Action::Custom("answer")` if LLM decides to answer directly
+- **AND** the node SHALL return `Action::Custom("search".to_string())` if LLM decides search is needed
+- **AND** the node SHALL return `Action::Custom("answer".to_string())` if LLM decides to answer directly
 - **AND** the node SHALL store decision metadata in SharedStore for observability
 
 #### Scenario: Agent loop for continued research
 - **WHEN** an agent needs to gather more information iteratively
-- **THEN** the graph SHALL have an edge back to the decision node: `search_node - "decide" >> decide_node`
-- **AND** this loop SHALL be defined at graph construction time via back-edge wiring
+- **THEN** the graph SHALL define a route back to the decision node via the Builder: `.route("search", Action::Custom("decide".to_string()), "decide")`
+- **AND** this loop SHALL be defined at graph construction time via the Builder
 - **AND** the loop SHALL continue until the agent returns an action not wired to the loop
 
 ### Requirement: Port Map-Reduce pattern to Rust with Dapr Workflows
@@ -70,7 +70,7 @@ The system SHALL port the PocketFlow Map-Reduce pattern to Rust using Dapr Workf
 
 #### Scenario: Linear map-reduce flow
 - **WHEN** building a simple map-reduce flow
-- **THEN** the system SHALL use sequential chaining: `read_node >> map_node >> reduce_node`
+- **THEN** the system SHALL use Builder pattern chaining: `Builder::new().add(read).add(map).add(reduce)`
 - **AND** the read node produces data stored in shared state
 - **AND** the map node (BatchNode) processes items from shared state
 - **AND** the reduce node aggregates results from shared state
@@ -106,7 +106,7 @@ The system SHALL port the PocketFlow RAG pattern to Rust using Dapr Vector bindi
 
 #### Scenario: Sequential RAG nodes
 - **WHEN** executing a RAG flow
-- **THEN** each node SHALL use `>>` for sequential chaining
+- **THEN** each node SHALL be chained via a Builder pattern
 - **AND** data SHALL be passed between nodes via SharedStore
 - **AND** each node SHALL store its output in SharedStore for next node to access
 
@@ -133,11 +133,11 @@ The system SHALL port the PocketFlow Multi-Agent pattern to Rust using Dapr Acto
 
 #### Scenario: Concurrent agent flows via shared queues
 - **WHEN** running multiple agent flows concurrently
-- **THEN** agents SHALL communicate via async message queues (asyncio.Queue)
+- **THEN** agents SHALL communicate via async message queues
 - **AND** each agent flow SHALL run independently with its own start node
-- **AND** agents SHALL loop by wiring themselves: `hinter - "continue" >> hinter`
-- **AND** the system SHALL use asyncio.gather() to run all agent flows concurrently
-- **AND** agents SHALL terminate when they return a terminal action (e.g., "end")
+- **AND** agents SHALL loop by wiring themselves via Builder routing
+- **AND** the system SHALL use `tokio::spawn` to run all agent flows concurrently
+- **AND** agents SHALL terminate when they return a terminal action (e.g., `Action::Done`)
 
 #### Scenario: Inter-agent signaling
 - **WHEN** one agent needs to signal another
@@ -168,10 +168,10 @@ The system SHALL port the PocketFlow Supervisor pattern to Rust using Dapr Workf
 
 #### Scenario: Supervisor back-edge for retry loops
 - **WHEN** supervisor rejects the agent's output
-- **THEN** the supervisor SHALL return `Action::Custom("retry")`
-- **AND** the graph SHALL have an edge: `supervisor - "retry" >> agent_flow`
+- **THEN** the supervisor SHALL return `Action::Retry`
+- **AND** the graph SHALL have a Builder-defined route back to the agent flow
 - **AND** this back-edge SHALL create the retry loop at construction time
-- **AND** when supervisor approves, it SHALL return `Action::Done` or similar, terminating the loop
+- **AND** when supervisor approves, it SHALL return `Action::Done`, terminating the loop
 
 #### Scenario: Supervisor escalation
 - **WHEN** supervisor determines output cannot be fixed after max iterations
@@ -204,7 +204,7 @@ The system SHALL port the PocketFlow Self-Healing pattern where errors trigger r
 
 #### Scenario: Error feedback loop
 - **WHEN** a node fails (e.g., compilation error)
-- **THEN** the node SHALL return an error action (e.g., "fix")
+- **THEN** the node SHALL return an error action (e.g., `Action::Custom("fix".to_string())`)
 - **AND** the error context SHALL be stored in shared state
 - **AND** a subsequent fix node SHALL read the error and attempt correction
 - **AND** the loop SHALL continue until success or max attempts
@@ -220,7 +220,7 @@ The system SHALL port the PocketFlow Guardrails pattern where input validation f
 
 #### Scenario: Input validation with retry
 - **WHEN** a guardrail node validates input
-- **THEN** if validation fails, the node SHALL return "retry"
+- **THEN** if validation fails, the node SHALL return `Action::Retry`
 - **AND** the validation message SHALL be stored in shared state
 - **AND** control SHALL return to the input source for correction
 - **AND** this loop SHALL continue until validation passes
@@ -253,8 +253,8 @@ The system SHALL port the PocketFlow Judge pattern where a judge node evaluates 
 #### Scenario: Judge evaluation
 - **WHEN** a judge node evaluates output
 - **THEN** the judge SHALL return {valid: true/false, reason: "..."}
-- **AND** valid=true SHALL cause judge to return terminal action (done/end)
-- **AND** valid=false SHALL cause judge to return "retry" action
+- **AND** valid=true SHALL cause judge to return terminal action (`Action::Done`)
+- **AND** valid=false SHALL cause judge to return `Action::Retry` action
 
 #### Scenario: Judge with max retries
 - **WHEN** implementing judge with limited retries
@@ -267,7 +267,7 @@ The system SHALL port the PocketFlow Debate pattern where sequential advocate no
 
 #### Scenario: Sequential advocates
 - **WHEN** building a debate flow
-- **THEN** the system SHALL wire advocates sequentially: FOR -> AGAINST -> JUDGE
+- **THEN** the system SHALL wire advocates sequentially via Builder
 - **AND** each advocate SHALL write its argument to shared state
 - **AND** the judge SHALL evaluate both arguments
 

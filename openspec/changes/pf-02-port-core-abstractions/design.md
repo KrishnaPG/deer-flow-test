@@ -172,59 +172,45 @@ impl Node for Flow {
 **Rationale**: Native Dapr support for parallel execution with durability.
 **Alternatives Considered**: Custom thread pool (rejected - no durability), sequential execution (rejected - performance).
 
-### 8. Dynamic Graph with Shared Successors (Python-Equivalent)
-**Decision**: Replicate Python's shallow copy pattern: Node.successors is wrapped in `Arc<RwLock<HashMap<String, Arc<RwLock<Node>>>>>` enabling runtime graph modification.
-**Rationale**: Python PocketFlow allows dynamic graph modification because `copy.copy()` creates a new node object but shares the successors dict via reference. We replicate this with `Arc` for shared ownership and `RwLock` for thread-safe mutation.
+### 8. Strict Action Enum Routing and Builder Pattern
 
-**Python Internals**:
-```python
-# Shallow copy - successors dict is SHARED
-curr = copy.copy(start_node)  # New object, same successors dict reference
+**Decision**: Replace dynamic string routing with an `Action` enum (including a `Custom(String)` variant for flexibility) and mandate a Builder pattern for graph construction rather than dynamic dictionary modification or operator overloading.
 
-# Runtime modification affects all copies
-self.successors["new_action"] = new_node  # Visible to all node copies!
-```
+**Rationale**: `HashMap<String, Arc<RwLock<Node>>>` for dynamic graph mutation is an anti-pattern in Rust that leads to deadlock risks and runtime panics. The graph structure must be deterministically constructed using a Builder pattern to ensure safety and clear topology.
 
-**Rust Implementation**:
 ```rust
-pub struct Node {
-    id: NodeId,
-    params: Arc<RwLock<Params>>,
-    // SHARED successors - enables runtime graph modification
-    successors: Arc<RwLock<HashMap<String, Arc<RwLock<Node>>>>>,
-    implementation: Box<dyn NodeImplementation>,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Action {
+    Default,
+    Done,
+    Retry,
+    Fallback,
+    Custom(String),
 }
 
-impl Clone for Node {
-    fn clone(&self) -> Self {
-        Node {
-            id: self.id.clone(),
-            params: Arc::clone(&self.params),
-            successors: Arc::clone(&self.successors), // SHARED!
-            implementation: self.implementation.clone(),
-        }
-    }
+pub struct FlowBuilder {
+    nodes: HashMap<String, Arc<dyn Node>>,
+    edges: HashMap<(String, Action), String>,
+    start_node: Option<String>,
 }
 
-impl Node {
-    // Runtime graph modification (like Python)
-    pub fn next(&self, action: &str, target: Arc<RwLock<Node>>) {
-        self.successors.write().insert(action.to_string(), target);
-    }
+impl FlowBuilder {
+    pub fn new() -> Self { ... }
+    
+    pub fn add_node(mut self, name: &str, node: impl Node + 'static) -> Self { ... }
+    
+    pub fn route(mut self, from: &str, action: Action, to: &str) -> Self { ... }
+    
+    pub fn start_at(mut self, node: &str) -> Self { ... }
+    
+    pub fn build(self) -> Result<Flow> { ... }
 }
 ```
 
-**Dynamic Capabilities**:
-- Add successors at runtime: `node.next("action", target_node)`
-- Remove successors: `node.successors.write().remove("action")`
-- Modify routing dynamically based on execution results
-- Flow-as-Node composition (Flow implements Node trait)
-
-**Action-Based Routing**:
-- `post()` returns `Option<String>` (action name)
-- Orchestrator looks up: `node.successors.read().get(action)`
-- Supports: `"default"`, `"fallback"`, `"retry"`, custom actions
-- Back-edges enable loops: `node_a - "continue" >> node_a`
+**Dynamic Capabilities Removed/Replaced**:
+- The graph structure is **immutable** once built.
+- Flow-as-Node composition is fully supported via the Builder.
+- Routing is defined explicitly, ensuring no unhandled `Action` returns.
 
 ### 10. Engine/Driver Separation & Domain-Agnostic Orchestration
 **Decision**: **Dapr is not the engine; it provides enterprise durability services ONLY.** The core `Node`, `Flow`, and orchestration patterns must be completely decoupled from both LLM-specific logic AND the execution environment.
@@ -251,7 +237,7 @@ Local Production (Single-User, No Docker):
   cargo run --example hello-world --features local-prod
   → Uses ReDBDurability (file-based persistence)
   → No sidecar needed, no Docker needed
-  → ReDB + sqlite-vss for vector search
+  → ReDB + embedvec for vector search
   → CheckpointPolicy::EveryN(5)
   → Works on any machine with just Rust installed
 
@@ -260,7 +246,7 @@ Hybrid (Local App + Remote Dapr Sidecar):
   → Uses DaprRemoteDurability
   → App runs locally without Docker
   → Connects to remote Dapr sidecar for distributed features
-  → ReDB + sqlite-vss still available locally for resilience
+  → ReDB + embedvec still available locally for resilience
 
 Distributed/Cloud (Full Enterprise Features):
   dapr run -- cargo run --example hello-world
@@ -284,7 +270,6 @@ pub struct State {
     pub current_node: NodeId,              // Where we are now
     pub action: Action,                    // Where to go next
     pub shared_store: HashMap<String, Value>, // Ephemeral node communication
-    pub checkpoint_data: Vec<u8>,          // Opaque node-specific state
     pub timestamp: DateTime<Utc>,
 }
 ```
@@ -345,9 +330,9 @@ pub enum SharedStorePolicy {
 - Recovery always uses the latest checkpoint
 - Old checkpoints can be garbage collected based on policy
 
-### 12. Nested Flow Execution (State-Driven)
-**Decision**: Composite nodes (Flows) spawn inner orchestrators. State is serialized into `checkpoint_data` for resumption. Parent orchestrator sees composite as opaque - just a node.
-**Rationale**: Pure state-driven architecture. No hierarchical checkpoint structures. Each orchestrator manages its own state independently.
+### 12. Nested Flow Execution and Serialization
+**Decision**: Composite nodes (Flows) spawn inner orchestrators. Internal state for nodes that need to suspend execution MUST be persisted directly to the `SharedStore` and MUST implement `Serialize`/`Deserialize` (e.g. `serde_json`).
+**Rationale**: Rust cannot serialize trait objects like `Arc<dyn Node>` into opaque blobs. By enforcing that all suspension state lives in the serializable `SharedStore`, the orchestrator only needs to serialize the top-level key-value store to pause/resume an entire workflow reliably.
 
 **Architecture**:
 ```rust
@@ -355,8 +340,7 @@ pub struct State {
     pub workflow_id: WorkflowId,
     pub current_node: NodeId,
     pub action: Action,
-    pub shared_store: HashMap<String, Value>, // EPHEMERAL
-    pub checkpoint_data: Vec<u8>,              // Node-specific opaque state
+    pub shared_store: HashMap<String, Value>, // MUST be serializable
     pub timestamp: DateTime<Utc>,
 }
 ```

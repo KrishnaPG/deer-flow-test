@@ -55,7 +55,7 @@ Custom Orchestrator
 | ReDB | None | ReDB file | Local production |
 | DaprRemote | Remote via env var | Optional | Hybrid deployment |
 | Dapr | Local/ Kubernetes | Optional | Full cloud |
-| SqliteVss | None | ReDB + sqlite-vss | Local with Vector |
+| SqliteVss | None | ReDB + embedvec | Local with Vector |
 
 **Alternatives Considered**: Dapr Workflows (rejected - static graphs only), Custom persistence layer (rejected - reinventing wheel).
 
