@@ -101,9 +101,15 @@ Flow:
 - If successors is empty: current node is terminal
 
 ### 10. Domain-Agnostic Orchestration (Decoupling from LLM)
-**Decision**: The core `Node`, `Flow`, and orchestration mechanisms must be completely abstracted away from LLM-specific logic. A `Node` is a generic unit of durable work (e.g., business logic validation, database update, legacy API request, or LLM call). The `Action` enums returned by nodes dictate control flow irrespective of the domain.
-**Rationale**: An enterprise workflow engine must not be bottlenecked to a single domain. PocketFlow should be capable of orchestrating generic microservices, data pipelines, and legacy systems just as seamlessly as AI agents. This maximizes the reuse of the Rust+Dapr foundation.
-### 9. Graph Persistence: Dapr State Management
+**Decision**: The core `Node`, `Flow`, and orchestration mechanisms must be completely abstracted away from LLM-specific logic. A `Node` is a generic unit of durable work (e.g., business logic validation, database update, legacy API request, or LLM call). The `Action` enums returned by nodes dictate control flow irrespective of the domain. 
+
+To enforce this strict boundary, the architecture is split into domain-specific crates that can be used independently:
+*   **`berg10-execution-engine`**: The core, domain-agnostic orchestration engine containing the `Node` trait, `Flow` orchestrator, generic DAG traversal logic, and design patterns. Zero AI/LLM dependencies. It can run entirely standalone as a local execution engine.
+*   **`berg10-dapr-driver`**: A swappable execution driver that bridges the generic `execution-engine` with the Dapr SDK for distributed durability. 
+*   **`berg10-ai-driver`**: The LLM/AI specific implementations that implement the `Node` trait for AI tasks (e.g., generation, retrieval).
+
+**Rationale**: An enterprise workflow engine must not be bottlenecked to a single domain. PocketFlow should be capable of orchestrating generic microservices, data pipelines, and legacy systems just as seamlessly as AI agents. This maximizes the reuse of the Rust+Dapr foundation and allows the execution engine to be embedded anywhere.
+### 11. Graph Persistence: Dapr State Management
 **Decision**: Store graph structure (nodes and successors relationships) in Dapr State Management for persistence and recovery.
 **Rationale**: Enables workflow restart from persisted state, version history for auditing, and external graph modification tools.
 
