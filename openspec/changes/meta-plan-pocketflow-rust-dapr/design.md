@@ -62,6 +62,110 @@ PocketFlow is a minimalist 100-line Python framework for LLM workflows. To achie
 5. Progress tracked automatically as changes complete
 6. Final validation of all porting plans against meta-validation criteria
 
+## Core Architecture Decisions (Established)
+
+The following architectural decisions have been established through design review and must guide all OpenSpec changes:
+
+### 1. Hybrid Architecture: Custom Orchestrator + Dapr Enterprise Services
+
+**Decision**: Use a custom workflow orchestrator for graph execution (NOT Dapr Workflows), but leverage Dapr for enterprise features (state persistence, resiliency, observability).
+
+**Rationale**: Dapr Workflows require static workflow definitions known at build time. Python PocketFlow supports dynamic graph modification at runtime (adding/removing nodes, changing successors during execution). A custom orchestrator maintains this flexibility while Dapr provides durability and enterprise features.
+
+**Implementation**:
+- **Layer 1**: Custom `Orchestrator` with `Node`/`Flow` traits (full control, dynamic graphs)
+- **Layer 2**: Dapr integration via `Durability` trait (state store, pub/sub, tracing, resiliency)
+
+```
+┌─────────────────────────────────────────────┐
+│          Custom Orchestrator                │
+│  (Dynamic graphs, runtime routing)          │
+├─────────────────────────────────────────────┤
+│          Durability Trait                   │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐    │
+│  │  Dapr    │ │  Local   │ │  SQLite  │    │
+│  │ (dist)   │ │ (memory) │ │ (file)   │    │
+│  └──────────┘ └──────────┘ └──────────┘    │
+└─────────────────────────────────────────────┘
+```
+
+### 2. Dynamic Graph Support (Python-Equivalent)
+
+**Decision**: Replicate Python's dynamic graph capabilities exactly:
+- Nodes can add/remove successors at runtime via shared `Arc<RwLock<HashMap>>`
+- Routing happens at runtime based on action strings from `post()`
+- Graph structure is mutable during execution
+
+**Key Mechanism**: Shallow copy pattern - cloning a node clones its ID and params but shares the `successors` HashMap via `Arc`, enabling runtime modification.
+
+### 3. Async-By-Default
+
+**Decision**: All node operations are async. No sync variants.
+
+**Rationale**: Modern Rust async is the standard. Users can block if needed, but the framework is async-first.
+
+### 4. Durability Trait with Multiple Backends
+
+**Decision**: Abstract over durability via trait, supporting:
+- **DaprDurability**: Distributed, enterprise-grade (Dapr sidecar required)
+- **LocalDurability**: Single-user production (SQLite persistence, no sidecar)
+- **InMemoryDurability**: Development/testing (no persistence)
+
+**Use Cases**:
+- **Dapr**: Multi-tenant SaaS, high availability, horizontal scaling
+- **Local**: Single-user desktop apps, resource-constrained deployments
+- **InMemory**: Unit tests, CI/CD, rapid development
+
+### 5. Streaming Architecture (Three-Tier)
+
+**Decision**: Support streaming where LLM utilities support it:
+
+| Tier | Strategy | Use Case |
+|------|----------|----------|
+| Direct | Bypass Dapr, use channels | Real-time chat, UI updates |
+| PubSub | Durable chunks via Dapr Pub/Sub | RAG with progress |
+| Complete | Standard execution | Batch processing |
+
+**Streaming Support Matrix**:
+- OpenAI/Claude: ✅ Direct streaming
+- Local LLMs: ✅ Direct streaming
+- TTS: ✅ Audio chunk streaming
+- STT: ✅ Real-time transcription
+- Embeddings: ❌ Complete only
+- Web Search: ❌ Complete only
+
+### 6. Flow-as-Node Hierarchical Composition
+
+**Decision**: Flow implements Node trait (like Python), enabling:
+- `flow_a >> flow_b` (Flow as node in another flow)
+- Nested workflow composition
+- Sub-flows with their own orchestration
+
+**Implementation**: Flow execution creates a sub-orchestrator. Shared state merges back to parent on completion.
+
+### 7. Dapr Usage Matrix
+
+| Feature | Custom | Dapr | Notes |
+|---------|--------|------|-------|
+| Graph execution | ✅ | ❌ | Custom orchestrator required |
+| Node dispatch | ✅ | ❌ | Runtime routing |
+| State persistence | ❌ | ✅ | Dapr State Store |
+| Retry/Circuit Breaker | ❌ | ✅ | Dapr Resiliency |
+| Pub/Sub messaging | ❌ | ✅ | Dapr Pub/Sub |
+| Distributed tracing | ❌ | ✅ | Dapr + OpenTelemetry |
+| Secret management | ❌ | ✅ | Dapr Secret Store |
+| Sub-workflows | ✅ (optional) | ✅ | Complex cases only |
+
+### 8. Non-Durable Deployment (Single-User Production)
+
+**Target**: Desktop apps, single-tenant deployments, edge devices
+
+**Configuration**:
+- SQLite for state persistence
+- File-based logging/tracing
+- Local retry policies
+- Resource limits enforced
+
 ## Open Questions
 
 1. What is the exact scope of enterprise features required? (Partially answered: observability, durability, scalability are must-haves)
