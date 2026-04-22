@@ -1,0 +1,19 @@
+[package]
+name = "deer-terrain"
+version = "0.1.0"
+edition = "2021"
+description = "Core terrain algorithms for heightmap processing and mesh generation"
+authors = ["Deer Project"]
+
+[dependencies]
+bevy = { version = "0.18.1", default-features = false, features = [
+    "bevy_asset",
+    "bevy_render",
+    "bevy_mesh",
+] }
+image = "0.25"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+bevy = { version = "0.18.1", features = ["bevy_asset", "bevy_render", "bevy_mesh"] }
