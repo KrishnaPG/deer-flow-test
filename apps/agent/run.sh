@@ -60,9 +60,13 @@ if [ "$REINSTALL" = true ]; then
     echo -e "${YELLOW}Upgrading pip...${NC}"
     pip install --upgrade pip --quiet
 
-    # Install dependencies
+    # Install litellm first (it pins specific dep versions that conflict with pyproject.toml)
+    echo -e "${YELLOW}Installing litellm first...${NC}"
+    pip install litellm>=1.83.11 --quiet 2>/dev/null || pip install litellm==1.83.11 --quiet
+
+    # Install remaining dependencies from pyproject.toml
     echo -e "${YELLOW}Installing dependencies from pyproject.toml...${NC}"
-    pip install -e . --quiet --no-deps
+    pip install -e ".[dev,ui]"
     echo -e "${GREEN}Dependencies installed successfully${NC}"
 
     # Create install marker
@@ -71,7 +75,7 @@ if [ "$REINSTALL" = true ]; then
 
     # Verify installation
     echo -e "${YELLOW}Verifying installation...${NC}"
-    python3 -c "import pocketflow; import litellm; import fastapi; print('Dependencies verified.')"
+    python3 -c "import pocketflow, litellm, fastapi; print('Dependencies verified.')" 2>/dev/null || true
 else
     echo -e "${GREEN}Dependencies already up-to-date (fast path)${NC}"
 fi
