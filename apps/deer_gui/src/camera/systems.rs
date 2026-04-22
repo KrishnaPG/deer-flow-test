@@ -7,7 +7,7 @@ use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::input::ButtonInput;
 use bevy::log::{debug, trace};
 use bevy::math::{Quat, Vec2, Vec3};
-use bevy::prelude::{MessageReader, MouseButton, Query, Res, Time, Transform};
+use bevy::prelude::{MessageReader, MouseButton, Query, Res, ResMut, Time, Transform};
 
 use super::components::{CameraMode, CinematicCamera};
 use super::navigation::ViewportNavigationRequest;
@@ -15,6 +15,7 @@ use crate::constants::camera::{
     INTERPOLATION_SPEED, MAX_PITCH, MAX_ZOOM, MIN_PITCH, MIN_ZOOM, ORBIT_RADIUS, PITCH_SENSITIVITY,
     SHAKE_DECAY, YAW_SENSITIVITY, ZOOM_SENSITIVITY,
 };
+use crate::preferences::UserPreferences;
 
 // ---------------------------------------------------------------------------
 // Input
@@ -452,6 +453,7 @@ pub fn mouse_look_system(
 pub fn camera_mode_toggle_system(
     keyboard_input: Option<Res<ButtonInput<bevy::input::keyboard::KeyCode>>>,
     mut query: Query<&mut CinematicCamera>,
+    mut prefs: Option<ResMut<UserPreferences>>,
 ) {
     let Some(keys) = keyboard_input else {
         return;
@@ -471,6 +473,10 @@ pub fn camera_mode_toggle_system(
         };
 
         cam.transition_to_mode(new_mode);
+        // Update user preferences to remember the selected mode, if preferences exist.
+        if let Some(ref mut prefs) = prefs {
+            prefs.camera_mode = new_mode;
+        }
 
         // When switching to FirstPerson, preserve current camera position
         // When switching from FirstPerson, set focus_target to current orbital center
@@ -480,6 +486,25 @@ pub fn camera_mode_toggle_system(
             "camera_mode_toggle: {:?} → {:?} (transitioning)",
             cam.mode, new_mode
         );
+    }
+}
+
+/// Syncs camera mode from user preferences when they change.
+pub fn camera_preferences_sync_system(
+    prefs: Option<Res<UserPreferences>>,
+    mut query: Query<&mut CinematicCamera>,
+) {
+    let Some(prefs) = prefs else {
+        return;
+    };
+    for mut cam in query.iter_mut() {
+        if cam.target_mode != prefs.camera_mode {
+            cam.transition_to_mode(prefs.camera_mode);
+            debug!(
+                "camera_preferences_sync: switching to {:?} from preferences",
+                prefs.camera_mode
+            );
+        }
     }
 }
 
