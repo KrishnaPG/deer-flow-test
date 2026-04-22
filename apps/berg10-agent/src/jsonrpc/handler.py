@@ -11,28 +11,26 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from .core import (
-    Cancel,
     ErrorCode,
     JsonRpcError,
     Message,
-    Progress,
     Request,
     RequestId,
     Response,
-    StreamChunk,
-    StreamEnd,
-    StreamStart,
-    StreamType,
+    StreamResponse,
     cancelled,
     invalid_params,
     method_not_found,
+    error_response,
+    stream_data,
+    stream_done,
+    stream_error,
 )
 
 
 # =============================================================================
 # Handler Types
 # =============================================================================
-
 
 T = TypeVar("T")
 
@@ -60,11 +58,6 @@ class HandlerInfo:
     name: str
     handler: Handler
     is_streaming: bool = False
-    streaming_types: list[StreamType] = None  # type: ignore
-
-    def __post_init__(self):
-        if self.streaming_types is None:
-            self.streaming_types = [StreamType.CONTENT]
 
 
 class Registry:
@@ -79,7 +72,6 @@ class Registry:
         name: str,
         handler: Handler,
         streaming: bool = False,
-        stream_types: Optional[list[StreamType]] = None,
     ) -> None:
         """Register a method handler.
 
@@ -87,13 +79,11 @@ class Registry:
             name: Method name
             handler: Function to handle the method
             streaming: Whether this handler supports streaming
-            stream_types: Types of streams this handler produces
         """
         self._handlers[name] = HandlerInfo(
             name=name,
             handler=handler,
             is_streaming=streaming,
-            streaming_types=list(stream_types) if stream_types else [StreamType.CONTENT],
         )
 
     def unregister(self, name: str) -> None:
@@ -105,7 +95,6 @@ class Registry:
         self,
         name: Optional[str] = None,
         streaming: bool = False,
-        stream_types: Optional[list[StreamType]] = None,
     ) -> Callable[[Handler], Handler]:
         """Decorator to register a method handler.
 
@@ -117,12 +106,12 @@ class Registry:
             @registry.method("stream_data", streaming=True)
             async def stream_handler(params, emit):
                 for i in range(10):
-                    await emit(StreamChunk(...))
+                    await emit(stream_data(req_id, i))
         """
 
         def decorator(handler: Handler) -> Handler:
             method_name = name or handler.__name__
-            self.register(method_name, handler, streaming, stream_types)
+            self.register(method_name, handler, streaming)
             return handler
 
         return decorator
@@ -151,7 +140,7 @@ class Registry:
         handler_info = self._handlers.get(request.method)
 
         if not handler_info:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.METHOD_NOT_FOUND,
                 f"Method not found: {request.method}",
@@ -169,7 +158,7 @@ class Registry:
         try:
             return await handler(request)
         except Exception as e:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.INTERNAL_ERROR,
                 str(e),
@@ -187,21 +176,31 @@ class Registry:
         try:
             # Check if handler is async
             if inspect.iscoroutinefunction(handler):
-                result = await handler(**params)
+                if isinstance(params, dict):
+                    result = await handler(**params)
+                elif isinstance(params, list):
+                    result = await handler(*params)
+                else:
+                    result = await handler()
             else:
-                result = handler(**params)
+                if isinstance(params, dict):
+                    result = handler(**params)
+                elif isinstance(params, list):
+                    result = handler(*params)
+                else:
+                    result = handler()
 
             return Response.success(request.id, result)
 
         except TypeError as e:
             # Parameter mismatch
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.INVALID_PARAMS,
                 f"Invalid parameters: {e}",
             )
         except Exception as e:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.INTERNAL_ERROR,
                 str(e),
@@ -223,13 +222,13 @@ class StreamingDispatcher:
     async def dispatch_stream(
         self,
         request: Request,
-        emit: Callable[[StreamChunk | StreamEnd | Progress], Awaitable[None]],
+        emit: Callable[[StreamResponse | Response], Awaitable[None]],
     ) -> Optional[Response]:
         """Dispatch a streaming request.
 
         Args:
             request: The JSON-RPC request
-            emit: Callback to emit stream chunks
+            emit: Callback to emit stream responses
 
         Returns:
             Final response (or None if streaming only)
@@ -237,7 +236,7 @@ class StreamingDispatcher:
         handler_info = self.registry.get_handler(request.method)
 
         if not handler_info:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.METHOD_NOT_FOUND,
                 f"Method not found: {request.method}",
@@ -247,58 +246,60 @@ class StreamingDispatcher:
             # Fall back to regular dispatch
             return await self.registry.dispatch(request)
 
-        # Mark stream as active
-        self._active_streams[str(request.id)] = True
+        # Mark stream as active (using id string)
+        stream_id = str(request.id.value) if request.id else str(uuid4())
+        self._active_streams[stream_id] = True
 
         try:
-            # Send stream start
-            await emit(StreamStart(id=request.id, stream_types=handler_info.streaming_types))
-
             # Execute handler
             handler = handler_info.handler
-            params = dict(request.params)
-            params["_request_id"] = request.id
-            params["_emit"] = emit
+
+            # Prepare arguments
+            kwargs = {}
+            args = []
+            if isinstance(request.params, dict):
+                kwargs = dict(request.params)
+            elif isinstance(request.params, list):
+                args = list(request.params)
+
+            kwargs["_request_id"] = stream_id
+            kwargs["_emit"] = emit
 
             if inspect.iscoroutinefunction(handler):
-                result = await handler(**params)
+                result = await handler(*args, **kwargs)
             else:
-                result = handler(**params)
+                result = handler(*args, **kwargs)
 
-            # Send stream end
-            await emit(StreamEnd(request_id=request.id))
-
-            # Return final response if there's a result
+            # Return final response if there's a result, but normally streaming
+            # handlers signal completion by emitting a StreamDone. We will automatically
+            # emit StreamDone if result is not None to ensure protocol compliance.
             if result is not None:
-                return Response.success(request.id, result)
+                await emit(stream_done(stream_id, result))
+
             return None
 
         except Exception as e:
-            await emit(StreamEnd(request_id=request.id))
-            return Response.error(
-                request.id,
-                ErrorCode.INTERNAL_ERROR,
-                str(e),
-            )
+            await emit(stream_error(stream_id, ErrorCode.INTERNAL_ERROR, str(e)))
+            return None
         finally:
-            if str(request.id) in self._active_streams:
-                del self._active_streams[str(request.id)]
+            if stream_id in self._active_streams:
+                del self._active_streams[stream_id]
 
-    def cancel_stream(self, request_id: RequestId) -> bool:
+    def cancel_stream(self, stream_id: Union[str, int]) -> bool:
         """Cancel an active stream.
 
         Returns:
             True if stream was found and cancelled
         """
-        req_id_str = str(request_id)
-        if req_id_str in self._active_streams:
-            self._active_streams[req_id_str] = False
+        stream_id_str = str(stream_id)
+        if stream_id_str in self._active_streams:
+            self._active_streams[stream_id_str] = False
             return True
         return False
 
-    def is_stream_active(self, request_id: RequestId) -> bool:
+    def is_stream_active(self, stream_id: Union[str, int]) -> bool:
         """Check if a stream is still active."""
-        return self._active_streams.get(str(request_id), False)
+        return self._active_streams.get(str(stream_id), False)
 
 
 # =============================================================================
@@ -368,17 +369,17 @@ async def validation_middleware(
 ) -> Response:
     """Middleware that validates request structure."""
     if not request.method:
-        return Response.error(
+        return error_response(
             request.id,
             ErrorCode.INVALID_REQUEST,
             "Missing method",
         )
 
-    if not isinstance(request.params, dict):
-        return Response.error(
+    if request.params is not None and not isinstance(request.params, (dict, list)):
+        return error_response(
             request.id,
             ErrorCode.INVALID_PARAMS,
-            "Params must be an object",
+            "Params must be an object or array",
         )
 
     return await handler(request)

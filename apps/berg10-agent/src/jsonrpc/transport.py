@@ -8,21 +8,19 @@ WebSocket and HTTP transports.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Callable, Optional, Protocol
+from typing import Any, AsyncIterator, Callable, Optional, Protocol, Union
 
 from .core import (
-    Cancel,
     ErrorCode,
     Message,
-    Progress,
     Request,
     RequestId,
     Response,
-    StreamChunk,
-    StreamEnd,
-    StreamStart,
+    StreamResponse,
+    error_response,
     parse_json,
     serialize,
+    request as build_request,
 )
 
 
@@ -157,12 +155,12 @@ class Connection:
                 except Exception as e:
                     # Send error response
                     if isinstance(message, Request):
-                        error_response = Response.error(
+                        err_res = error_response(
                             message.id,
                             ErrorCode.INTERNAL_ERROR,
                             f"Handler error: {e}",
                         )
-                        await self.transport.send(error_response)
+                        await self.transport.send(err_res)
 
     async def stop(self) -> None:
         """Stop processing messages."""
@@ -172,18 +170,23 @@ class Connection:
     async def call(
         self,
         method: str,
-        params: Optional[dict[str, Any]] = None,
+        params: Union[dict[str, Any], list[Any], None] = None,
+        options: Optional[dict[str, Any]] = None,
     ) -> Response:
         """Make a request and wait for response."""
-        request = Request(method=method, params=params or {})
-        self._pending_requests[str(request.id)] = request.id
+        req_msg = build_request(method=method, params=params, options=options)
+        self._pending_requests[str(req_msg.id.value)] = req_msg.id  # type: ignore
 
-        await self.transport.send(request)
+        await self.transport.send(req_msg)
 
         # Wait for response with matching ID
         async for message in self.transport.receive():
-            if isinstance(message, Response) and str(message.id) == str(request.id):
-                del self._pending_requests[str(request.id)]
+            if (
+                isinstance(message, Response)
+                and message.id
+                and str(message.id.value) == str(req_msg.id.value)
+            ):  # type: ignore
+                del self._pending_requests[str(req_msg.id.value)]  # type: ignore
                 return message
 
         raise ConnectionError("Connection closed before response received")
@@ -191,44 +194,51 @@ class Connection:
     async def notify(
         self,
         method: str,
-        params: Optional[dict[str, Any]] = None,
+        params: Union[dict[str, Any], list[Any], None] = None,
     ) -> None:
         """Send a notification (no response expected)."""
-        request = Request(method=method, params=params or {})
-        await self.transport.send(request)
+        req_msg = build_request(method=method, params=params)
+        await self.transport.send(req_msg)
 
     async def stream(
         self,
         method: str,
-        params: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[StreamChunk]:
+        params: Union[dict[str, Any], list[Any], None] = None,
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[StreamResponse]:
         """Make a streaming request and yield chunks."""
-        request = Request(method=method, params=params or {})
-        await self.transport.send(request)
+        req_msg = build_request(method=method, params=params, options=options)
+        req_id_str = str(req_msg.id.value) if req_msg.id else None
+
+        await self.transport.send(req_msg)
 
         async for message in self.transport.receive():
-            if isinstance(message, StreamChunk):
-                yield message
-            elif isinstance(message, StreamEnd):
-                if str(message.request_id) == str(request.id):
-                    break
+            if isinstance(message, StreamResponse):
+                if str(message.stream_id) == req_id_str:
+                    yield message
+                    if message.is_done or message.is_error:
+                        break
             elif isinstance(message, Response):
-                if str(message.id) == str(request.id):
-                    # Non-streaming response
+                if message.id and str(message.id.value) == req_id_str:
+                    # Non-streaming response received, break
                     break
 
-    async def cancel(self, request_id: RequestId, reason: Optional[str] = None) -> None:
+    async def cancel(self, request_id: Union[RequestId, str, int]) -> None:
         """Cancel a pending request."""
-        cancel_msg = Cancel(request_id=request_id, reason=reason)
+        req_id_str = str(request_id.value) if isinstance(request_id, RequestId) else str(request_id)
+
+        cancel_msg = build_request(
+            method="request.cancel", params={"stream": True, "id": req_id_str}
+        )
+
         await self.transport.send(cancel_msg)
-        if str(request_id) in self._pending_requests:
-            del self._pending_requests[str(request_id)]
+        if req_id_str in self._pending_requests:
+            del self._pending_requests[req_id_str]
 
 
 # =============================================================================
 # WebSocket Transport (using websockets library)
 # =============================================================================
-
 
 try:
     import websockets
@@ -265,8 +275,8 @@ try:
                         yield parse_json(raw_message)
                     except Exception as e:
                         # Yield error as response
-                        yield Response.error(
-                            RequestId(),
+                        yield error_response(
+                            None,
                             ErrorCode.PARSE_ERROR,
                             f"Failed to parse message: {e}",
                         )
@@ -284,7 +294,6 @@ except ImportError:
 # =============================================================================
 # HTTP Transport
 # =============================================================================
-
 
 try:
     import httpx
