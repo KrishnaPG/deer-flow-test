@@ -272,9 +272,8 @@ class StreamingDispatcher:
 
             # Return final response if there's a result, but normally streaming
             # handlers signal completion by emitting a StreamDone. We will automatically
-            # emit StreamDone if result is not None to ensure protocol compliance.
-            if result is not None:
-                await emit(stream_done(stream_id, result))
+            # emit StreamDone to ensure protocol compliance and terminate the stream.
+            await emit(stream_done(stream_id, result))
 
             return None
 

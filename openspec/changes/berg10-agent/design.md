@@ -37,7 +37,7 @@ Build a headless LLM agent using PocketFlow + LiteLLM with WebSocket transport. 
 - Do not inline the paths or hardcoded structures (e.g. json responses); use reusable builder helper methods; 
 - Aim for high type-safety for all domain types; Avoid using basic types (e.g. string, number) as much as possible; 
 - Avoid memory allocations or memory copies; aim for zero-copy pipelines;
-- Start at 30000 feet (identify all the high-level interfaces, types, function prototypes, contracts, constants, response structures, helper methods) and work down towards the method level code implementation;
+- Start at 30000 feet (identify all the high-level interfaces, types, function prototypes, contracts, constants, response structures, helper methods, imports) and work down towards the function level code step by step using a todo-list to keep track of the steps;
 
 ## Decisions
 

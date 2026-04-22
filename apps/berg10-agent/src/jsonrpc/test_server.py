@@ -1,16 +1,17 @@
 """Tests for JSON-RPC 3.0 handler and server modules."""
 
 import pytest
+import asyncio
 
-from berg10_agent.jsonrpc.core import (
+from jsonrpc.core import (
     ErrorCode,
     Request,
     RequestId,
     Response,
-    StreamChunk,
-    StreamType,
+    StreamResponse,
+    request,
 )
-from berg10_agent.jsonrpc.handler import (
+from jsonrpc.handler import (
     CancellationError,
     CancellableRequest,
     Registry,
@@ -18,8 +19,8 @@ from berg10_agent.jsonrpc.handler import (
     logging_middleware,
     validation_middleware,
 )
-from berg10_agent.jsonrpc.server import Client, Server
-from berg10_agent.jsonrpc.transport import InMemoryTransport
+from jsonrpc.server import Client, Server
+from jsonrpc.transport import InMemoryTransport
 
 
 class TestRegistry:
@@ -62,8 +63,8 @@ class TestRegistry:
         def add(a: int, b: int) -> int:
             return a + b
 
-        request = Request("add", {"a": 2, "b": 3}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("add", {"a": 2, "b": 3}, RequestId("123"))
+        response = await registry.dispatch(req)
 
         assert response.is_success
         assert response.result == 5
@@ -74,16 +75,16 @@ class TestRegistry:
         async def async_echo(message: str) -> str:
             return message
 
-        request = Request("async_echo", {"message": "hello"}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("async_echo", {"message": "hello"}, RequestId("123"))
+        response = await registry.dispatch(req)
 
         assert response.is_success
         assert response.result == "hello"
 
     @pytest.mark.asyncio
     async def test_dispatch_method_not_found(self, registry):
-        request = Request("unknown", {}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("unknown", {}, RequestId("123"))
+        response = await registry.dispatch(req)
 
         assert response.is_error
         assert response.error.code == ErrorCode.METHOD_NOT_FOUND
@@ -94,8 +95,8 @@ class TestRegistry:
         def needs_param(required: str) -> str:
             return required
 
-        request = Request("needs_param", {}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("needs_param", {}, RequestId("123"))
+        response = await registry.dispatch(req)
 
         assert response.is_error
         assert response.error.code == ErrorCode.INVALID_PARAMS
@@ -116,8 +117,8 @@ class TestMiddleware:
     async def test_logging_middleware(self, registry, capsys):
         registry.add_middleware(logging_middleware)
 
-        request = Request("echo", {"message": "test"}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("echo", {"message": "test"}, RequestId("123"))
+        response = await registry.dispatch(req)
 
         assert response.is_success
         captured = capsys.readouterr()
@@ -128,8 +129,8 @@ class TestMiddleware:
         registry.add_middleware(validation_middleware)
 
         # Valid request
-        request = Request("echo", {"message": "test"}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("echo", {"message": "test"}, RequestId("123"))
+        response = await registry.dispatch(req)
         assert response.is_success
 
     @pytest.mark.asyncio
@@ -137,8 +138,8 @@ class TestMiddleware:
         registry.add_middleware(validation_middleware)
 
         # Invalid request - empty method
-        request = Request("", {}, RequestId("123"))
-        response = await registry.dispatch(request)
+        req = Request("", {}, RequestId("123"))
+        response = await registry.dispatch(req)
         assert response.is_error
 
 
@@ -146,11 +147,12 @@ class TestStreamingDispatcher:
     @pytest.fixture
     def registry(self):
         reg = Registry()
+        from jsonrpc.core import stream_data
 
         @reg.method("stream_count", streaming=True)
         async def stream_count(n: int, _emit, _request_id):
             for i in range(n):
-                await _emit(StreamChunk(_request_id, str(i)))
+                await _emit(stream_data(_request_id, str(i)))
             return {"count": n}
 
         return reg
@@ -166,21 +168,22 @@ class TestStreamingDispatcher:
         async def emit(chunk):
             emitted.append(chunk)
 
-        request = Request("stream_count", {"n": 3}, RequestId("123"))
-        response = await dispatcher.dispatch_stream(request, emit)
+        req = Request("stream_count", {"n": 3}, RequestId("123"))
+        response = await dispatcher.dispatch_stream(req, emit)
 
-        # Should have: stream_start, 3 chunks, stream_end
-        assert len(emitted) >= 4
-        assert response is not None
-        assert response.result == {"count": 3}
+        # Should have: 3 data chunks, 1 done chunk
+        assert len(emitted) == 4
+        assert response is None  # returns None because stream finishes with StreamDone
+        assert emitted[-1].is_done
+        assert emitted[-1].result == {"count": 3}
 
     @pytest.mark.asyncio
     async def test_stream_not_found(self, dispatcher):
         async def emit(chunk):
             pass
 
-        request = Request("unknown", {}, RequestId("123"))
-        response = await dispatcher.dispatch_stream(request, emit)
+        req = Request("unknown", {}, RequestId("123"))
+        response = await dispatcher.dispatch_stream(req, emit)
 
         assert response.is_error
         assert response.error.code == ErrorCode.METHOD_NOT_FOUND
@@ -235,30 +238,38 @@ class TestServer:
         async def add(a: int, b: int) -> int:
             return a + b
 
-        request = Request("add", {"a": 1, "b": 2}, RequestId("123"))
-        response = await server._handle_message(request)
+        req = Request("add", {"a": 1, "b": 2}, RequestId("123"))
+        response = await server._handle_message(req)
 
         assert isinstance(response, Response)
         assert response.result == 3
 
     @pytest.mark.asyncio
-    async def test_handle_cancellation(self, server):
-        # First make a request to track it
-        @server.method("slow_op")
-        async def slow_op():
-            return "done"
+    async def test_handle_cancellation_options(self, server):
+        # Track a dummy request
+        server._cancellable_requests["123"] = CancellableRequest(
+            Request("slow_op", {}, RequestId("123"))
+        )
 
-        request = Request("slow_op", {}, RequestId("123"))
-        # Manually add to cancellable requests
-        from berg10_agent.jsonrpc.handler import CancellableRequest
+        # Cancel it via options
+        cancel_req = Request(
+            "does_not_matter", {}, RequestId("999"), options={"abort": True, "stream": "123"}
+        )
+        response = await server._handle_message(cancel_req)
 
-        server._cancellable_requests["123"] = CancellableRequest(request)
+        assert response.is_success
+        assert response.result["cancelled"]
 
-        # Now cancel it
-        from berg10_agent.jsonrpc.core import Cancel
+    @pytest.mark.asyncio
+    async def test_handle_cancellation_method(self, server):
+        # Track a dummy request
+        server._cancellable_requests["123"] = CancellableRequest(
+            Request("slow_op", {}, RequestId("123"))
+        )
 
-        cancel_msg = Cancel(RequestId("123"), "test")
-        response = await server._handle_message(cancel_msg)
+        # Cancel it via method
+        cancel_req = Request("request.cancel", {"id": "123"}, RequestId("999"))
+        response = await server._handle_message(cancel_req)
 
         assert response.is_success
         assert response.result["cancelled"]
@@ -282,18 +293,28 @@ class TestClient:
         conn_server = server.add_connection(transport_a)
 
         # Create client on other side
-        from berg10_agent.jsonrpc.transport import Connection
+        from jsonrpc.transport import Connection
 
         conn_client = Connection(transport_b)
         client = Client(conn_client)
 
-        await conn_server.start()
-        await client.connect()
+
+        server_task = asyncio.create_task(conn_server.start())
+        client_task = asyncio.create_task(client.connect())
+        # Let tasks start
+        await asyncio.sleep(0)
 
         yield client, server
 
         await client.disconnect()
         await server.stop()
+        server_task.cancel()
+        client_task.cancel()
+        try:
+            await server_task
+            await client_task
+        except asyncio.CancelledError:
+            pass
 
     @pytest.mark.asyncio
     async def test_client_call(self, client_pair):
@@ -323,30 +344,47 @@ class TestIntegration:
         async def greet(name: str) -> str:
             return f"Hello, {name}!"
 
+        from jsonrpc.core import stream_data
+
+        @server.method("stream_hello", streaming=True)
+        async def stream_hello(name: str, _emit, _request_id):
+            await _emit(stream_data(_request_id, "Hello"))
+            await _emit(stream_data(_request_id, name))
+
         conn_server = server.add_connection(transport_a)
 
         # Client setup
-        from berg10_agent.jsonrpc.transport import Connection
+        from jsonrpc.transport import Connection
 
         conn_client = Connection(transport_b)
         client = Client(conn_client)
 
         # Run server in background
-        import asyncio
 
         server_task = asyncio.create_task(conn_server.start())
-
-        await client.connect()
+        client_task = asyncio.create_task(client.connect())
+        # Let tasks start
+        await asyncio.sleep(0)
 
         # Make request
         response = await client.call("greet", {"name": "World"})
         assert response.result == "Hello, World!"
 
+        # Stream request
+        chunks = []
+        async for chunk in client.stream("stream_hello", {"name": "World"}):
+            if chunk.is_data:
+                chunks.append(chunk.data)
+
+        assert chunks == ["Hello", "World"]
+
         # Cleanup
         await client.disconnect()
         await conn_server.stop()
         server_task.cancel()
+        client_task.cancel()
         try:
             await server_task
+            await client_task
         except asyncio.CancelledError:
             pass

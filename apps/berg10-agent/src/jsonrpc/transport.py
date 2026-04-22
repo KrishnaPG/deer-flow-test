@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Callable, Optional, Protocol, Union
+import asyncio
+import uuid
 
 from .core import (
     ErrorCode,
@@ -105,8 +107,6 @@ class InMemoryTransport(Transport):
             if self._receive_queue:
                 yield self._receive_queue.pop(0)
             else:
-                import asyncio
-
                 await asyncio.sleep(0.01)
 
     @property
@@ -124,7 +124,8 @@ class Connection:
 
     def __init__(self, transport: Transport):
         self.transport = transport
-        self._pending_requests: dict[str, RequestId] = {}
+        self._pending_requests: dict[str, asyncio.Future] = {}
+        self._pending_streams: dict[str, asyncio.Queue] = {}
         self._handlers: list[MessageHandler] = []
         self._running = False
 
@@ -146,7 +147,26 @@ class Connection:
             if not self._running:
                 break
 
-            # Handle the message
+            # If it's a Response, fulfill future
+            if isinstance(message, Response) and message.id:
+                req_id = str(message.id.value)
+                if req_id in self._pending_requests:
+                    if not self._pending_requests[req_id].done():
+                        self._pending_requests[req_id].set_result(message)
+                    continue
+                # For stream responses that are just Response (like error or final), we might put it in queue
+                if req_id in self._pending_streams:
+                    await self._pending_streams[req_id].put(message)
+                    continue
+
+            # If it's a StreamResponse, put in queue
+            if isinstance(message, StreamResponse):
+                req_id = str(message.stream_id)
+                if req_id in self._pending_streams:
+                    await self._pending_streams[req_id].put(message)
+                    continue
+
+            # Handle as standard message (request or notification)
             for handler in self._handlers:
                 try:
                     response = await handler(message)
@@ -154,7 +174,7 @@ class Connection:
                         await self.transport.send(response)
                 except Exception as e:
                     # Send error response
-                    if isinstance(message, Request):
+                    if isinstance(message, Request) and message.id:
                         err_res = error_response(
                             message.id,
                             ErrorCode.INTERNAL_ERROR,
@@ -174,22 +194,20 @@ class Connection:
         options: Optional[dict[str, Any]] = None,
     ) -> Response:
         """Make a request and wait for response."""
-        req_msg = build_request(method=method, params=params, options=options)
-        self._pending_requests[str(req_msg.id.value)] = req_msg.id  # type: ignore
+        msg_id = str(uuid.uuid4())
+        req_msg = build_request(method=method, params=params, msg_id=msg_id, options=options)
+
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._pending_requests[msg_id] = future
 
         await self.transport.send(req_msg)
 
-        # Wait for response with matching ID
-        async for message in self.transport.receive():
-            if (
-                isinstance(message, Response)
-                and message.id
-                and str(message.id.value) == str(req_msg.id.value)
-            ):  # type: ignore
-                del self._pending_requests[str(req_msg.id.value)]  # type: ignore
-                return message
-
-        raise ConnectionError("Connection closed before response received")
+        try:
+            return await future
+        finally:
+            if msg_id in self._pending_requests:
+                del self._pending_requests[msg_id]
 
     async def notify(
         self,
@@ -207,21 +225,26 @@ class Connection:
         options: Optional[dict[str, Any]] = None,
     ) -> AsyncIterator[StreamResponse]:
         """Make a streaming request and yield chunks."""
-        req_msg = build_request(method=method, params=params, options=options)
-        req_id_str = str(req_msg.id.value) if req_msg.id else None
+        msg_id = str(uuid.uuid4())
+        req_msg = build_request(method=method, params=params, msg_id=msg_id, options=options)
+
+        queue: asyncio.Queue = asyncio.Queue()
+        self._pending_streams[msg_id] = queue
 
         await self.transport.send(req_msg)
 
-        async for message in self.transport.receive():
-            if isinstance(message, StreamResponse):
-                if str(message.stream_id) == req_id_str:
+        try:
+            while True:
+                message = await queue.get()
+                if isinstance(message, StreamResponse):
                     yield message
                     if message.is_done or message.is_error:
                         break
-            elif isinstance(message, Response):
-                if message.id and str(message.id.value) == req_id_str:
-                    # Non-streaming response received, break
+                elif isinstance(message, Response):
                     break
+        finally:
+            if msg_id in self._pending_streams:
+                del self._pending_streams[msg_id]
 
     async def cancel(self, request_id: Union[RequestId, str, int]) -> None:
         """Cancel a pending request."""
