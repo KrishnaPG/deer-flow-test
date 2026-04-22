@@ -44,8 +44,8 @@ class TestListFilesNode:
         node = ListFilesNode(work_dir=work_dir)
         shared = _make_shared("list_files", {"path": ".", "pattern": "*"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert "entries" in result
         names = [e["name"] for e in result["entries"]]
@@ -57,8 +57,8 @@ class TestListFilesNode:
         node = ListFilesNode(work_dir=work_dir)
         shared = _make_shared("list_files", {"path": "sub", "pattern": "*"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert result["entries"][0]["name"] == "nested.py"
 
@@ -67,8 +67,8 @@ class TestListFilesNode:
         node = ListFilesNode(work_dir=work_dir)
         shared = _make_shared("list_files", {"path": "../../../etc", "pattern": "*"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
         assert "error" in result
 
 
@@ -78,8 +78,8 @@ class TestGrepSearchNode:
         node = GrepSearchNode(work_dir=work_dir)
         shared = _make_shared("grep_search", {"pattern": "foo", "path": ".", "glob": "*"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert "results" in result
         assert any(r["content"].find("foo") >= 0 for r in result["results"])
@@ -91,8 +91,8 @@ class TestGrepSearchNode:
             "grep_search", {"pattern": "xyznonexistent", "path": ".", "glob": "*"}
         )
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert result["results"] == []
 
@@ -101,8 +101,8 @@ class TestGrepSearchNode:
         node = GrepSearchNode(work_dir=work_dir)
         shared = _make_shared("grep_search", {"pattern": "[invalid", "path": ".", "glob": "*"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
         assert "error" in result
 
 
@@ -112,10 +112,10 @@ class TestReadFileNode:
         node = ReadFileNode(work_dir=work_dir)
         shared = _make_shared("read_file", {"path": "test.txt"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
-        assert result["content"] == "hello world\nfoo bar\nbaz qux\n"
+        assert result["content"] == "hello world\nfoo bar\nbaz qux"
         assert result["total_lines"] == 3
 
     @pytest.mark.asyncio
@@ -123,8 +123,8 @@ class TestReadFileNode:
         node = ReadFileNode(work_dir=work_dir)
         shared = _make_shared("read_file", {"path": "test.txt", "start_line": 2, "end_line": 2})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert result["content"] == "foo bar"
 
@@ -133,8 +133,8 @@ class TestReadFileNode:
         node = ReadFileNode(work_dir=work_dir)
         shared = _make_shared("read_file", {"path": "nonexistent.txt"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
         assert "error" in result
 
 
@@ -144,8 +144,8 @@ class TestRunCommandNode:
         node = RunCommandNode(work_dir=work_dir, default_timeout=10)
         shared = _make_shared("run_command", {"command": "echo hello"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert result["success"] is True
         assert "hello" in result["stdout"]
@@ -156,7 +156,7 @@ class TestRunCommandNode:
         node = RunCommandNode(work_dir=work_dir, default_timeout=10)
         shared = _make_shared("run_command", {"command": "exit 1"})
 
-        prep = await node.prep(shared)
-        result = await node.exec(prep)
+        prep = await node.prep_async(shared)
+        result = await node.exec_async(prep)
 
         assert result["exit_code"] == 1

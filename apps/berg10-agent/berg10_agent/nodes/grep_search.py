@@ -17,7 +17,7 @@ class GrepSearchNode(AsyncNode):
         self._work_dir = Path(work_dir).resolve()
         self._max_results = max_results
 
-    async def prep(self, shared: dict[str, Any]) -> dict[str, Any]:
+    async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         tc = shared.get("current_tool_call", {})
         args = tc.arguments if hasattr(tc, "arguments") else tc.get("arguments", {})
         return {
@@ -26,7 +26,7 @@ class GrepSearchNode(AsyncNode):
             "glob": args.get("glob", "*"),
         }
 
-    async def exec(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+    async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         pattern = prep_res["pattern"]
         if not pattern:
             return {"error": "Search pattern is required"}
@@ -68,7 +68,7 @@ class GrepSearchNode(AsyncNode):
 
         return {"results": results, "truncated": False}
 
-    async def post(
+    async def post_async(
         self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: dict[str, Any]
     ) -> str:
         tc = shared.get("current_tool_call", {})

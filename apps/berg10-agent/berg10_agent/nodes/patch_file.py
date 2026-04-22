@@ -15,7 +15,7 @@ class PatchFileNode(AsyncNode):
         super().__init__()
         self._work_dir = Path(work_dir).resolve()
 
-    async def prep(self, shared: dict[str, Any]) -> dict[str, Any]:
+    async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         tc = shared.get("current_tool_call", {})
         args = tc.arguments if hasattr(tc, "arguments") else tc.get("arguments", {})
         return {
@@ -23,7 +23,7 @@ class PatchFileNode(AsyncNode):
             "diff": args.get("diff", ""),
         }
 
-    async def exec(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+    async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         file_path = prep_res["path"]
         diff_content = prep_res["diff"]
 
@@ -53,7 +53,7 @@ class PatchFileNode(AsyncNode):
         except (PermissionError, OSError) as e:
             return {"error": f"Cannot write file: {e}"}
 
-    async def post(
+    async def post_async(
         self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: dict[str, Any]
     ) -> str:
         tc = shared.get("current_tool_call", {})

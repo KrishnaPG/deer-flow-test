@@ -123,7 +123,7 @@ class DecideActionNode(AsyncNode):
             "code, or provide a final answer when done. Always think step by step."
         )
 
-    async def prep(self, shared: dict[str, Any]) -> dict[str, Any]:
+    async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         history = shared.get("history", [])
         memory = shared.get("memory_content", "")
         skills = shared.get("skills_content", "")
@@ -136,7 +136,7 @@ class DecideActionNode(AsyncNode):
         messages.extend(history)
         return {"messages": messages}
 
-    async def exec(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+    async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         result = await self.llm.complete(
             messages=prep_res["messages"],
             tools=self.tools,
@@ -170,7 +170,7 @@ class DecideActionNode(AsyncNode):
             "finish_reason": "stop",
         }
 
-    async def post(
+    async def post_async(
         self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: dict[str, Any]
     ) -> str:
         content = exec_res["content"]
