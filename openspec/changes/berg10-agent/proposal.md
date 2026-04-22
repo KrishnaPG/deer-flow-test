@@ -17,12 +17,14 @@ Build a headless LLM agent (similar to hermes-agent) using PocketFlow as the age
 
 ### New Capabilities
 
-- `websocket-agent`: Headless LLM agent with WebSocket input/output streaming
+- `websocket-agent`: Headless LLM agent with WebSocket input/output streaming (JSON-RPC 3.0)
 - `llm-routing`: Multi-provider LLM routing via LiteLLM (OpenAI, Anthropic, OpenRouter, etc.)
 - `tool-nodes`: Reusable tool nodes (list_files, grep_search, read_file, patch_file, run_command)
 - `agent-loop`: Cyclic AsyncFlow with decision-making and tool execution
 - `streamlit-debug`: Debug UI connecting to running agent via WebSocket
 - `config-management`: Configuration via python-dotenv with CLI overrides
+- `validator-registry`: Extensible security validation for tool inputs (pattern-based, operation-based, schema-based)
+- `session-interface`: In-memory session management with sync interface to downstream storage
 
 ### Modified Capabilities
 
