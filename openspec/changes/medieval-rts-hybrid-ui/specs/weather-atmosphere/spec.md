@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Modular Architecture
+
+All systems in this spec SHALL be implemented as modular, reusable components:
+- Time of day system SHALL use `bevy_skybox` (0.7.0) + `bevy_easings` (0.18.0) wrapped in `DayNightPlugin`
+- Weather system SHALL use `bevy_hanabi` (0.18.0) + `bevy_exponential_height_fog` (0.1.0) wrapped in `WeatherPlugin`
+- Season system SHALL integrate with `bevy_feronia` vegetation, wrapped in `SeasonPlugin`
+- Each plugin SHALL expose configuration via Bevy resources
+- Each plugin SHALL be reusable in external Bevy projects
+
 ### Requirement: Time of Day System
 The system SHALL simulate day/night cycle with lighting transitions.
 

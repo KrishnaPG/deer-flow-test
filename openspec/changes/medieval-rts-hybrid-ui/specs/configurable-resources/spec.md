@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Modular Architecture
+
+The resource display system SHALL be implemented as a reusable `ResourceDisplayPlugin`:
+- Plugin SHALL be extractable to `crates/resource-display` for use in any application
+- Resource configuration SHALL be data-driven (support custom resource types)
+- Plugin SHALL integrate with `FactionThemePlugin` for icon tinting
+- Public API SHALL support: `set_mode()`, `update_resource()`, `set_threshold()`
+- Plugin SHALL include examples for external reuse
+
 ### Requirement: Resource Mode Selection
 The system SHALL support multiple resource display modes.
 

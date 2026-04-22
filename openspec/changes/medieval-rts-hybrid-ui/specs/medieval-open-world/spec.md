@@ -1,5 +1,15 @@
 ## ADDED Requirements
 
+### Modular Architecture
+
+All systems in this spec SHALL be implemented as modular, reusable components:
+- Terrain system SHALL be extractable to `crates/terrain/`
+- Vegetation system SHALL use `bevy_feronia` (0.8.2) wrapped in a reusable `FoliagePlugin`
+- Water system SHALL use `bevy_water` (0.18.1) wrapped in a reusable `WaterPlugin`
+- NPC system SHALL use `bevior_tree` (0.10.0) wrapped in a reusable `NpcPlugin`
+- Each plugin SHALL expose a clean public API with configuration via Bevy resources
+- Each plugin SHALL include documentation for reuse in external projects
+
 ### Requirement: Heightmap Terrain System
 The system SHALL render terrain from heightmap data with texture splatting.
 
