@@ -19,7 +19,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 1.4 Implement ThirdPerson mode with orbit controls
 - [x] 1.5 Implement Orbital mode (existing functionality refactor)
 - [x] 1.6 Add Tab key mode toggle with smooth lerp transition
-- [ ] 1.7 Add camera mode settings to user preferences
+- [x] 1.7 Add camera mode settings to user preferences
 - [x] 1.8 Write unit tests for camera mode switching
 
 **Modularity**: Camera system already modular in `apps/deer_gui/src/camera/`. Consider extracting to `crates/hybrid-camera` for reuse.
@@ -47,7 +47,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 
 **Dependencies**: `bevy_feronia = "0.8.2"`
 
-- [ ] 3.1 Add `bevy_feronia` dependency to Cargo.toml
+- [x] 3.1 Add `bevy_feronia` dependency to Cargo.toml
 - [ ] 3.2 Create `FoliagePlugin` wrapper for reusability in other projects
 - [ ] 3.3 Define biome-to-foliage mappings (Meadow, Forest, Rocky, etc.)
 - [ ] 3.4 Configure scattering density per biome type
@@ -63,8 +63,8 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 > **Modularity Note**: Building placement should be a reusable `BuildingPlugin` that can be used
 > in any project needing structure placement with variants (weathering, faction colors).
 
-- [ ] 4.1 Create `BuildingPlugin` with clean public API
-- [ ] 4.2 Define `BuildingDef` struct for building configurations
+- [x] 4.1 Create `BuildingPlugin` with clean public API
+- [x] 4.2 Define `BuildingDef` struct for building configurations
 - [ ] 4.3 Implement building placement with layout presets
 - [ ] 4.4 Create glTF medieval building models (house, tower, church)
 - [ ] 4.5 Add weathering level support (pristine to ruined) via material variants
@@ -82,7 +82,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 
 **Dependencies**: `bevior_tree = "0.10.0"` (optional: `bevy_bae = "0.1.0"`)
 
-- [ ] 5.1 Add `bevior_tree` dependency to Cargo.toml
+- [x] 5.1 Add `bevior_tree` dependency to Cargo.toml
 - [ ] 5.2 Create `NpcPlugin` with configurable spawning parameters
 - [ ] 5.3 Define `NpcType` enum (Knight, Peasant, Guard, etc.)
 - [ ] 5.4 Implement NPC spawning with count and radius
@@ -104,7 +104,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 
 **Dependencies**: `bevy_water = "0.18.1"`, `bevy_easings = "0.18.0"`
 
-- [ ] 6.1 Add `bevy_water` and `bevy_easings` dependencies to Cargo.toml
+- [x] 6.1 Add `bevy_water` and `bevy_easings` dependencies to Cargo.toml
 - [ ] 6.2 Create `WaterPlugin` wrapper for reusable configuration
 - [ ] 6.3 Configure water plane for rivers and lakes (not just ocean)
 - [ ] 6.4 Set up wave animation parameters (amplitude, frequency, speed)
@@ -177,7 +177,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 
 **Dependencies**: `bevy_skybox = "0.7.0"`, `bevy_easings = "0.18.0"`
 
-- [ ] 10.1 Add `bevy_skybox` and `bevy_easings` dependencies to Cargo.toml
+- [x] 10.1 Add `bevy_skybox` and `bevy_easings` dependencies to Cargo.toml
 - [ ] 10.2 Create `DayNightPlugin` with clean public API
 - [ ] 10.3 Define `TimeOfDay` resource (hour 0-24, time scale)
 - [ ] 10.4 Implement time progression with configurable scale
@@ -197,7 +197,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 
 **Dependencies**: `bevy_hanabi = "0.18.0"` (existing), `bevy_exponential_height_fog = "0.1.0"`
 
-- [ ] 11.1 Add `bevy_exponential_height_fog` dependency to Cargo.toml
+- [x] 11.1 Add `bevy_exponential_height_fog` dependency to Cargo.toml
 - [ ] 11.2 Create `WeatherPlugin` with clean public API
 - [ ] 11.3 Define `WeatherState` enum (Clear, Cloudy, Rainy, Foggy, Stormy)
 - [ ] 11.4 Define `WeatherConfig` struct for transition timing

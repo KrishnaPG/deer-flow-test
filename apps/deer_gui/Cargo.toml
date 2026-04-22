@@ -31,6 +31,12 @@ bevy_egui = "0.39"
 bevy_hanabi = "0.18"
 bevy_tweening = "0.15"
 bevy_prototype_lyon = "0.16"
+bevy_feronia = "0.8.2"
+bevy_water = "0.18.1"
+bevy_easings = "0.18.0"
+bevy_skybox = "0.7.0"
+bevior_tree = "0.10.0"
+bevy_exponential_height_fog = "0.1.0"
 
 # ── Serialization / data ────────────────────────────────────────────
 chrono = { version = "0.4.44", features = ["clock", "serde"] }

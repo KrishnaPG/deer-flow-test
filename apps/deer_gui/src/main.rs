@@ -11,11 +11,13 @@ use bevy_egui::EguiPlugin;
 
 use deer_gui::audio::DeerAudioPlugin;
 use deer_gui::bridge::BridgePlugin;
+use deer_gui::building::BuildingPlugin;
 use deer_gui::camera::CameraPlugin;
 use deer_gui::constants::window::*;
 use deer_gui::diagnostics::DiagnosticsPlugin;
 use deer_gui::hud::HudPlugin;
 use deer_gui::picking::PickingPlugin as DeerPickingPlugin;
+use deer_gui::preferences::PreferencesPlugin;
 use deer_gui::scene::ScenePlugin;
 use deer_gui::shell::ShellPlugin;
 use deer_gui::theme::ThemePlugin;
@@ -55,6 +57,8 @@ fn main() {
         )
         .add_plugins(EguiPlugin::default())
         .add_plugins(ThemePlugin)
+        .add_plugins(PreferencesPlugin)
+        .add_plugins(BuildingPlugin)
         .add_plugins(DiagnosticsPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(bevy_hanabi::HanabiPlugin)

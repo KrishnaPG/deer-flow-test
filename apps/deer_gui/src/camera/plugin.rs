@@ -4,7 +4,7 @@ use bevy::light::GlobalAmbientLight;
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
 use bevy::prelude::{
-    App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Plugin, Startup,
+    App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Plugin, Res, Startup,
     Transform, Update,
 };
 
@@ -12,10 +12,11 @@ use super::components::CinematicCamera;
 use super::navigation::{camera_sync_snapshot_system, CameraSyncState};
 use super::systems::{
     camera_focus_system, camera_input_system, camera_interpolation_system,
-    camera_mode_toggle_system, camera_shake_system, first_person_movement_system,
-    mouse_look_system, viewport_navigation_system,
+    camera_mode_toggle_system, camera_preferences_sync_system, camera_shake_system,
+    first_person_movement_system, mouse_look_system, viewport_navigation_system,
 };
 use crate::constants::camera::ORBIT_RADIUS;
+use crate::preferences::UserPreferences;
 
 // ---------------------------------------------------------------------------
 // Plugin
@@ -37,6 +38,7 @@ impl Plugin for CameraPlugin {
                 Update,
                 (
                     camera_mode_toggle_system,
+                    camera_preferences_sync_system,
                     camera_input_system,
                     mouse_look_system,
                     first_person_movement_system,
@@ -57,13 +59,22 @@ impl Plugin for CameraPlugin {
 
 /// Spawns the primary camera entity with [`CinematicCamera`] state,
 /// a directional light for basic illumination, and an ambient light resource.
-fn camera_spawn_system(mut commands: Commands) {
-    let cam = CinematicCamera::default();
+fn camera_spawn_system(mut commands: Commands, prefs: Option<Res<UserPreferences>>) {
+    let mut cam = CinematicCamera::default();
+    // Apply saved camera mode from user preferences if available.
+    if let Some(prefs) = prefs {
+        cam.mode = prefs.camera_mode;
+        cam.target_mode = prefs.camera_mode;
+    }
+    cam.mode_transition = 1.0; // No transition.
 
     let position = cam.compute_position(ORBIT_RADIUS);
     let look_at = cam.compute_look_at();
 
-    debug!("camera_spawn: pos={:?} look_at={:?}", position, look_at,);
+    debug!(
+        "camera_spawn: pos={:?} look_at={:?} mode={:?}",
+        position, look_at, cam.mode
+    );
 
     // Camera entity.
     commands.spawn((

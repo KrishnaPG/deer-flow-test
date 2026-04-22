@@ -16,7 +16,7 @@ use crate::constants::camera::{DEFAULT_PITCH, DEFAULT_YAW, DEFAULT_ZOOM};
 // ---------------------------------------------------------------------------
 
 /// Camera mode enumeration for hybrid FPS/RTS camera system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum CameraMode {
     /// First-person exploration with WASD movement and mouse look.
     FirstPerson,

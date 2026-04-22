@@ -8,13 +8,19 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 use super::{HudState, ModalKind};
+use crate::camera::CameraMode;
+use crate::preferences::UserPreferences;
 
 // ---------------------------------------------------------------------------
 // System
 // ---------------------------------------------------------------------------
 
 /// Renders a modal overlay if one is active.
-pub fn modal_system(mut contexts: EguiContexts, mut hud: ResMut<HudState>) {
+pub fn modal_system(
+    mut contexts: EguiContexts,
+    mut hud: ResMut<HudState>,
+    mut prefs: ResMut<UserPreferences>,
+) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
@@ -52,7 +58,7 @@ pub fn modal_system(mut contexts: EguiContexts, mut hud: ResMut<HudState>) {
         .open(&mut open)
         .order(egui::Order::Foreground)
         .show(ctx, |ui| match kind {
-            ModalKind::Settings => render_settings_modal(ui),
+            ModalKind::Settings => render_settings_modal(ui, &mut prefs),
             ModalKind::AgentTuning => render_agent_tuning_modal(ui),
             ModalKind::ArtifactLineage => render_artifact_lineage_modal(ui),
         });
@@ -78,14 +84,51 @@ fn modal_title(kind: ModalKind) -> &'static str {
 }
 
 /// Renders the Settings modal content.
-fn render_settings_modal(ui: &mut egui::Ui) {
+fn render_settings_modal(ui: &mut egui::Ui, prefs: &mut UserPreferences) {
     ui.label("Application settings");
     ui.separator();
+
+    // Camera mode selection
+    ui.horizontal(|ui| {
+        ui.label("Camera mode:");
+        let mut current = prefs.camera_mode;
+        let mut changed = false;
+        egui::ComboBox::from_id_salt("camera_mode")
+            .selected_text(camera_mode_label(current))
+            .show_ui(ui, |ui| {
+                for &mode in &[
+                    CameraMode::Orbital,
+                    CameraMode::FirstPerson,
+                    CameraMode::ThirdPerson,
+                    CameraMode::Cinematic,
+                ] {
+                    changed |= ui
+                        .selectable_value(&mut current, mode, camera_mode_label(mode))
+                        .changed();
+                }
+            });
+        if changed {
+            prefs.camera_mode = current;
+            debug!("Settings: camera mode changed to {:?}", current);
+        }
+    });
+
+    ui.separator();
     ui.label(
-        egui::RichText::new("Configuration options will appear here.")
+        egui::RichText::new("More settings coming soon.")
             .color(egui::Color32::from_rgb(140, 145, 150))
             .italics(),
     );
+}
+
+/// Returns a human-readable label for a camera mode.
+fn camera_mode_label(mode: CameraMode) -> &'static str {
+    match mode {
+        CameraMode::Orbital => "Orbital (RTS)",
+        CameraMode::FirstPerson => "First Person",
+        CameraMode::ThirdPerson => "Third Person",
+        CameraMode::Cinematic => "Cinematic",
+    }
 }
 
 /// Renders the Agent Tuning modal content.
