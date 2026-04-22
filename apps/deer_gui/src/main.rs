@@ -18,6 +18,7 @@ use deer_gui::diagnostics::DiagnosticsPlugin;
 use deer_gui::hud::HudPlugin;
 use deer_gui::picking::PickingPlugin as DeerPickingPlugin;
 use deer_gui::preferences::PreferencesPlugin;
+use deer_gui::render::{CapabilityQualityPlugin, RenderQualityPlugin};
 use deer_gui::scene::ScenePlugin;
 use deer_gui::shell::ShellPlugin;
 use deer_gui::theme::ThemePlugin;
@@ -56,6 +57,8 @@ fn main() {
                 }),
         )
         .add_plugins(EguiPlugin::default())
+        .add_plugins(RenderQualityPlugin::default())
+        .add_plugins(CapabilityQualityPlugin)
         .add_plugins(ThemePlugin)
         .add_plugins(PreferencesPlugin)
         .add_plugins(BuildingPlugin::default())
