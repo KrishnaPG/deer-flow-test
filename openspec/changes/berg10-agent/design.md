@@ -56,16 +56,27 @@ Build a headless LLM agent using PocketFlow + LiteLLM with WebSocket transport. 
 - **Decision**: UI connects to running WS server (not embedded)
 - **Rationale**: Separation of concerns; server can run headless without UI
 
-### D6: WebSocket library
+### D6: WebSocket protocol
 
-- **Decision**: Built-in FastAPI WebSocket (no custom websockets library)
-- **Rationale**: FastAPI includes battle-tested WebSocket support; no extra deps needed
+- **Decision**: JSON-RPC 3.0 over FastAPI WebSocket
+- **Rationale**: Built-in streaming, ACK, cancellation, and structured error codes. Standardizes multi-stream handling and cancel semantics.
+
+### D7: Session management
+
+- **Decision**: In-memory session state managed by berg10-agent, with abstract sync interface to downstream storage
+- **Rationale**: Agent needs live session state (history, context) during a WebSocket connection. Downstream (`berg10-storage-vfs`) handles durability/long-term persistence.
+
+### D8: Security validation extensibility
+
+- **Decision**: Pluggable validator registry for tool inputs (pattern-based, operation-based, schema-based)
+- **Rationale**: Security checks should be configurable/extensible, not hardcoded. Allow custom validators for path traversal, dangerous commands, format validation, etc.
 
 ## Risks / Trade-offs
 
-- [Risk] WebSocket connection drops during long tool execution → Mitigation: Add heartbeat/keepalive mechanism in protocol
+- [Risk] WebSocket connection drops during long tool execution → Mitigation: JSON-RPC 3.0 stream cancellation (client can send `request.cancel`)
 - [Risk] LiteLLM API changes → Mitigation: Pin to major version, update on release cycles
 - [Risk] No built-in auth → Mitigation: Handled by downstream berg10-stack; this is headless by design
+- [Risk] Tool inputs can escape workdir → Mitigation: Pluggable validator registry with path-traversal checks enabled by default
 
 ## Open Questions
 

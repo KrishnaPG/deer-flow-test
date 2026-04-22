@@ -7,9 +7,17 @@
 
 ## 2. Constants & Protocol
 
-- [ ] 2.1 Create `src/constants.py` with all enums (MessageType, ToolName, etc.)
-- [ ] 2.2 Create `src/protocol.py` with message builder helper functions
+- [ ] 2.1 Create `src/constants.py` with all enums (MessageType, ToolName, JsonRpcVersion, ErrorCode, etc.)
+- [ ] 2.2 Create `src/protocol.py` with JSON-RPC 3.0 message builder helper functions
 - [ ] 2.3 Create `src/config.py` for configuration management
+
+## 2.5 Validator Registry
+
+- [ ] 2.4 Create `src/validators/__init__.py` validator registry
+- [ ] 2.5 Implement pattern-based validators (regex)
+- [ ] 2.6 Implement operation-based validators (path_traversal)
+- [ ] 2.7 Implement schema-based validators (JSON Schema)
+- [ ] 2.8 Create validator configuration loading from config files
 
 ## 3. LLM Client
 
