@@ -10,7 +10,8 @@ dependencies = [
     "uvicorn[standard]>=0.45.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.28.1",
-    "aiofiles>=25.1.0"
+    "aiofiles>=25.1.0",
+    "boto3>=1.38.0",
 ]
 
 [project.optional-dependencies]

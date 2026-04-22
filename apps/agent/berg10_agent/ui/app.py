@@ -159,6 +159,14 @@ def _render_catalog_browser() -> None:
         st.info("Click '🔄 Refresh Catalog' in the sidebar to load available models.")
         return
 
+    # Get existing model IDs to disable add button
+    api = st.session_state.api_client
+    try:
+        existing_models = api.list_models()
+        existing_ids = {m["model"] for m in existing_models}
+    except Exception:
+        existing_ids = set()
+
     # Search and filters
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
     with col1:
@@ -220,7 +228,7 @@ def _render_catalog_browser() -> None:
             with col2:
                 st.caption(f"Provider: {model.provider}")
                 if model.is_free:
-                    st.badge("Free", type="primary")
+                    st.badge("Free", color="primary")
             with col3:
                 cost = model.input_cost_per_token + model.output_cost_per_token
                 st.caption(f"Cost: ${cost * 1000:.4f}/1K tokens")
@@ -238,7 +246,10 @@ def _render_catalog_browser() -> None:
                 if caps:
                     st.markdown(" ".join(caps))
 
-                if st.button("Add", key=f"add_{model.id}"):
+                model_id = model.id
+                is_added = model_id in existing_ids
+                label = "Added ✓" if is_added else "Add"
+                if st.button(label, key=f"add_{model.id}", disabled=is_added):
                     _add_model_from_catalog(model)
 
             st.divider()
@@ -276,7 +287,7 @@ def _render_my_models() -> None:
             with col2:
                 st.caption(f"Provider: {model.get('provider', 'N/A')}")
                 if model.get("is_free"):
-                    st.badge("Free", type="primary")
+                    st.badge("Free", color="primary")
             with col3:
                 btn_col1, btn_col2, btn_col3 = st.columns(3)
                 with btn_col1:
@@ -400,7 +411,7 @@ def _add_model_from_catalog(catalog_model: ModelInfo) -> None:
     """Add a model from the catalog to the user's configured models."""
     api = st.session_state.api_client
 
-    from ..models import ModelConfig
+    from berg10_agent.models import ModelConfig
 
     config = ModelConfig(
         id=catalog_model.id.replace("/", "-").replace(":", "-"),
@@ -445,7 +456,7 @@ def _render_test_result(model_config: dict[str, Any]) -> None:
 
     # Run test in a thread
     with st.spinner("Testing connection..."):
-        from ..models import ModelConfig
+        from berg10_agent.models import ModelConfig
 
         config = ModelConfig(
             id=model_config["id"],
