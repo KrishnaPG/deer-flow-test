@@ -3,10 +3,12 @@
 use bevy::light::GlobalAmbientLight;
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
+use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::prelude::{
     App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Plugin, Res, Startup,
     Transform, Update,
 };
+use bevy::render::view::Hdr;
 
 use super::components::CinematicCamera;
 use super::navigation::{camera_sync_snapshot_system, CameraSyncState};
@@ -76,9 +78,11 @@ fn camera_spawn_system(mut commands: Commands, prefs: Option<Res<UserPreferences
         position, look_at, cam.mode
     );
 
-    // Camera entity.
+    // Camera entity with HDR and SSAO for cinematic quality.
     commands.spawn((
         Camera3d::default(),
+        Hdr::default(),                         // Enable HDR rendering
+        ScreenSpaceAmbientOcclusion::default(), // Enable SSAO
         cam,
         Transform::from_translation(position).looking_at(look_at, Vec3::Y),
     ));

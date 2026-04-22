@@ -11,6 +11,7 @@ pub mod hud;
 pub mod models;
 pub mod picking;
 pub mod preferences;
+pub mod render;
 pub mod scene;
 pub mod shell;
 pub mod theme;

@@ -334,9 +334,11 @@ fn setup_npc_system(
 }
 
 /// Spawn a group of NPCs based on spawn configuration.
-fn spawn_npc_group(commands: &mut Commands, asset_server: &AssetServer, spawn: &NpcSpawnConfig) {
+fn spawn_npc_group(commands: &mut Commands, _asset_server: &AssetServer, spawn: &NpcSpawnConfig) {
     let center = Vec3::from(spawn.center);
     let count = spawn.count;
+    let npc_type = spawn.npc_type;
+    let faction_id = spawn.faction_id.clone();
 
     for i in 0..count {
         // Calculate position in a circle pattern
@@ -346,28 +348,20 @@ fn spawn_npc_group(commands: &mut Commands, asset_server: &AssetServer, spawn: &
         let z = center.z + radius_variance * angle.sin();
         let position = Vec3::new(x, 0.0, z); // Y will be set by terrain if needed
 
-        // Create NPC entity
-        let npc_entity = commands
-            .spawn((
-                Name::new(format!("{:?}_{}", spawn.npc_type, i)),
-                Transform::from_translation(position),
-                Npc {
-                    npc_type: spawn.npc_type,
-                    animation_state: AnimationState::Idle,
-                    faction_id: spawn.faction_id.clone(),
-                },
-                NpcHealth::for_type(spawn.npc_type),
-                NpcMovement::for_type(spawn.npc_type),
-                // Add mesh and material for visualization (placeholder)
-                Mesh3d(asset_server.load(spawn.npc_type.model_path())),
-                // Note: In a real implementation, we would use SceneRoot for glTF models
-            ))
-            .id();
+        // Create NPC entity (without mesh for now - asset loading needs async handling)
+        commands.spawn((
+            Name::new(format!("{:?}_{}", npc_type, i)),
+            Transform::from_translation(position),
+            Npc {
+                npc_type,
+                animation_state: AnimationState::Idle,
+                faction_id: faction_id.clone(),
+            },
+            NpcHealth::for_type(npc_type),
+            NpcMovement::for_type(npc_type),
+        ));
 
-        debug!(
-            "spawn_npc_group: spawned {:?} at {:?}",
-            spawn.npc_type, position
-        );
+        debug!("spawn_npc_group: spawned {:?} at {:?}", npc_type, position);
     }
 }
 
