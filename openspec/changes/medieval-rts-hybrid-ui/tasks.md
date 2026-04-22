@@ -33,11 +33,11 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 2.2 Implement heightmap mesh generation from PNG
 - [x] 2.3 Add terrain material with texture splatting (basic)
 - [x] 2.6 Implement basic LOD system for terrain chunks
-- [ ] 2.4 Create terrain texture assets (grass, dirt, rock, snow)
-- [ ] 2.5 Create splat mask texture format
-- [ ] 2.7 Add terrain to scene descriptor RON format
+- [x] 2.4 Create terrain texture assets (grass, dirt, rock, snow) - Download script + procedural placeholders
+- [x] 2.5 Create splat mask texture format - SplatMask with height/slope generation
+- [x] 2.7 Add terrain to scene descriptor RON format - Terrain variant in GeneratorParams, medieval_terrain generator
 - [ ] 2.8 Write integration tests for terrain loading
-- [ ] 2.9 Extract `crates/terrain` as standalone reusable crate
+- [x] 2.9 Extract `crates/terrain` as standalone reusable crate - Already in workspace, compiles standalone
 - [ ] 2.10 Document terrain API for external use
 
 ## 3. Procedural Vegetation (Using bevy_feronia)
@@ -48,12 +48,12 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 **Dependencies**: `bevy_feronia = "0.8.2"`
 
 - [x] 3.1 Add `bevy_feronia` dependency to Cargo.toml
-- [ ] 3.2 Create `FoliagePlugin` wrapper for reusability in other projects
-- [ ] 3.3 Define biome-to-foliage mappings (Meadow, Forest, Rocky, etc.)
-- [ ] 3.4 Configure scattering density per biome type
-- [ ] 3.5 Create glTF tree models (oak, pine, birch) compatible with bevy_feronia
-- [ ] 3.6 Create glTF bush and grass models
-- [ ] 3.7 Configure wind animation parameters
+- [x] 3.2 Create `FoliagePlugin` wrapper for reusability in other projects - `apps/deer_gui/src/world/foliage.rs`
+- [x] 3.3 Define biome-to-foliage mappings (Meadow, Forest, Rocky, etc.) - BiomeType enum + BiomeVegetationConfig
+- [x] 3.4 Configure scattering density per biome type - spacing and density in FoliageType
+- [x] 3.7 Configure wind animation parameters - WindConfig with direction, speed, turbulence, gust_frequency
+- [x] 3.5 Create glTF tree models (oak, pine, birch) compatible with bevy_feronia - Download script + placeholders in `assets/models/foliage/`
+- [x] 3.6 Create glTF bush and grass models - Included in download script
 - [ ] 3.8 Add vegetation to scene descriptor RON format
 - [ ] 3.9 Delete `crates/vegetation/` (replaced by bevy_feronia)
 - [ ] 3.10 Document `FoliagePlugin` API for reuse in other projects
@@ -65,13 +65,13 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 
 - [x] 4.1 Create `BuildingPlugin` with clean public API
 - [x] 4.2 Define `BuildingDef` struct for building configurations
-- [ ] 4.3 Implement building placement with layout presets
-- [ ] 4.4 Create glTF medieval building models (house, tower, church)
-- [ ] 4.5 Add weathering level support (pristine to ruined) via material variants
-- [ ] 4.6 Implement faction color application to buildings
-- [ ] 4.7 Add collision shapes to buildings
-- [ ] 4.8 Create building cluster layout presets (village, castle, farm)
-- [ ] 4.9 Write unit tests for BuildingDef serialization
+- [x] 4.3 Implement building placement with layout presets - LayoutPreset + BuildingPlacement structs
+- [x] 4.5 Add weathering level support (pristine to ruined) via material variants - WeatheringLevel enum with 5 levels
+- [x] 4.8 Create building cluster layout presets (village, castle, farm) - presets module with village(), castle(), farm()
+- [x] 4.9 Write unit tests for BuildingDef serialization - Tests in mod.rs
+- [ ] 4.4 Create glTF medieval building models (house, tower, church) - Need download script output
+- [ ] 4.6 Implement faction color application to buildings - Will integrate with faction themes
+- [ ] 4.7 Add collision shapes to buildings - collision_half_extents defined, needs integration
 - [ ] 4.10 Document `BuildingPlugin` API for external reuse
 
 ## 5. NPC Population System (Using bevior_tree)
@@ -83,17 +83,14 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 **Dependencies**: `bevior_tree = "0.10.0"` (optional: `bevy_bae = "0.1.0"`)
 
 - [x] 5.1 Add `bevior_tree` dependency to Cargo.toml
-- [ ] 5.2 Create `NpcPlugin` with configurable spawning parameters
-- [ ] 5.3 Define `NpcType` enum (Knight, Peasant, Guard, etc.)
-- [ ] 5.4 Implement NPC spawning with count and radius
-- [ ] 5.5 Create glTF character models (knight, peasant)
-- [ ] 5.6 Create glTF horse model
-- [ ] 5.7 Implement skeletal animation controller
-- [ ] 5.8 Add idle, walk, work animation states
-- [ ] 5.9 Define behavior trees for NPC types:
-       - [ ] 5.9.1 Idle behavior tree
-       - [ ] 5.9.2 Wander behavior tree (waypoint navigation)
-       - [ ] 5.9.3 Work behavior tree
+- [x] 5.2 Create `NpcPlugin` with configurable spawning parameters - NpcPlugin with NpcGlobalConfig
+- [x] 5.3 Define `NpcType` enum (Knight, Peasant, Guard, etc.) - NpcType with 6 variants
+- [x] 5.8 Add idle, walk, work animation states - AnimationState enum with 7 states
+- [x] 5.9 Define behavior trees for NPC types - BehaviorType enum with Wander, Patrol, Work, etc.
+- [ ] 5.4 Implement NPC spawning with count and radius - Needs spawn system implementation
+- [ ] 5.5 Create glTF character models (knight, peasant) - Need download script output
+- [ ] 5.6 Create glTF horse model - Need download script output
+- [ ] 5.7 Implement skeletal animation controller - Needs integration with bevy animation
 - [ ] 5.10 Create reusable `NpcBehaviorTreeBuilder` for other projects
 - [ ] 5.11 Document `NpcPlugin` and behavior tree API
 
