@@ -8,12 +8,9 @@ dependencies = [
     "litellm>=1.83.11",
     "fastapi>=0.136.0",
     "uvicorn[standard]>=0.45.0",
-    "python-dotenv>=1.2.2",
-    "pydantic>=2.13.3",
+    "python-dotenv>=1.0.0",
     "httpx>=0.28.1",
-    "jsonschema>=4.26.0",
-    "aiofiles>=25.1.0",
-    "click>=8.1.0"
+    "aiofiles>=25.1.0"
 ]
 
 [project.optional-dependencies]
@@ -26,6 +23,7 @@ dev = [
 ]
 ui = [
     "streamlit>=1.56.0",
+    "websocket-client>=1.9.0"
 ]
 
 [project.scripts]
