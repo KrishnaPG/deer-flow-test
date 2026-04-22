@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Modular Architecture
+
+All HUD components SHALL be implemented as reusable egui widgets:
+- Widgets SHALL be extractable to `crates/medieval-widgets` for use in any egui application
+- Each widget SHALL accept a `MedievalStyle` struct for consistent theming
+- Widgets SHALL integrate with `FactionThemePlugin` for dynamic color application
+- Public API SHALL follow egui conventions (Builder pattern, `ui.horizontal(|ui| ...)` )
+- Each widget SHALL include usage examples in documentation
+
 ### Requirement: Medieval Resource Bar
 The system SHALL display resources in a medieval-themed top bar.
 

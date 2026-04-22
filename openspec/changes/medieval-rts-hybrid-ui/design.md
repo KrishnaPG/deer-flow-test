@@ -63,12 +63,39 @@ pub enum CameraMode {
 - Full control over medieval-specific features (biome blending, building placement)
 - Avoids external dependency complexity
 - Heightmap format matches existing `GeneratorParams::HeightmapTerrain` design
+- No mature Bevy 0.18 compatible terrain crate exists (`bevy_mesh_terrain` only supports 0.15)
 
 **Alternatives Considered**:
-- `bevy_terrain` crate: Rejected - API instability, learning curve
+- `bevy_terrain` crate: Rejected - API instability, learning curve, outdated
 - Voxel terrain: Rejected - performance overhead for open world
 
-### 3. Faction Theme Engine
+**Modularity**: Terrain crate (`crates/terrain/`) is designed for reuse in other projects.
+
+### 3. Vegetation System (Using bevy_feronia)
+
+**Decision**: Use **`bevy_feronia`** (0.8.2) instead of custom vegetation implementation.
+
+**Rationale**:
+- GPU instancing, wind simulation, scattering tools out of the box
+- Bevy 0.18 compatible (2.5k downloads, actively maintained)
+- Eliminates need to write custom shaders for wind animation
+- Reusable as a plugin wrapper in any project
+
+**Migration**: Replace `crates/vegetation/` entirely with `bevy_feronia` + `FoliagePlugin` wrapper.
+
+### 4. Water System (Using bevy_water)
+
+**Decision**: Use **`bevy_water`** (0.18.1) instead of custom water implementation.
+
+**Rationale**:
+- Dynamic ocean material with wave animations
+- Bevy 0.18 compatible (40k downloads)
+- Built-in `bevy_easings` integration for smooth transitions
+- Gerstner wave implementation included
+
+**Migration**: Replace `crates/water/` entirely with `bevy_water` + `WaterPlugin` wrapper.
+
+### 5. Faction Theme Engine
 
 **Decision**: Extend existing `ThemeManager` with `FactionTheme` struct and transition system.
 
@@ -92,7 +119,28 @@ pub struct FactionTheme {
 - Separate theme plugin: Rejected - duplicates theme logic
 - CSS-like theme cascading: Rejected - unnecessary complexity for 4 factions
 
-### 4. Asset Pipeline
+**Modularity**: Extractable to `crates/faction-themes` for use in any project needing faction-based UI.
+
+### 6. Time of Day System (Using bevy_skybox)
+
+**Decision**: Use **`bevy_skybox`** (0.7.0) for sky rendering + **`bevy_easings`** (0.18.0) for transitions.
+
+**Rationale**:
+- Battle-tested crates with 150k+ combined downloads
+- Smooth interpolation for sun/light color changes
+- Reusable `DayNightPlugin` wrapper for other projects
+
+### 7. NPC/AI System (Using bevior_tree)
+
+**Decision**: Use **`bevior_tree`** (0.10.0) for NPC behavior trees.
+
+**Rationale**:
+- Full behavior tree implementation (10k downloads)
+- Bevy 0.18 compatible
+- ECS-friendly design
+- Reusable `NpcPlugin` for any project needing NPC behaviors
+
+### 8. Asset Pipeline
 
 **Decision**: glTF 2.0 for all 3D models with Bevy's built-in loader.
 
@@ -105,7 +153,7 @@ pub struct FactionTheme {
 - Custom format: Rejected - reinvention, no tooling
 - FBX: Rejected - licensing concerns, conversion overhead
 
-### 5. Resource Display System
+### 9. Resource Display System
 
 **Decision**: `ResourceMode` enum with Traditional, AgentMetrics, Hybrid variants.
 
@@ -125,6 +173,8 @@ pub enum ResourceMode {
 **Alternatives Considered**:
 - Separate HUD plugins: Rejected - code duplication
 - Runtime switching only: Rejected - no persistence
+
+**Modularity**: Extractable to `crates/resource-display` for any app needing configurable resource UI.
 
 ## Risks / Trade-offs
 

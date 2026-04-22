@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Modular Architecture
+
+The faction theme system SHALL be implemented as a reusable `FactionThemePlugin`:
+- Plugin SHALL be extractable to `crates/faction-themes` for use in other projects
+- Faction configuration SHALL be data-driven (loaded from RON files or embedded structs)
+- Plugin SHALL integrate with existing `ThemeManager` for smooth transitions
+- Public API SHALL support: `set_faction()`, `get_current_faction()`, `add_custom_faction()`
+- Plugin SHALL include documentation and examples for external reuse
+
 ### Requirement: Faction Theme Definition
 The system SHALL define faction themes with colors, borders, and heraldry.
 

@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Modular Architecture
+
+The hybrid camera system SHALL be implemented as a reusable `HybridCameraPlugin`:
+- Plugin SHALL be extractable to `crates/hybrid-camera` for use in any Bevy project
+- Camera configuration SHALL be data-driven (configurable speeds, distances, FOV)
+- Plugin SHALL support smooth interpolation via `bevy_easings` (0.18.0)
+- Public API SHALL support: `set_mode()`, `get_mode()`, `set_target()`
+- Plugin SHALL include documentation for external reuse
+
 ### Requirement: Hybrid Camera Mode System
 The system SHALL support multiple camera modes with smooth transitions between them.
 
