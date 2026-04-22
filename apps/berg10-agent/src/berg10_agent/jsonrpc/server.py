@@ -8,6 +8,7 @@ and connection management.
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Callable, Optional, Union
+from uuid import uuid4
 
 from .core import (
     ErrorCode,
