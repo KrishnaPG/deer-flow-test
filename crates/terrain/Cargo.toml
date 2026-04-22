@@ -10,10 +10,11 @@ bevy = { version = "0.18.1", default-features = false, features = [
     "bevy_asset",
     "bevy_render",
     "bevy_mesh",
+    "bevy_image",
 ] }
 image = "0.25"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2"
 
 [dev-dependencies]
-bevy = { version = "0.18.1", features = ["bevy_asset", "bevy_render", "bevy_mesh"] }
+bevy = { version = "0.18.1", features = ["bevy_asset", "bevy_render", "bevy_mesh", "bevy_image"] }

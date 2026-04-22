@@ -1,0 +1,40 @@
+// Medieval Open World Scene
+// A medieval landscape with terrain, vegetation, buildings, and NPCs
+(
+    name: "medieval_open",
+    ambient_audio: "audio/ambient/medieval_forest.ogg",
+    gltf_scene: null,
+    theme: "medieval",
+    generators: [
+        // Medieval terrain with heightmap and texture splatting
+        (
+            generator: "medieval_terrain",
+            params: Terrain(
+                heightmap: "textures/terrain/heightmaps/medieval_valley.png",
+                world_size: [2000.0, 2000.0],
+                height_scale: 150.0,
+                height_offset: 0.0,
+                resolution: 64,
+                chunk_size: 100.0,
+                splat_mask: "textures/splat/medieval_valley_splat.png",
+                layer_textures: [
+                    "textures/terrain/grass/grass_Color_2K.png",
+                    "textures/terrain/dirt/dirt_Color_2K.png",
+                    "textures/terrain/rock/rock_Color_2K.png",
+                    "textures/terrain/snow/snow_Color_2K.png",
+                ],
+                uv_scale: 10.0,
+                invert_heightmap: false,
+            ),
+        ),
+        // Ambient particles (dust motes in sunlight)
+        (
+            generator: "starfield",
+            params: Starfield(
+                count: 500,
+                radius: 50.0,
+                emissive: (1.0, 0.95, 0.8, 0.3),
+            ),
+        ),
+    ],
+)

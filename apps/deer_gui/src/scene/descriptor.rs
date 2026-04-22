@@ -106,4 +106,52 @@ pub enum GeneratorParams {
         transform: Option<[f32; 3]>,
         scale: Option<f32>,
     },
+    /// Heightmap terrain generator for medieval open world.
+    /// Creates terrain from a heightmap image with texture splatting.
+    Terrain {
+        /// Path to the heightmap image (PNG, grayscale).
+        heightmap: String,
+        /// World-space size (width, depth) in meters.
+        world_size: [f32; 2],
+        /// Maximum height in meters (default: 100.0).
+        #[serde(default = "default_height_scale")]
+        height_scale: f32,
+        /// Base terrain elevation offset (default: 0.0).
+        #[serde(default)]
+        height_offset: f32,
+        /// Mesh resolution per chunk (default: 64).
+        #[serde(default = "default_terrain_resolution")]
+        resolution: u32,
+        /// Chunk size in world units (default: 100.0).
+        #[serde(default = "default_chunk_size")]
+        chunk_size: f32,
+        /// Path to splat mask texture for layer blending (optional).
+        #[serde(default)]
+        splat_mask: Option<String>,
+        /// Paths to terrain layer textures [grass, dirt, rock, snow].
+        #[serde(default)]
+        layer_textures: [Option<String>; 4],
+        /// UV scale for terrain tiling (default: 10.0).
+        #[serde(default = "default_uv_scale")]
+        uv_scale: f32,
+        /// Invert heightmap values (default: false).
+        #[serde(default)]
+        invert_heightmap: bool,
+    },
+}
+
+fn default_height_scale() -> f32 {
+    100.0
+}
+
+fn default_terrain_resolution() -> u32 {
+    64
+}
+
+fn default_chunk_size() -> f32 {
+    100.0
+}
+
+fn default_uv_scale() -> f32 {
+    10.0
 }

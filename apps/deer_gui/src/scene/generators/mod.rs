@@ -10,6 +10,7 @@ pub mod spiral_trails;
 pub mod starfield;
 pub mod static_glow;
 pub mod systems;
+pub mod terrain;
 
 pub use cloud_layer::CloudParticle;
 pub use drop_pods::DropPod;
@@ -19,3 +20,4 @@ pub use river_barges::Barge;
 pub use spiral_trails::SpiralTrail;
 pub use static_glow::GlowEntity;
 pub use systems::{barge_system, cloud_system, drop_pod_system, traveller_system};
+pub use terrain::{MedievalTerrain, TerrainLayerConfig};

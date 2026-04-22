@@ -80,6 +80,8 @@ impl GeneratorRegistry {
             super::static_glow::gen_static_glow_cluster,
         );
         registry.register("gltf_subscene", super::gltf_subscene::gen_gltf_subscene);
+        // Medieval terrain for open world scenes
+        registry.register("medieval_terrain", super::terrain::gen_medieval_terrain);
         debug!(
             "GeneratorRegistry::with_builtins — {} generators",
             registry.factories.len(),

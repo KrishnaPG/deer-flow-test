@@ -32,6 +32,10 @@ pub enum TerrainError {
     /// LOD level out of range.
     #[error("LOD level {level} out of range (max: {max})")]
     InvalidLodLevel { level: u32, max: u32 },
+
+    /// Invalid configuration parameter.
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
 /// Result type for terrain operations.

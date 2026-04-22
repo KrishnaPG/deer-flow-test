@@ -58,7 +58,7 @@ fn main() {
         .add_plugins(EguiPlugin::default())
         .add_plugins(ThemePlugin)
         .add_plugins(PreferencesPlugin)
-        .add_plugins(BuildingPlugin)
+        .add_plugins(BuildingPlugin::default())
         .add_plugins(DiagnosticsPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(bevy_hanabi::HanabiPlugin)
