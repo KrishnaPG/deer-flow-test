@@ -2,29 +2,24 @@
 
 import pytest
 
-from berg10_agent.jsonrpc.core import (
-    Cancel,
+from jsonrpc.core import (
     ErrorCode,
     JsonRpcError,
-    Progress,
     Request,
     RequestId,
     Response,
-    StreamChunk,
-    StreamEnd,
-    StreamStart,
-    StreamType,
+    StreamResponse,
     batch,
-    cancel,
     parse_json,
     parse_message,
-    progress,
     request,
     serialize,
-    stream_chunk,
-    stream_end,
-    stream_start,
+    stream_data,
+    stream_done,
+    stream_error,
     success_response,
+    error_response,
+    ack_response,
     validate_request,
     validate_response,
 )
@@ -39,7 +34,7 @@ class TestRequestId:
         req_id1 = RequestId()
         req_id2 = RequestId()
         assert req_id1.value != req_id2.value
-        assert len(req_id1.value) == 36  # UUID length
+        assert len(str(req_id1.value)) == 36  # UUID length
 
     def test_string_conversion(self):
         req_id = RequestId("abc")
@@ -49,31 +44,39 @@ class TestRequestId:
         req_id = RequestId("test")
         assert hash(req_id) == hash("test")
 
+    def test_equality(self):
+        assert RequestId("123") == RequestId("123")
+        assert RequestId("123") == "123"
+        assert RequestId(123) == 123
+
 
 class TestJsonRpcError:
     def test_to_dict(self):
-        error = JsonRpcError(ErrorCode.INVALID_PARAMS, "Bad params", {"field": "name"})
+        error = JsonRpcError(ErrorCode.INVALID_PARAMS, "Bad params", "Title", {"field": "name"})
         assert error.to_dict() == {
             "code": -32602,
             "message": "Bad params",
+            "title": "Title",
             "data": {"field": "name"},
         }
 
     def test_from_dict(self):
-        data = {"code": -32601, "message": "Not found", "data": {}}
+        data = {"code": -32601, "message": "Not found", "title": "Not Found", "data": {}}
         error = JsonRpcError.from_dict(data)
         assert error.code == ErrorCode.METHOD_NOT_FOUND
         assert error.message == "Not found"
+        assert error.title == "Not Found"
 
 
 class TestRequest:
     def test_to_dict(self):
-        req = Request("echo", {"message": "hello"}, RequestId("123"))
+        req = Request("echo", {"message": "hello"}, RequestId("123"), options={"stream": True})
         assert req.to_dict() == {
             "jsonrpc": "3.0",
             "method": "echo",
             "params": {"message": "hello"},
             "id": "123",
+            "options": {"stream": True},
         }
 
     def test_from_dict(self):
@@ -82,11 +85,13 @@ class TestRequest:
             "method": "echo",
             "params": {"message": "hello"},
             "id": "456",
+            "options": {"stream": True},
         }
         req = Request.from_dict(data)
         assert req.method == "echo"
         assert req.params == {"message": "hello"}
-        assert str(req.id) == "456"
+        assert req.id == "456"
+        assert req.options == {"stream": True}
 
 
 class TestResponse:
@@ -94,19 +99,30 @@ class TestResponse:
         resp = Response.success("123", {"result": "ok"})
         assert resp.is_success
         assert not resp.is_error
+        assert not resp.is_ack
         assert resp.result == {"result": "ok"}
         assert resp.error is None
 
     def test_error_response(self):
-        resp = Response.error("123", ErrorCode.METHOD_NOT_FOUND, "Not found")
+        resp = Response.error_response("123", ErrorCode.METHOD_NOT_FOUND, "Not found")
         assert not resp.is_success
         assert resp.is_error
+        assert not resp.is_ack
         assert resp.error.code == ErrorCode.METHOD_NOT_FOUND
 
-    def test_cannot_have_both_result_and_error(self):
+    def test_ack_response(self):
+        resp = Response.ack_response("123", {"progress": 50})
+        assert not resp.is_success
+        assert not resp.is_error
+        assert resp.is_ack
+        assert resp.ack == {"progress": 50}
+
+    def test_validation(self):
         with pytest.raises(ValueError):
             Response(
-                RequestId("123"), result="ok", error=JsonRpcError(ErrorCode.INTERNAL_ERROR, "err")
+                id=RequestId("123"),
+                result="ok",
+                error=JsonRpcError(ErrorCode.INTERNAL_ERROR, "err"),
             )
 
     def test_to_dict_success(self):
@@ -117,14 +133,6 @@ class TestResponse:
             "result": "hello",
         }
 
-    def test_to_dict_error(self):
-        resp = Response.error("123", ErrorCode.INVALID_PARAMS, "Bad params")
-        assert resp.to_dict() == {
-            "jsonrpc": "3.0",
-            "id": "123",
-            "error": {"code": -32602, "message": "Bad params"},
-        }
-
     def test_from_dict(self):
         data = {"jsonrpc": "3.0", "id": "789", "result": "success"}
         resp = Response.from_dict(data)
@@ -133,73 +141,45 @@ class TestResponse:
 
 
 class TestStreamMessages:
-    def test_stream_start_to_dict(self):
-        start = StreamStart(RequestId("123"), [StreamType.CONTENT, StreamType.PROGRESS])
-        data = start.to_dict()
-        assert data["method"] == "$/stream/start"
-        assert data["params"]["id"] == "123"
-        assert data["params"]["streams"] == ["content", "progress"]
+    def test_stream_data_to_dict(self):
+        data_chunk = stream_data("s123", "partial")
+        data = data_chunk.to_dict()
+        assert data["stream"] == {"id": "s123"}
+        assert data["data"] == "partial"
+        assert "result" not in data
+        assert "error" not in data
 
-    def test_stream_chunk_to_dict(self):
-        chunk = StreamChunk(RequestId("123"), "hello", StreamType.CONTENT, 5)
-        data = chunk.to_dict()
-        assert data["method"] == "$/stream/chunk"
-        assert data["params"]["content"] == "hello"
-        assert data["params"]["index"] == 5
+    def test_stream_done_to_dict(self):
+        done = stream_done("s123", "final")
+        data = done.to_dict()
+        assert data["stream"] == {"id": "s123"}
+        assert data["result"] == "final"
+        assert "data" not in data
 
-    def test_stream_end_to_dict(self):
-        end = StreamEnd(RequestId("123"), StreamType.CONTENT)
-        data = end.to_dict()
-        assert data["method"] == "$/stream/end"
-        assert data["params"]["type"] == "content"
+    def test_stream_error_to_dict(self):
+        err = stream_error("s123", ErrorCode.INTERNAL_ERROR, "oops")
+        data = err.to_dict()
+        assert data["stream"] == {"id": "s123"}
+        assert data["error"]["code"] == -32603
 
-
-class TestProgress:
-    def test_percent_calculation(self):
-        prog = Progress(RequestId("123"), 50, 100)
-        assert prog.percent == 50.0
-
-    def test_percent_zero_total(self):
-        prog = Progress(RequestId("123"), 0, 0)
-        assert prog.percent == 0.0
-
-    def test_to_dict(self):
-        prog = Progress(RequestId("123"), 75, 100, "Processing...")
-        data = prog.to_dict()
-        assert data["params"]["current"] == 75
-        assert data["params"]["total"] == 100
-        assert data["params"]["percent"] == 75.0
-        assert data["params"]["message"] == "Processing..."
+    def test_validation(self):
+        with pytest.raises(ValueError):
+            StreamResponse(stream={"id": "123"}, data="a", result="b")
+        with pytest.raises(ValueError):
+            StreamResponse(stream={}, data="a")  # missing id
 
 
 class TestMessageBuilders:
     def test_request_builder(self):
-        req = request("echo", {"msg": "hi"}, "id-1")
+        req = request("echo", {"msg": "hi"}, "id-1", options={"stream": True})
         assert req.method == "echo"
         assert req.params == {"msg": "hi"}
+        assert req.options == {"stream": True}
 
     def test_success_response_builder(self):
         resp = success_response("id-1", "result")
         assert resp.is_success
         assert resp.result == "result"
-
-    def test_stream_start_builder(self):
-        start = stream_start("id-1", [StreamType.CONTENT])
-        assert start.id.value == "id-1"
-
-    def test_stream_chunk_builder(self):
-        chunk = stream_chunk("id-1", "data", StreamType.CONTENT, 0)
-        assert chunk.content == "data"
-
-    def test_progress_builder(self):
-        prog = progress("id-1", 10, 20, "halfway")
-        assert prog.current == 10
-        assert prog.message == "halfway"
-
-    def test_cancel_builder(self):
-        can = cancel("id-1", "user requested")
-        assert can.request_id.value == "id-1"
-        assert can.reason == "user requested"
 
 
 class TestParsing:
@@ -215,10 +195,11 @@ class TestParsing:
         assert isinstance(msg, Response)
         assert msg.result == "ok"
 
-    def test_parse_stream_start(self):
-        data = {"jsonrpc": "3.0", "method": "$/stream/start", "params": {"id": "123"}}
+    def test_parse_stream(self):
+        data = {"jsonrpc": "3.0", "stream": {"id": "123"}, "data": "hello"}
         msg = parse_message(data)
-        assert isinstance(msg, StreamStart)
+        assert isinstance(msg, StreamResponse)
+        assert msg.data == "hello"
 
     def test_parse_invalid_version(self):
         data = {"jsonrpc": "2.0", "method": "echo", "id": "123"}

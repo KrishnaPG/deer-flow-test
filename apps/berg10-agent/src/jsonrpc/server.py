@@ -67,7 +67,26 @@ class Server:
     def add_connection(self, transport: Transport) -> Connection:
         """Add a new connection to the server."""
         connection = Connection(transport)
-        connection.add_handler(self._handle_message)
+
+        async def connection_handler(message: Message) -> Optional[Response]:
+            if isinstance(message, Request):
+                if message.method == "request.cancel":
+                    return await self._handle_cancel(message)
+                if message.options and message.options.get("abort"):
+                    return await self._handle_cancel_options(message)
+
+                handler_info = self.registry.get_handler(message.method)
+                if handler_info and handler_info.is_streaming:
+                    # Route to stream handler
+                    async def emit(chunk: Union[StreamResponse, Response]):
+                        await connection.transport.send(chunk)
+
+                    return await self.handle_stream(message, emit)
+
+                return await self._handle_request(message)
+            return None
+
+        connection.add_handler(connection_handler)
         self._connections.append(connection)
         return connection
 
@@ -97,7 +116,7 @@ class Server:
     # -------------------------------------------------------------------------
 
     async def _handle_message(self, message: Message) -> Optional[Response]:
-        """Handle incoming messages."""
+        """Handle incoming messages (used when not bound to a specific connection)."""
         if isinstance(message, Request):
             # Check for cancellation
             if message.method == "request.cancel":
@@ -127,17 +146,6 @@ class Server:
             self._cancellable_requests[str(request.id.value)] = cancellable
 
         try:
-            # Note: Server handle_stream is the preferred way to execute streams via WebSockets,
-            # but if a normal dispatch gets a streaming request, it should handle it if stream option is set
-            is_stream_req = request.options and request.options.get("stream")
-
-            if handler_info.is_streaming and not is_stream_req:
-                return error_response(
-                    request.id,
-                    ErrorCode.INVALID_REQUEST,
-                    f"Method {request.method} requires streaming options",
-                )
-
             # Check for cancellation before executing
             cancellable.check_cancelled()
 
