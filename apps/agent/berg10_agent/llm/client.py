@@ -125,7 +125,9 @@ class LLMClient:
                     yield CompletionChunk(content=content, finish_reason=finish)
 
 
-def _msg_to_dict(msg: ChatMessage) -> dict[str, Any]:
+def _msg_to_dict(msg: ChatMessage | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(msg, dict):
+        return msg
     d: dict[str, Any] = {"role": msg.role, "content": msg.content}
     if msg.tool_call_id:
         d["tool_call_id"] = msg.tool_call_id
