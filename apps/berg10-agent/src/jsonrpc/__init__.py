@@ -5,7 +5,6 @@ This module provides a full implementation of JSON-RPC 3.0 with support for:
 - Standard request/response
 - Bidirectional streaming
 - Cancellation
-- Progress notifications
 - Batch operations
 - Multiple transports (WebSocket, HTTP, in-memory)
 
@@ -21,9 +20,9 @@ Example Usage:
 
     @server.method("stream_count", streaming=True)
     async def stream_count(n: int, _emit, _request_id):
-        from berg10_agent.jsonrpc import StreamChunk
+        from berg10_agent.jsonrpc import stream_data
         for i in range(n):
-            await _emit(StreamChunk(_request_id, str(i)))
+            await _emit(stream_data(_request_id, str(i)))
 
     # Client
     from berg10_agent.jsonrpc import Client, WebSocketTransport
@@ -38,28 +37,21 @@ Example Usage:
 
     # Streaming call
     async for chunk in client.stream("stream_count", {"n": 5}):
-        print(chunk.content)
+        print(chunk.data)
 """
 
 # Core types and functions
 from .core import (
     VERSION,
-    BatchItem,
-    Cancel,
     ErrorCode,
     JsonRpcError,
     Message,
     ParseError,
-    Progress,
     Request,
     RequestId,
     Response,
-    StreamChunk,
-    StreamEnd,
-    StreamStart,
-    StreamType,
+    StreamResponse,
     batch,
-    cancel,
     cancelled,
     error_response,
     internal_error,
@@ -69,14 +61,14 @@ from .core import (
     parse_error,
     parse_json,
     parse_message,
-    progress,
     request,
     serialize,
     serialize_batch,
-    stream_chunk,
-    stream_end,
-    stream_start,
+    stream_data,
+    stream_done,
+    stream_error,
     success_response,
+    ack_response,
     validate_request,
     validate_response,
 )
@@ -125,16 +117,10 @@ __all__ = [
     "JsonRpcError",
     "Request",
     "Response",
-    "StreamStart",
-    "StreamChunk",
-    "StreamEnd",
-    "Progress",
-    "Cancel",
+    "StreamResponse",
     "Message",
-    "BatchItem",
     # Enums
     "ErrorCode",
-    "StreamType",
     # Exceptions
     "ParseError",
     "CancellationError",
@@ -142,11 +128,10 @@ __all__ = [
     "request",
     "success_response",
     "error_response",
-    "stream_start",
-    "stream_chunk",
-    "stream_end",
-    "progress",
-    "cancel",
+    "ack_response",
+    "stream_data",
+    "stream_done",
+    "stream_error",
     "parse_json",
     "parse_message",
     "serialize",

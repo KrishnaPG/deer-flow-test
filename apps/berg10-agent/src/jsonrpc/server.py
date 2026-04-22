@@ -7,19 +7,17 @@ and connection management.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Callable, Optional
+from typing import Any, AsyncIterator, Callable, Optional, Union
 
 from .core import (
-    Cancel,
     ErrorCode,
     Message,
-    Progress,
     Request,
     RequestId,
     Response,
-    StreamChunk,
-    StreamEnd,
-    StreamStart,
+    StreamResponse,
+    error_response,
+    success_response,
     parse_json,
     serialize,
 )
@@ -49,24 +47,9 @@ class Server:
         self,
         name: Optional[str] = None,
         streaming: bool = False,
-        stream_types: Optional[list[str]] = None,
     ) -> Callable[..., Any]:
-        """Decorator to register a method handler.
-
-        Usage:
-            @server.method("echo")
-            async def echo(message: str) -> str:
-                return message
-
-            @server.method("stream_chat", streaming=True)
-            async def stream_chat(prompt: str, _emit, _request_id):
-                for chunk in generate_chunks(prompt):
-                    await _emit(StreamChunk(_request_id, chunk))
-        """
-        from .core import StreamType
-
-        types = [StreamType(t) for t in stream_types] if stream_types else None
-        return self.registry.method(name, streaming, types)
+        """Decorator to register a method handler."""
+        return self.registry.method(name, streaming)
 
     def register(
         self,
@@ -115,12 +98,13 @@ class Server:
 
     async def _handle_message(self, message: Message) -> Optional[Response]:
         """Handle incoming messages."""
-        # Handle cancellation
-        if isinstance(message, Cancel):
-            return await self._handle_cancel(message)
-
-        # Handle requests
         if isinstance(message, Request):
+            # Check for cancellation
+            if message.method == "request.cancel":
+                return await self._handle_cancel(message)
+            if message.options and message.options.get("abort"):
+                return await self._handle_cancel_options(message)
+
             return await self._handle_request(message)
 
         # Responses are handled by the connection layer
@@ -131,7 +115,7 @@ class Server:
         handler_info = self.registry.get_handler(request.method)
 
         if not handler_info:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.METHOD_NOT_FOUND,
                 f"Method not found: {request.method}",
@@ -139,16 +123,19 @@ class Server:
 
         # Track cancellable request
         cancellable = CancellableRequest(request)
-        self._cancellable_requests[str(request.id)] = cancellable
+        if request.id is not None:
+            self._cancellable_requests[str(request.id.value)] = cancellable
 
         try:
-            if handler_info.is_streaming:
-                # Streaming not supported in standard request/response
-                # Client should use streaming endpoint
-                return Response.error(
+            # Note: Server handle_stream is the preferred way to execute streams via WebSockets,
+            # but if a normal dispatch gets a streaming request, it should handle it if stream option is set
+            is_stream_req = request.options and request.options.get("stream")
+
+            if handler_info.is_streaming and not is_stream_req:
+                return error_response(
                     request.id,
-                    ErrorCode.METHOD_NOT_FOUND,
-                    f"Method {request.method} requires streaming",
+                    ErrorCode.INVALID_REQUEST,
+                    f"Method {request.method} requires streaming options",
                 )
 
             # Check for cancellation before executing
@@ -158,29 +145,59 @@ class Server:
             return await self.registry.dispatch(request)
 
         except Exception as e:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.INTERNAL_ERROR,
                 str(e),
             )
         finally:
-            if str(request.id) in self._cancellable_requests:
-                del self._cancellable_requests[str(request.id)]
+            if request.id is not None and str(request.id.value) in self._cancellable_requests:
+                del self._cancellable_requests[str(request.id.value)]
 
-    async def _handle_cancel(self, cancel: Cancel) -> Optional[Response]:
-        """Handle cancellation request."""
-        request_id = str(cancel.request_id)
-
-        if request_id in self._cancellable_requests:
-            self._cancellable_requests[request_id].cancel(cancel.reason)
-            self.streaming.cancel_stream(cancel.request_id)
-            return Response.success(
-                cancel.request_id,
-                {"cancelled": True, "reason": cancel.reason},
+    async def _handle_cancel(self, request: Request) -> Optional[Response]:
+        """Handle standard request.cancel method."""
+        params = request.params
+        if not isinstance(params, dict) or "id" not in params:
+            return error_response(
+                request.id,
+                ErrorCode.INVALID_PARAMS,
+                "Cancel request must include 'id' in params",
             )
 
-        return Response.error(
-            cancel.request_id,
+        target_id = str(params["id"])
+        return await self._execute_cancel(target_id, request.id)
+
+    async def _handle_cancel_options(self, request: Request) -> Optional[Response]:
+        """Handle cancellation via options.abort."""
+        target_id = str(request.options["stream"]) if "stream" in request.options else None
+        if not target_id and request.id:
+            target_id = str(request.id.value)
+
+        if target_id:
+            return await self._execute_cancel(target_id, request.id)
+
+        return error_response(
+            request.id,
+            ErrorCode.INVALID_REQUEST,
+            "Cannot determine target for cancellation",
+        )
+
+    async def _execute_cancel(self, target_id: str, request_id: Optional[RequestId]) -> Response:
+        """Execute the cancellation on tracked requests and streams."""
+        cancelled = False
+
+        if target_id in self._cancellable_requests:
+            self._cancellable_requests[target_id].cancel("Request cancelled by client")
+            cancelled = True
+
+        if self.streaming.cancel_stream(target_id):
+            cancelled = True
+
+        if cancelled:
+            return success_response(request_id, {"cancelled": True})
+
+        return error_response(
+            request_id,
             ErrorCode.INVALID_REQUEST,
             "Request not found or already completed",
         )
@@ -192,7 +209,7 @@ class Server:
     async def handle_stream(
         self,
         request: Request,
-        emit: Callable[[StreamChunk | StreamEnd | Progress], Any],
+        emit: Callable[[Union[StreamResponse, Response]], Any],
     ) -> Optional[Response]:
         """Handle a streaming request.
 
@@ -201,10 +218,11 @@ class Server:
         """
         # Track cancellable request
         cancellable = CancellableRequest(request)
-        self._cancellable_requests[str(request.id)] = cancellable
+        req_id_str = str(request.id.value) if request.id else str(uuid4())
+        self._cancellable_requests[req_id_str] = cancellable
 
         async def wrapped_emit(
-            chunk: StreamChunk | StreamEnd | Progress,
+            chunk: Union[StreamResponse, Response],
         ) -> None:
             """Emit wrapper that checks for cancellation."""
             cancellable.check_cancelled()
@@ -213,14 +231,14 @@ class Server:
         try:
             return await self.streaming.dispatch_stream(request, wrapped_emit)
         except Exception as e:
-            return Response.error(
+            return error_response(
                 request.id,
                 ErrorCode.INTERNAL_ERROR,
                 str(e),
             )
         finally:
-            if str(request.id) in self._cancellable_requests:
-                del self._cancellable_requests[str(request.id)]
+            if req_id_str in self._cancellable_requests:
+                del self._cancellable_requests[req_id_str]
 
 
 # =============================================================================
@@ -246,9 +264,10 @@ class Client:
         self,
         method: str,
         params: Optional[dict[str, Any]] = None,
+        options: Optional[dict[str, Any]] = None,
     ) -> Response:
         """Make a synchronous call."""
-        return await self.connection.call(method, params)
+        return await self.connection.call(method, params, options)
 
     async def notify(
         self,
@@ -262,17 +281,19 @@ class Client:
         self,
         method: str,
         params: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[StreamChunk]:
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[StreamResponse]:
         """Make a streaming call."""
-        async for chunk in self.connection.stream(method, params):
+        stream_opts = options or {}
+        stream_opts["stream"] = True
+        async for chunk in self.connection.stream(method, params, stream_opts):
             yield chunk
 
     async def cancel(
         self,
-        request_id: RequestId,
-        reason: Optional[str] = None,
+        request_id: Union[RequestId, str, int],
     ) -> Response:
         """Cancel a pending request."""
-        await self.connection.cancel(request_id, reason)
+        await self.connection.cancel(request_id)
         # The server will send a response
-        return Response.success(request_id, {"cancelled": True})
+        return success_response(request_id, {"cancelled": True})
