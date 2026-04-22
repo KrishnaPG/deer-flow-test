@@ -10,8 +10,8 @@ from typing import Any
 import streamlit as st
 import websocket
 
-from .api_client import AgentAPIClient, TestResult
-from .catalog import ModelCatalog, ModelInfo
+from berg10_agent.ui.api_client import AgentAPIClient, TestResult
+from berg10_agent.ui.catalog import ModelCatalog, ModelInfo
 
 # Constants
 MODES = ["build", "plan", "debug", "review"]
@@ -372,7 +372,7 @@ def _render_model_form(existing: dict[str, Any] | None = None) -> None:
                 st.error("Model ID, Name, and Model String are required.")
                 return
 
-            from ..models import ModelConfig
+            from berg10_agent.models import ModelConfig
 
             config = ModelConfig(
                 id=model_id,

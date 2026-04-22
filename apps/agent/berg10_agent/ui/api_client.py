@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import litellm
 
-from ..models import ModelConfig
+from berg10_agent.models import ModelConfig
 
 
 @dataclass
