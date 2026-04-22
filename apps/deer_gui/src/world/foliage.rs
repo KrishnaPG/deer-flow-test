@@ -17,10 +17,8 @@
 //! Bevy project needing procedural vegetation. Configuration is done
 //! via Bevy resources (data-driven, no hardcoded paths).
 
-use bevy::asset::AssetServer;
-use bevy::ecs::system::{Commands, Res, ResMut};
-use bevy::log::{debug, info, trace, warn};
-use bevy::math::Vec3;
+use bevy::ecs::system::{Commands, Res};
+use bevy::log::{debug, info, trace};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -150,7 +148,7 @@ impl Default for WindConfig {
 // ---------------------------------------------------------------------------
 
 /// Global configuration for the foliage system.
-#[derive(Resource, Debug, Clone, Serialize, Deserialize)]
+#[derive(Resource, Component, Debug, Clone, Serialize, Deserialize)]
 pub struct FoliageGlobalConfig {
     /// Biome vegetation configurations.
     #[serde(default)]

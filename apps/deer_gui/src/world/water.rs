@@ -18,11 +18,32 @@
 //! Bevy project needing water rendering. Configuration is done
 //! via Bevy resources (data-driven, no hardcoded paths).
 
-use bevy::ecs::system::{Commands, Res};
-use bevy::log::{debug, info, trace, warn};
-use bevy::math::{Vec2, Vec3};
+use bevy::ecs::system::{Res, ResMut};
+use bevy::log::{info, trace};
+use bevy::math::Vec2;
 use bevy::prelude::*;
+use bevy_water::{WaterPlugin as BevyWaterPlugin, WaterSettings};
 use serde::{Deserialize, Serialize};
+
+/// Trait for terrain water integration.
+///
+/// This provides a common interface for terrain systems to integrate with water.
+pub trait TerrainWaterIntegration {
+    /// Get the terrain height at a given world position.
+    fn get_height_at(&self, world_pos: Vec2) -> Option<f32>;
+
+    /// Get the terrain slope at a given world position.
+    fn get_slope_at(&self, world_pos: Vec2) -> Option<f32>;
+
+    /// Check if a position is near water (within threshold).
+    fn is_near_water(&self, world_pos: Vec2, water_level: f32, threshold: f32) -> bool {
+        if let Some(height) = self.get_height_at(world_pos) {
+            (height - water_level).abs() < threshold
+        } else {
+            false
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Water Types
@@ -260,6 +281,10 @@ pub struct Swimmable {
     pub breath: f32,
     /// Maximum breath.
     pub max_breath: f32,
+    /// Is currently swimming.
+    pub is_swimming: bool,
+    /// Is currently underwater.
+    pub is_underwater: bool,
 }
 
 impl Default for Swimmable {
@@ -268,6 +293,29 @@ impl Default for Swimmable {
             speed_multiplier: 0.5,
             breath: 100.0,
             max_breath: 100.0,
+            is_swimming: false,
+            is_underwater: false,
+        }
+    }
+}
+
+impl Swimmable {
+    /// Check if entity can swim (has breath).
+    pub fn can_swim(&self) -> bool {
+        self.breath > 0.0
+    }
+
+    /// Consume breath when underwater.
+    pub fn consume_breath(&mut self, amount: f32, delta_time: f32) {
+        if self.is_underwater {
+            self.breath = (self.breath - amount * delta_time).max(0.0);
+        }
+    }
+
+    /// Recover breath when above water.
+    pub fn recover_breath(&mut self, amount: f32, delta_time: f32) {
+        if !self.is_underwater {
+            self.breath = (self.breath + amount * delta_time).min(self.max_breath);
         }
     }
 }
@@ -300,16 +348,34 @@ impl Plugin for WaterPlugin {
     fn build(&self, app: &mut App) {
         info!("WaterPlugin: initializing water system");
 
-        // Add config resource
+        // Add bevy_water with default settings
+        app.add_plugins(BevyWaterPlugin::default());
+
+        // Configure water settings based on our config
         if let Some(config) = &self.config {
             app.insert_resource(config.clone());
+
+            // Apply water settings from our config
+            if let Some(first_body) = config.bodies.first() {
+                app.insert_resource(WaterSettings {
+                    height: first_body.position.1, // Use Y position as water height
+                    ..default()
+                });
+            }
         } else {
             app.init_resource::<WaterGlobalConfig>();
         }
 
         // Add systems
         app.add_systems(Startup, setup_water_system);
-        app.add_systems(Update, update_water_waves_system);
+        app.add_systems(
+            Update,
+            (
+                update_water_waves_system,
+                update_water_level_system,
+                update_swimming_system,
+            ),
+        );
 
         info!("WaterPlugin: registered systems");
     }
@@ -346,6 +412,43 @@ fn update_water_waves_system(time: Res<Time>, mut water_bodies: Query<&mut Water
 
     for mut water in water_bodies.iter_mut() {
         water.wave_time += delta * water.wave_time;
+    }
+}
+
+/// Update water level from config to bevy_water settings.
+fn update_water_level_system(
+    config: Res<WaterGlobalConfig>,
+    mut water_settings: ResMut<WaterSettings>,
+) {
+    // Sync water level from our config to bevy_water settings
+    water_settings.height = config.water_level;
+}
+
+/// Update swimming state for entities in water.
+fn update_swimming_system(
+    config: Res<WaterGlobalConfig>,
+    time: Res<Time>,
+    mut query: Query<(&mut Swimmable, &Transform)>,
+) {
+    let delta = time.delta_secs();
+
+    for (mut swimmable, transform) in query.iter_mut() {
+        let water_level = config.water_level;
+        let entity_height = transform.translation.y;
+
+        // Determine if entity is in water
+        let in_water = entity_height < water_level;
+        let underwater = entity_height < water_level - 1.0; // 1 meter below surface
+
+        swimmable.is_swimming = in_water;
+        swimmable.is_underwater = underwater;
+
+        // Update breath
+        if underwater {
+            swimmable.consume_breath(10.0, delta); // Consume 10 breath per second
+        } else {
+            swimmable.recover_breath(20.0, delta); // Recover 20 breath per second
+        }
     }
 }
 
@@ -398,5 +501,40 @@ mod tests {
         let swimmable = Swimmable::default();
         assert_eq!(swimmable.breath, 100.0);
         assert!(swimmable.speed_multiplier < 1.0);
+        assert!(!swimmable.is_swimming);
+        assert!(!swimmable.is_underwater);
+    }
+
+    #[test]
+    fn swimmable_breath_consumption() {
+        let mut swimmable = Swimmable::default();
+        swimmable.is_underwater = true;
+
+        swimmable.consume_breath(10.0, 1.0);
+        assert_eq!(swimmable.breath, 90.0);
+
+        swimmable.consume_breath(100.0, 0.5);
+        assert_eq!(swimmable.breath, 40.0);
+
+        // Should not go below 0
+        swimmable.consume_breath(100.0, 1.0);
+        assert_eq!(swimmable.breath, 0.0);
+    }
+
+    #[test]
+    fn swimmable_breath_recovery() {
+        let mut swimmable = Swimmable::default();
+        swimmable.breath = 50.0;
+        swimmable.is_underwater = false;
+
+        swimmable.recover_breath(20.0, 1.0);
+        assert_eq!(swimmable.breath, 70.0);
+
+        swimmable.recover_breath(100.0, 0.5);
+        assert_eq!(swimmable.breath, 100.0); // Capped at max
+
+        // Should not go above max
+        swimmable.recover_breath(50.0, 1.0);
+        assert_eq!(swimmable.breath, 100.0);
     }
 }

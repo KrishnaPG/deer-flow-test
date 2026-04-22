@@ -14,8 +14,6 @@ members = [
     "crates/runtime/world_projection",
     "crates/storage/core",
     "crates/terrain",
-    "crates/vegetation",
-    "crates/water",
     "crates/views/scene3d",
     "crates/views/chat_thread",
     "crates/views/list_detail",

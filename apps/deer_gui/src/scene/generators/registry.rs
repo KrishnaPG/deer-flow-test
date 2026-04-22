@@ -82,6 +82,8 @@ impl GeneratorRegistry {
         registry.register("gltf_subscene", super::gltf_subscene::gen_gltf_subscene);
         // Medieval terrain for open world scenes
         registry.register("medieval_terrain", super::terrain::gen_medieval_terrain);
+        // Vegetation for biome-based foliage scattering
+        registry.register("vegetation", super::vegetation::gen_vegetation);
         debug!(
             "GeneratorRegistry::with_builtins — {} generators",
             registry.factories.len(),

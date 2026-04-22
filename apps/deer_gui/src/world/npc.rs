@@ -17,12 +17,11 @@
 //! Bevy project needing NPC populations. Configuration is done
 //! via Bevy resources (data-driven, no hardcoded paths).
 
-use bevy::ecs::system::{Commands, Res, ResMut};
-use bevy::log::{debug, info, trace, warn};
-use bevy::math::{Quat, Vec3};
+use bevy::ecs::system::{Commands, Res};
+use bevy::log::{debug, info, trace};
+use bevy::math::Vec3;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // NPC Types
@@ -308,7 +307,11 @@ impl Plugin for NpcPlugin {
 // ---------------------------------------------------------------------------
 
 /// Setup the NPC system.
-fn setup_npc_system(config: Res<NpcGlobalConfig>) {
+fn setup_npc_system(
+    mut commands: Commands,
+    config: Res<NpcGlobalConfig>,
+    asset_server: Res<AssetServer>,
+) {
     trace!("setup_npc_system: initializing");
 
     info!(
@@ -323,6 +326,47 @@ fn setup_npc_system(config: Res<NpcGlobalConfig>) {
             spawn.count,
             spawn.npc_type,
             spawn.radius
+        );
+
+        // Spawn NPCs based on config
+        spawn_npc_group(&mut commands, &asset_server, spawn);
+    }
+}
+
+/// Spawn a group of NPCs based on spawn configuration.
+fn spawn_npc_group(commands: &mut Commands, asset_server: &AssetServer, spawn: &NpcSpawnConfig) {
+    let center = Vec3::from(spawn.center);
+    let count = spawn.count;
+
+    for i in 0..count {
+        // Calculate position in a circle pattern
+        let angle = (i as f32 / count as f32) * std::f32::consts::TAU;
+        let radius_variance = spawn.radius * (0.5 + (i as f32 * 0.1) % 0.5);
+        let x = center.x + radius_variance * angle.cos();
+        let z = center.z + radius_variance * angle.sin();
+        let position = Vec3::new(x, 0.0, z); // Y will be set by terrain if needed
+
+        // Create NPC entity
+        let npc_entity = commands
+            .spawn((
+                Name::new(format!("{:?}_{}", spawn.npc_type, i)),
+                Transform::from_translation(position),
+                Npc {
+                    npc_type: spawn.npc_type,
+                    animation_state: AnimationState::Idle,
+                    faction_id: spawn.faction_id.clone(),
+                },
+                NpcHealth::for_type(spawn.npc_type),
+                NpcMovement::for_type(spawn.npc_type),
+                // Add mesh and material for visualization (placeholder)
+                Mesh3d(asset_server.load(spawn.npc_type.model_path())),
+                // Note: In a real implementation, we would use SceneRoot for glTF models
+            ))
+            .id();
+
+        debug!(
+            "spawn_npc_group: spawned {:?} at {:?}",
+            spawn.npc_type, position
         );
     }
 }
