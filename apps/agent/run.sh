@@ -62,7 +62,7 @@ if [ "$REINSTALL" = true ]; then
 
     # Install dependencies
     echo -e "${YELLOW}Installing dependencies from pyproject.toml...${NC}"
-    pip install -e . --quiet
+    pip install -e . --quiet --no-deps
     echo -e "${GREEN}Dependencies installed successfully${NC}"
 
     # Create install marker
@@ -82,8 +82,8 @@ echo -e "${GREEN}Running berg10_agent...${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
-# Run berg10_agent as a module
-python3 -m berg10_agent
+# Run berg10_agent as a module with passed arguments
+python3 -m berg10_agent "$@"
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
