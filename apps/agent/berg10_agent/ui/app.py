@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import streamlit as st
 import json
+import websocket
+
 from typing import Any
 
 
 def run_ui(server_url: str = "ws://localhost:8765/ws") -> None:
     """Launch the Streamlit debug UI."""
-    import streamlit as st
 
     st.set_page_config(page_title="Berg10 Agent Debug", layout="wide")
     st.title("Berg10 Agent Debug UI")
@@ -51,8 +53,6 @@ def run_ui(server_url: str = "ws://localhost:8765/ws") -> None:
 def _send_message(ws_url: str, content: str) -> str:
     """Send message via WebSocket and collect response."""
     try:
-        import websocket
-
         ws = websocket.create_connection(ws_url)
         ws.send(json.dumps({"type": "message", "content": content}))
 

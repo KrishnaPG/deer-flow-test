@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pocketflow import AsyncNode
 
 from ..llm import LLMClient
+
+if TYPE_CHECKING:
+    from ..models import ModelConfig
 
 
 class CompactHistoryNode(AsyncNode):
@@ -26,16 +29,19 @@ class CompactHistoryNode(AsyncNode):
     async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         history = shared.get("history", [])
         token_count = _estimate_tokens(history)
+        model_config: ModelConfig | None = shared.get("model_config")
         return {
             "history": history,
             "token_count": token_count,
             "needs_compaction": token_count > self.compact_threshold,
+            "model_config": model_config,
         }
 
     async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         if not prep_res["needs_compaction"]:
             return {"compacted": False, "history": prep_res["history"]}
 
+        model_config: ModelConfig | None = prep_res.get("model_config")
         history = prep_res["history"]
         # Keep recent messages, summarize older ones
         keep_count = max(2, len(history) // 3)
@@ -45,7 +51,10 @@ class CompactHistoryNode(AsyncNode):
         summary_msgs = [
             {
                 "role": "system",
-                "content": "Summarize the following conversation concisely, preserving key facts, decisions, and context.",
+                "content": (
+                    "Summarize the following conversation concisely, "
+                    "preserving key facts, decisions, and context."
+                ),
             },
             *[_msg_dict(m) for m in older],
             {"role": "user", "content": "Provide a concise summary of the conversation above."},
@@ -55,6 +64,7 @@ class CompactHistoryNode(AsyncNode):
             messages=[_dict_to_msg(m) for m in summary_msgs],
             max_tokens=1024,
             temperature=0.3,
+            model_config=model_config,
         )
 
         compacted = [
