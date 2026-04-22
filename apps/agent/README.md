@@ -17,7 +17,7 @@ Headless LLM agent with WebSocket transport using PocketFlow and LiteLLM.
 
 ```bash
 # Option 1: Using run.sh (recommended - automatically handles venv)
-./run.sh --model openrouter/google/gemma-3-2b-it:free --port 8765
+./run.sh --model openrouter/inclusionai/ling-2.6-flash:free --port 8765
 
 # launch debug UI (optional)
 .venv/bin/streamlit run berg10_agent/ui/app.py --server.port 8501

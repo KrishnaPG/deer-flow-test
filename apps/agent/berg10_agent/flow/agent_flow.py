@@ -9,6 +9,7 @@ from ..llm import LLMClient
 from ..nodes import (
     CompactHistoryNode,
     DecideActionNode,
+    DoneNode,
     GrepSearchNode,
     ListFilesNode,
     PatchFileNode,
@@ -34,6 +35,7 @@ def create_agent_flow(config: AgentConfig) -> AgentFlow:
 
     # Create nodes
     decide = DecideActionNode(llm)
+    done = DoneNode()
     compact = CompactHistoryNode(
         llm, max_tokens=config.max_history_tokens, compact_threshold=config.compact_threshold
     )
@@ -45,6 +47,7 @@ def create_agent_flow(config: AgentConfig) -> AgentFlow:
 
     # Wire: decide -> tool -> decide (cyclic via post routing)
     # Each tool node routes back to "decide" in its post method
+    decide - "answer" >> done
     decide - "tool_list_files" >> list_files
     decide - "tool_grep_search" >> grep_search
     decide - "tool_read_file" >> read_file
