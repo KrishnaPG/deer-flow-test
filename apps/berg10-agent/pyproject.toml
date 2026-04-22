@@ -1,0 +1,49 @@
+[project]
+name = "berg10-agent"
+version = "0.1.0"
+description = "Headless LLM agent with WebSocket transport using PocketFlow and LiteLLM"
+requires-python = ">=3.10"
+dependencies = [
+    "pocketflow>=0.1.0",
+    "litellm>=1.57.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-socketio>=5.12.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.9.0",
+    "click>=8.1.0",
+    "streamlit>=1.40.0",
+    "httpx>=0.28.0",
+    "jsonschema>=4.23.0",
+    "aiofiles>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "black>=24.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+berg10-agent = "berg10_agent.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/berg10_agent"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

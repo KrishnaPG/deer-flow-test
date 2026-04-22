@@ -29,6 +29,16 @@ Build a headless LLM agent using PocketFlow + LiteLLM with WebSocket transport. 
 - Cron/scheduled automations
 - Built-in auth (handled by downstream)
 
+## Coding Standards
+
+- Avoid monolith files (> 400 LOC); split into smaller files;
+- Avoid large functions > 50 LOC
+- Maintain all hardcoded values in a central location easy to edit and configure.
+- Do not inline the paths or hardcoded structures (e.g. json responses); use reusable builder helper methods; 
+- Aim for high type-safety for all domain types; Avoid using basic types (e.g. string, number) as much as possible; 
+- Avoid memory allocations or memory copies; aim for zero-copy pipelines;
+- Start at 30000 feet (identify all the high-level interfaces, types, function prototypes, contracts, constants, response structures, helper methods) and work down towards the method level code implementation;
+
 ## Decisions
 
 ### D1: PocketFlow from PyPI vs vendored
