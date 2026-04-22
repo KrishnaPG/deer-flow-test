@@ -13,32 +13,29 @@ Headless LLM agent with WebSocket transport using PocketFlow and LiteLLM.
 
 ## Quick Start
 
+**Launch debug UI** (requires agent running on port 8765):
+
 ```bash
-pip install -e ".[dev,ui]"
+# Option 1: Using run.sh (recommended - automatically handles venv)
+./run.sh --model openrouter/google/gemma-3-2b-it:free --port 8765
 
-# Run the agent server
-berg10-agent --model openrouter/google/gemma-3-2b-it:free --port 8765
-
-# Run with custom config
-berg10-agent --model openrouter/anthropic/claude-sonnet-4 --work-dir ./my-project
-
-# Launch debug UI
-streamlit run src/berg10_agent/ui/app.py
+# launch debug UI (optional)
+.venv/bin/streamlit run berg10_agent/ui/app.py --server.port 8501
 ```
 
 ## Configuration
 
 All options can be set via CLI flags, environment variables, or a `.env` file:
 
-| Option | CLI Flag | Env Var | Default |
-|--------|----------|---------|---------|
-| Model | `--model` | `BERG10_AGENT_MODEL` | `openrouter/google/gemma-3-2b-it:free` |
-| API Key | — | `BERG10_AGENT_API_KEY` | — |
-| Host | `--host` | `BERG10_AGENT_HOST` | `0.0.0.0` |
-| Port | `--port` | `BERG10_AGENT_PORT` | `8765` |
-| Work Dir | `--work-dir` | `BERG10_AGENT_WORK_DIR` | `.` |
-| Tool Timeout | `--tool-timeout` | `BERG10_AGENT_TOOL_TIMEOUT` | `60` |
-| Max Turns | `--max-turns` | `BERG10_AGENT_MAX_TURNS` | `50` |
+| Option       | CLI Flag         | Env Var                     | Default                                |
+| ------------ | ---------------- | --------------------------- | -------------------------------------- |
+| Model        | `--model`        | `BERG10_AGENT_MODEL`        | `openrouter/google/gemma-3-2b-it:free` |
+| API Key      | —                | `BERG10_AGENT_API_KEY`      | —                                      |
+| Host         | `--host`         | `BERG10_AGENT_HOST`         | `0.0.0.0`                              |
+| Port         | `--port`         | `BERG10_AGENT_PORT`         | `8765`                                 |
+| Work Dir     | `--work-dir`     | `BERG10_AGENT_WORK_DIR`     | `.`                                    |
+| Tool Timeout | `--tool-timeout` | `BERG10_AGENT_TOOL_TIMEOUT` | `60`                                   |
+| Max Turns    | `--max-turns`    | `BERG10_AGENT_MAX_TURNS`    | `50`                                   |
 
 ## Architecture
 
@@ -72,9 +69,16 @@ Connect to `ws://localhost:8765/ws` and send JSON-RPC 3.0 messages:
 
 ## Development
 
+Always use the virtual environment (`.venv`) for all Python commands:
+
 ```bash
-pip install -e ".[dev,ui]"
-pytest
-ruff check src/ tests/
-black src/ tests/
+# Install dependencies
+.venv/bin/pip install -e ".[dev,ui]"
+
+# Run tests
+.venv/bin/pytest
+
+# Lint and format
+.venv/bin/ruff check berg10_agent/ tests/
+.venv/bin/black berg10_agent/ tests/
 ```
