@@ -11,8 +11,9 @@ use bevy::prelude::{
 use super::components::CinematicCamera;
 use super::navigation::{camera_sync_snapshot_system, CameraSyncState};
 use super::systems::{
-    camera_focus_system, camera_input_system, camera_interpolation_system, camera_shake_system,
-    viewport_navigation_system,
+    camera_focus_system, camera_input_system, camera_interpolation_system,
+    camera_mode_toggle_system, camera_shake_system, first_person_movement_system,
+    mouse_look_system, viewport_navigation_system,
 };
 use crate::constants::camera::ORBIT_RADIUS;
 
@@ -35,7 +36,10 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 Update,
                 (
+                    camera_mode_toggle_system,
                     camera_input_system,
+                    mouse_look_system,
+                    first_person_movement_system,
                     camera_interpolation_system,
                     camera_shake_system,
                     viewport_navigation_system,
