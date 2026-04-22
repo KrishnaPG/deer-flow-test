@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g fill="#4169e1" stroke="#2c3e8c" stroke-width="1.5">
+    <!-- Central petal -->
+    <path d="M32 8 Q36 20 32 32 Q28 20 32 8"/>
+    <!-- Left petal -->
+    <path d="M16 24 Q24 28 32 32 Q28 36 20 36 Q12 32 16 24"/>
+    <!-- Right petal -->
+    <path d="M48 24 Q40 28 32 32 Q36 36 44 36 Q52 32 48 24"/>
+    <!-- Base -->
+    <rect x="28" y="32" width="8" height="24" rx="2"/>
+    <!-- Crossbar -->
+    <ellipse cx="32" cy="56" rx="12" ry="4"/>
+  </g>
+  <!-- Gold accents -->
+  <circle cx="32" cy="24" r="3" fill="#ffd700"/>
+  <circle cx="22" cy="30" r="2" fill="#ffd700"/>
+  <circle cx="42" cy="30" r="2" fill="#ffd700"/>
+</svg>

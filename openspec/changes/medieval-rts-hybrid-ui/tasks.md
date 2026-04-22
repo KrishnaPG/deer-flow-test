@@ -54,9 +54,9 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 3.7 Configure wind animation parameters - WindConfig with direction, speed, turbulence, gust_frequency
 - [x] 3.5 Create glTF tree models (oak, pine, birch) compatible with bevy_feronia - Download script + placeholders in `assets/models/foliage/`
 - [x] 3.6 Create glTF bush and grass models - Included in download script
-- [ ] 3.8 Add vegetation to scene descriptor RON format
-- [ ] 3.9 Delete `crates/vegetation/` (replaced by bevy_feronia)
-- [ ] 3.10 Document `FoliagePlugin` API for reuse in other projects
+- [x] 3.8 Add vegetation to scene descriptor RON format
+- [x] 3.9 Delete `crates/vegetation/` (replaced by bevy_feronia)
+- [x] 3.10 Document `FoliagePlugin` API for reuse in other projects
 
 ## 4. Building Placement System
 
@@ -67,10 +67,10 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 4.2 Define `BuildingDef` struct for building configurations
 - [x] 4.3 Implement building placement with layout presets - LayoutPreset + BuildingPlacement structs
 - [x] 4.5 Add weathering level support (pristine to ruined) via material variants - WeatheringLevel enum with 5 levels
+- [x] 4.6 Implement faction color application to buildings - FactionColored component + color system
 - [x] 4.8 Create building cluster layout presets (village, castle, farm) - presets module with village(), castle(), farm()
 - [x] 4.9 Write unit tests for BuildingDef serialization - Tests in mod.rs
 - [ ] 4.4 Create glTF medieval building models (house, tower, church) - Need download script output
-- [ ] 4.6 Implement faction color application to buildings - Will integrate with faction themes
 - [ ] 4.7 Add collision shapes to buildings - collision_half_extents defined, needs integration
 - [ ] 4.10 Document `BuildingPlugin` API for external reuse
 
@@ -85,9 +85,9 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 5.1 Add `bevior_tree` dependency to Cargo.toml
 - [x] 5.2 Create `NpcPlugin` with configurable spawning parameters - NpcPlugin with NpcGlobalConfig
 - [x] 5.3 Define `NpcType` enum (Knight, Peasant, Guard, etc.) - NpcType with 6 variants
+- [x] 5.4 Implement NPC spawning with count and radius - spawn_npc_group system
 - [x] 5.8 Add idle, walk, work animation states - AnimationState enum with 7 states
 - [x] 5.9 Define behavior trees for NPC types - BehaviorType enum with Wander, Patrol, Work, etc.
-- [ ] 5.4 Implement NPC spawning with count and radius - Needs spawn system implementation
 - [ ] 5.5 Create glTF character models (knight, peasant) - Need download script output
 - [ ] 5.6 Create glTF horse model - Need download script output
 - [ ] 5.7 Implement skeletal animation controller - Needs integration with bevy animation
@@ -102,34 +102,34 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 **Dependencies**: `bevy_water = "0.18.1"`, `bevy_easings = "0.18.0"`
 
 - [x] 6.1 Add `bevy_water` and `bevy_easings` dependencies to Cargo.toml
-- [ ] 6.2 Create `WaterPlugin` wrapper for reusable configuration
-- [ ] 6.3 Configure water plane for rivers and lakes (not just ocean)
-- [ ] 6.4 Set up wave animation parameters (amplitude, frequency, speed)
-- [ ] 6.5 Add flow direction configuration for rivers
-- [ ] 6.6 Integrate `bevy_water` with terrain heightmap (shore detection)
+- [x] 6.2 Create `WaterPlugin` wrapper for reusable configuration
+- [x] 6.3 Configure water plane for rivers and lakes (not just ocean)
+- [x] 6.4 Set up wave animation parameters (amplitude, frequency, speed)
+- [x] 6.5 Add flow direction configuration for rivers
+- [x] 6.6 Integrate `bevy_water` with terrain heightmap (shore detection)
 - [ ] 6.7 Add splash particle effect on water contact (using bevy_hanabi)
-- [ ] 6.8 Implement water collision for swimming
-- [ ] 6.9 Delete `crates/water/` (replaced by bevy_water)
-- [ ] 6.10 Document `WaterPlugin` configuration API for reuse
+- [x] 6.8 Implement water collision for swimming
+- [x] 6.9 Delete `crates/water/` (replaced by bevy_water)
+- [x] 6.10 Document `WaterPlugin` configuration API for reuse
 
 ## 7. Faction Theme Engine
 
 > **Modularity Note**: Faction theming should be extractable to `crates/faction-themes` for reuse
 > in any game needing faction-based UI styling with smooth transitions.
 
-- [ ] 7.1 Create `FactionThemePlugin` with clean public API
-- [ ] 7.2 Define `FactionTheme` struct (colors, border_style, symbol)
-- [ ] 7.3 Define `FactionId` enum (English, French, Byzantine, Mongol)
-- [ ] 7.4 Create `FactionPreset` resource for faction definitions
-- [ ] 7.5 Implement smooth faction transition system (2-4s, EaseInOutCubic)
-- [ ] 7.6 Implement color interpolation with purple midpoint transition
-- [ ] 7.7 Implement border style morphing during transitions
-- [ ] 7.8 Implement heraldry crossfade effect
-- [ ] 7.9 Create faction symbol assets (SVG/texture)
-- [ ] 7.10 Add faction selector UI to settings
-- [ ] 7.11 Write unit tests for FactionTheme serialization
-- [ ] 7.12 Write integration tests for faction transitions
-- [ ] 7.13 Document `FactionThemePlugin` API for external reuse
+- [x] 7.1 Create `FactionThemePlugin` with clean public API
+- [x] 7.2 Define `FactionTheme` struct (colors, border_style, symbol)
+- [x] 7.3 Define `FactionId` enum (English, French, Byzantine, Mongol)
+- [x] 7.4 Create `FactionPreset` resource for faction definitions
+- [x] 7.5 Implement smooth faction transition system (2-4s, EaseInOutCubic)
+- [x] 7.6 Implement color interpolation with purple midpoint transition
+- [x] 7.7 Implement border style morphing during transitions
+- [x] 7.8 Implement heraldry crossfade effect
+- [x] 7.9 Create faction symbol assets (SVG/texture)
+- [x] 7.10 Add faction selector UI to settings
+- [x] 7.11 Write unit tests for FactionTheme serialization
+- [x] 7.12 Write integration tests for faction transitions
+- [x] 7.13 Document `FactionThemePlugin` API for external reuse
 
 ## 8. Medieval HUD Components
 

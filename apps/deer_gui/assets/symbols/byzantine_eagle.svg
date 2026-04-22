@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g fill="#8b008b" stroke="#4b0082" stroke-width="1.5">
+    <!-- Body -->
+    <ellipse cx="32" cy="36" rx="12" ry="16"/>
+    <!-- Left head -->
+    <circle cx="22" cy="18" r="8"/>
+    <path d="M14 18 Q10 14 8 18 Q10 22 14 18"/>
+    <!-- Right head -->
+    <circle cx="42" cy="18" r="8"/>
+    <path d="M50 18 Q54 14 56 18 Q54 22 50 18"/>
+    <!-- Wings -->
+    <path d="M20 30 Q8 28 6 36 Q10 40 20 36"/>
+    <path d="M44 30 Q56 28 58 36 Q54 40 44 36"/>
+    <!-- Tail -->
+    <path d="M28 52 Q32 58 36 52"/>
+  </g>
+  <!-- Gold crown -->
+  <path d="M24 12 L26 8 L30 12 L34 8 L38 12 L40 8 L42 12" 
+        fill="#ffd700" stroke="#b8860b" stroke-width="1"/>
+  <!-- Gold accents -->
+  <circle cx="22" cy="17" r="2" fill="#ffd700"/>
+  <circle cx="42" cy="17" r="2" fill="#ffd700"/>
+</svg>

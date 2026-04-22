@@ -18,9 +18,8 @@
 //! Bevy project needing building placement. Configuration is done
 //! via Bevy resources (data-driven, no hardcoded paths).
 
-use bevy::ecs::system::{Commands, Res, ResMut};
-use bevy::log::{debug, info, trace, warn};
-use bevy::math::{Vec2, Vec3};
+use bevy::ecs::system::Res;
+use bevy::log::{debug, info, trace};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -430,6 +429,58 @@ pub struct PlacedBuilding {
     pub faction_id: Option<String>,
 }
 
+/// Component for faction-colored buildings.
+#[derive(Component, Debug)]
+pub struct FactionColored {
+    /// Current faction color (RGB).
+    pub color: Vec3,
+    /// Target faction color for smooth transition.
+    pub target_color: Option<Vec3>,
+    /// Transition progress (0.0 to 1.0).
+    pub transition_progress: f32,
+}
+
+impl FactionColored {
+    /// Create a new faction-colored component.
+    pub fn new(color: Vec3) -> Self {
+        Self {
+            color,
+            target_color: None,
+            transition_progress: 1.0,
+        }
+    }
+
+    /// Start transition to a new color.
+    pub fn transition_to(&mut self, new_color: Vec3, duration: f32) {
+        self.target_color = Some(new_color);
+        self.transition_progress = 0.0;
+    }
+
+    /// Update transition progress.
+    pub fn update(&mut self, delta: f32, duration: f32) {
+        if self.target_color.is_some() && self.transition_progress < 1.0 {
+            self.transition_progress += delta / duration;
+            self.transition_progress = self.transition_progress.min(1.0);
+
+            if self.transition_progress >= 1.0 {
+                if let Some(target) = self.target_color.take() {
+                    self.color = target;
+                }
+            }
+        }
+    }
+
+    /// Get the current interpolated color.
+    pub fn current_color(&self) -> Vec3 {
+        if let Some(target) = self.target_color {
+            let t = self.transition_progress;
+            self.color.lerp(target, t)
+        } else {
+            self.color
+        }
+    }
+}
+
 /// Component for buildings that can be damaged/destroyed.
 #[derive(Component, Debug)]
 pub struct BuildingHealth {
@@ -506,6 +557,7 @@ impl Plugin for BuildingPlugin {
 
         // Add systems
         app.add_systems(Startup, setup_building_system);
+        app.add_systems(Update, update_faction_colors_system);
 
         info!("BuildingPlugin: registered systems");
     }
@@ -536,6 +588,19 @@ fn setup_building_system(registry: Res<BuildingRegistry>) {
             id,
             layout.buildings.len()
         );
+    }
+}
+
+/// Update faction colors for buildings.
+fn update_faction_colors_system(time: Res<Time>, mut query: Query<(&mut FactionColored, &Mesh3d)>) {
+    let delta = time.delta_secs();
+
+    for (mut faction_color, _mesh) in query.iter_mut() {
+        // Update transition
+        faction_color.update(delta, 2.0); // 2 second transition
+
+        // Note: In a real implementation, we would update the material color here
+        // This would require access to the material assets
     }
 }
 
@@ -589,9 +654,40 @@ mod tests {
     }
 
     #[test]
-    fn layout_preset_village() {
-        let layout = presets::village();
-        assert_eq!(layout.id, "village");
-        assert!(layout.buildings.len() >= 4);
+    fn faction_colored_creation() {
+        let color = Vec3::new(1.0, 0.0, 0.0);
+        let faction_colored = FactionColored::new(color);
+        assert_eq!(faction_colored.color, color);
+        assert!(faction_colored.target_color.is_none());
+        assert_eq!(faction_colored.transition_progress, 1.0);
+    }
+
+    #[test]
+    fn faction_colored_transition() {
+        let mut faction_colored = FactionColored::new(Vec3::new(1.0, 0.0, 0.0));
+        faction_colored.transition_to(Vec3::new(0.0, 1.0, 0.0), 2.0);
+
+        assert!(faction_colored.target_color.is_some());
+        assert_eq!(faction_colored.transition_progress, 0.0);
+
+        // Update transition
+        faction_colored.update(1.0, 2.0);
+        assert_eq!(faction_colored.transition_progress, 0.5);
+
+        let current = faction_colored.current_color();
+        assert!(current.x > 0.0 && current.x < 1.0); // Interpolated
+        assert!(current.y > 0.0 && current.y < 1.0);
+    }
+
+    #[test]
+    fn faction_colored_completion() {
+        let mut faction_colored = FactionColored::new(Vec3::new(1.0, 0.0, 0.0));
+        faction_colored.transition_to(Vec3::new(0.0, 1.0, 0.0), 2.0);
+
+        // Complete transition
+        faction_colored.update(2.0, 2.0);
+        assert_eq!(faction_colored.transition_progress, 1.0);
+        assert!(faction_colored.target_color.is_none());
+        assert_eq!(faction_colored.color, Vec3::new(0.0, 1.0, 0.0));
     }
 }

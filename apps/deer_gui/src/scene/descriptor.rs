@@ -138,6 +138,25 @@ pub enum GeneratorParams {
         #[serde(default)]
         invert_heightmap: bool,
     },
+    /// Vegetation generator for forests, meadows, and biomes.
+    /// Scatters trees, bushes, and grass based on biome configuration.
+    Vegetation {
+        /// Biome type (Meadow, Forest, Rocky, Coastal, Alpine, Riverbank).
+        biome: String,
+        /// Center position for vegetation scatter.
+        center: [f32; 3],
+        /// Radius in meters for vegetation spread.
+        radius: f32,
+        /// Density multiplier (default: 1.0).
+        #[serde(default = "default_vegetation_density")]
+        density: f32,
+        /// Enable wind animation (default: true).
+        #[serde(default = "default_true_bool")]
+        enable_wind: bool,
+        /// Maximum vegetation draw distance in meters (default: 500.0).
+        #[serde(default = "default_vegetation_draw_distance")]
+        draw_distance: f32,
+    },
 }
 
 fn default_height_scale() -> f32 {
@@ -154,4 +173,16 @@ fn default_chunk_size() -> f32 {
 
 fn default_uv_scale() -> f32 {
     10.0
+}
+
+fn default_vegetation_density() -> f32 {
+    1.0
+}
+
+fn default_true_bool() -> bool {
+    true
+}
+
+fn default_vegetation_draw_distance() -> f32 {
+    500.0
 }

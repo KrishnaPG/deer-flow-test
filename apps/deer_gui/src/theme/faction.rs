@@ -17,8 +17,8 @@
 //! Bevy project needing faction-based theming. Configuration is done
 //! via Bevy resources (data-driven, no hardcoded paths).
 
-use bevy::ecs::system::{Commands, Res, ResMut};
-use bevy::log::{debug, info, trace, warn};
+use bevy::ecs::system::{Res, ResMut};
+use bevy::log::{info, trace, warn};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -269,6 +269,10 @@ pub struct FactionThemeManager {
     pub transition_config: TransitionConfig,
     /// All registered faction themes.
     pub themes: std::collections::HashMap<FactionId, FactionTheme>,
+    /// Current interpolated border style (morphed during transition).
+    pub current_border_style: BorderStyle,
+    /// Current heraldry opacity (0.0 = old faction, 1.0 = new faction).
+    pub heraldry_opacity: f32,
 }
 
 impl Default for FactionThemeManager {
@@ -286,6 +290,8 @@ impl Default for FactionThemeManager {
             transition_progress: 1.0,
             transition_config: TransitionConfig::default(),
             themes,
+            current_border_style: BorderStyle::Solid,
+            heraldry_opacity: 1.0,
         }
     }
 }
@@ -310,9 +316,23 @@ impl FactionThemeManager {
             self.transition_progress += delta / self.transition_config.duration;
             self.transition_progress = self.transition_progress.min(1.0);
 
+            // Update border style morphing (switch at midpoint)
+            if let Some(target) = &self.target {
+                if self.transition_progress >= 0.5 {
+                    self.current_border_style = target.border_style;
+                } else {
+                    self.current_border_style = self.current.border_style;
+                }
+            }
+
+            // Update heraldry opacity (crossfade)
+            self.heraldry_opacity = self.transition_progress;
+
             if self.transition_progress >= 1.0 {
                 if let Some(target) = self.target.take() {
                     self.current = target;
+                    self.current_border_style = self.current.border_style;
+                    self.heraldry_opacity = 1.0;
                 }
             }
         }
@@ -331,6 +351,16 @@ impl FactionThemeManager {
         } else {
             self.current.primary_color()
         }
+    }
+
+    /// Get the current border style (interpolated during transition).
+    pub fn current_border_style(&self) -> BorderStyle {
+        self.current_border_style
+    }
+
+    /// Get the heraldry crossfade opacity (0.0 = old, 1.0 = new).
+    pub fn heraldry_opacity(&self) -> f32 {
+        self.heraldry_opacity
     }
 
     /// Get a faction theme by ID.
@@ -502,11 +532,63 @@ mod tests {
     }
 
     #[test]
+    fn faction_theme_serialization() {
+        use serde_json;
+
+        let theme = FactionTheme::english();
+        let json = serde_json::to_string(&theme).unwrap();
+        let deserialized: FactionTheme = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(theme.id, deserialized.id);
+        assert_eq!(theme.primary, deserialized.primary);
+        assert_eq!(theme.border_style, deserialized.border_style);
+    }
+
+    #[test]
     fn faction_theme_manager_transition() {
         let mut manager = FactionThemeManager::default();
         manager.transition_to(FactionId::English);
         assert!(manager.target.is_some());
         assert_eq!(manager.transition_progress, 0.0);
+    }
+
+    #[test]
+    fn border_style_morphing() {
+        let mut manager = FactionThemeManager::default();
+        manager.transition_to(FactionId::French);
+
+        // Initial state should be Neutral's border style
+        assert_eq!(manager.current_border_style(), BorderStyle::Solid);
+
+        // Simulate transition progress
+        manager.update_transition(1.5); // Half of 3.0s duration
+
+        // At 50% progress, should still be current style (neutral solid)
+        // because transition hasn't passed 0.5 threshold yet
+        assert_eq!(manager.transition_progress, 0.5);
+        assert_eq!(manager.current_border_style(), BorderStyle::Solid);
+
+        // Advance past midpoint
+        manager.update_transition(0.1);
+        assert!(manager.transition_progress > 0.5);
+        assert_eq!(manager.current_border_style(), BorderStyle::Double); // French style
+    }
+
+    #[test]
+    fn heraldry_crossfade() {
+        let mut manager = FactionThemeManager::default();
+        manager.transition_to(FactionId::English);
+
+        // Initial heraldry opacity
+        assert_eq!(manager.heraldry_opacity(), 0.0);
+
+        // Simulate transition progress
+        manager.update_transition(1.5);
+        assert_eq!(manager.heraldry_opacity(), 0.5);
+
+        // Complete transition
+        manager.update_transition(3.0);
+        assert_eq!(manager.heraldry_opacity(), 1.0);
     }
 
     #[test]

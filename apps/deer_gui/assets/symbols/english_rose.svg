@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g fill="none" stroke="#8a1a1a" stroke-width="2">
+    <!-- Outer petals -->
+    <circle cx="32" cy="20" r="8" fill="#c41e3a"/>
+    <circle cx="44" cy="28" r="8" fill="#c41e3a"/>
+    <circle cx="44" cy="42" r="8" fill="#c41e3a"/>
+    <circle cx="32" cy="48" r="8" fill="#c41e3a"/>
+    <circle cx="20" cy="42" r="8" fill="#c41e3a"/>
+    <circle cx="20" cy="28" r="8" fill="#c41e3a"/>
+    <!-- Center -->
+    <circle cx="32" cy="34" r="6" fill="#ffd700"/>
+    <!-- Leaves -->
+    <path d="M32 52 Q26 58 20 56" stroke="#228b22" stroke-width="3" fill="none"/>
+    <path d="M32 52 Q38 58 44 56" stroke="#228b22" stroke-width="3" fill="none"/>
+  </g>
+</svg>
