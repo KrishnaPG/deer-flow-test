@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Energy Gradient - Project Setup & Run Script
-# Creates virtual environment, installs dependencies, and runs main.py
+# Berg10.Agent - Project Setup & Run Script
+# Creates virtual environment, installs dependencies, and runs berg10_agent
 #
 
 set -e  # Exit on error
@@ -71,19 +71,19 @@ if [ "$REINSTALL" = true ]; then
 
     # Verify installation
     echo -e "${YELLOW}Verifying installation...${NC}"
-    python3 -c "import torch; import numpy; import pandas; import pyarrow; print(f'  torch: {torch.__version__}'); print(f'  numpy: {numpy.__version__}'); print(f'  pandas: {pandas.__version__}'); print(f'  pyarrow: {pyarrow.__version__}')"
+    python3 -c "import pocketflow; import litellm; import fastapi; print('Dependencies verified.')"
 else
     echo -e "${GREEN}Dependencies already up-to-date (fast path)${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}Running main.py...${NC}"
+echo -e "${GREEN}Running berg10_agent...${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
-# Run main.py as a module so relative imports work
-python3 -m app.main
+# Run berg10_agent as a module
+python3 -m berg10_agent
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
