@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+import json as _json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any
+
+import litellm
+
+# Suppress LiteLLM debug output (Provider List messages, etc.)
+litellm.suppress_debug_info = True
+
+if TYPE_CHECKING:
+    from ..models import ModelConfig
 
 
 @dataclass
@@ -57,12 +67,25 @@ class LLMClient:
         self.api_key = api_key
         self.base_url = base_url or api_base
 
-    def _build_kwargs(self, **extra: Any) -> dict[str, Any]:
-        kw: dict[str, Any] = {"model": self.model}
-        if self.api_key:
-            kw["api_key"] = self.api_key
-        if self.base_url:
-            kw["api_base"] = self.base_url
+    def _build_kwargs(
+        self, model_config: ModelConfig | None = None, **extra: Any
+    ) -> dict[str, Any]:
+        """Build kwargs for LiteLLM completion call.
+
+        If model_config is provided, use its settings. Otherwise fall back to defaults.
+        """
+        if model_config:
+            kw: dict[str, Any] = {"model": model_config.model}
+            if model_config.api_key:
+                kw["api_key"] = model_config.api_key
+            if model_config.base_url:
+                kw["api_base"] = model_config.base_url
+        else:
+            kw = {"model": self.model}
+            if self.api_key:
+                kw["api_key"] = self.api_key
+            if self.base_url:
+                kw["api_base"] = self.base_url
         kw.update(extra)
         return kw
 
@@ -72,12 +95,13 @@ class LLMClient:
         tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        model_config: ModelConfig | None = None,
     ) -> CompletionResult:
         """Non-streaming completion."""
-        import litellm
 
         msg_dicts = [_msg_to_dict(m) for m in messages]
         kw = self._build_kwargs(
+            model_config=model_config,
             messages=msg_dicts,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -101,12 +125,13 @@ class LLMClient:
         tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        model_config: ModelConfig | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         """Streaming completion - yields chunks as they arrive."""
-        import litellm
 
         msg_dicts = [_msg_to_dict(m) for m in messages]
         kw = self._build_kwargs(
+            model_config=model_config,
             messages=msg_dicts,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -139,8 +164,6 @@ def _msg_to_dict(msg: ChatMessage | dict[str, Any]) -> dict[str, Any]:
 def _parse_tool_calls(choice: Any) -> list[ToolCall]:
     calls: list[ToolCall] = []
     for tc in choice.message.tool_calls:
-        import json as _json
-
         args = (
             _json.loads(tc.function.arguments)
             if isinstance(tc.function.arguments, str)

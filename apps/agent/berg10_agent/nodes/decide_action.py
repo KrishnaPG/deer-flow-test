@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any, AsyncIterator, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from pocketflow import AsyncNode
 
 from ..constants import ToolName
 from ..llm import LLMClient
-from ..llm.client import ChatMessage, CompletionChunk
+from ..llm.client import ChatMessage
+
+if TYPE_CHECKING:
+    from ..models import ModelConfig
 
 TOOL_DEFINITIONS = [
     {
@@ -127,6 +130,7 @@ class DecideActionNode(AsyncNode):
         history = shared.get("history", [])
         memory = shared.get("memory_content", "")
         skills = shared.get("skills_content", "")
+        model_config: ModelConfig | None = shared.get("model_config")
 
         messages = [ChatMessage(role="system", content=self.system_prompt)]
         if memory:
@@ -134,17 +138,20 @@ class DecideActionNode(AsyncNode):
         if skills:
             messages.append(ChatMessage(role="system", content=f"[Skills]\n{skills}"))
         messages.extend(history)
-        return {"messages": messages}
+        return {"messages": messages, "model_config": model_config}
 
     async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+        model_config: ModelConfig | None = prep_res.get("model_config")
         result = await self.llm.complete(
             messages=prep_res["messages"],
             tools=self.tools,
+            model_config=model_config,
         )
         return {
             "content": result.content,
             "tool_calls": result.tool_calls,
             "finish_reason": result.finish_reason,
+            "model_config": model_config,
         }
 
     async def exec_stream(
@@ -153,10 +160,12 @@ class DecideActionNode(AsyncNode):
         emit: Callable[[str], Any] | None = None,
     ) -> dict[str, Any]:
         """Streaming execution - emits tokens as they arrive."""
+        model_config: ModelConfig | None = prep_res.get("model_config")
         content_parts: list[str] = []
         async for chunk in self.llm.stream(
             messages=prep_res["messages"],
             tools=self.tools,
+            model_config=model_config,
         ):
             if chunk.content:
                 content_parts.append(chunk.content)
@@ -168,6 +177,7 @@ class DecideActionNode(AsyncNode):
             "content": full_content,
             "tool_calls": [],
             "finish_reason": "stop",
+            "model_config": model_config,
         }
 
     async def post_async(
@@ -175,10 +185,16 @@ class DecideActionNode(AsyncNode):
     ) -> str:
         content = exec_res["content"]
         tool_calls = exec_res["tool_calls"]
+        model_config: ModelConfig | None = exec_res.get("model_config")
 
-        # Append assistant message to history
+        # Append assistant message to history with model_id
         history = shared.get("history", [])
-        assistant_msg: dict[str, Any] = {"role": "assistant", "content": content}
+        assistant_msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": content,
+        }
+        if model_config:
+            assistant_msg["model_id"] = model_config.id
         if tool_calls:
             assistant_msg["tool_calls"] = [
                 {"id": tc.id, "name": tc.name, "arguments": tc.arguments} for tc in tool_calls

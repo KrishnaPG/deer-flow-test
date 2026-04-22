@@ -15,6 +15,7 @@ class Session:
     history: list[dict[str, Any]] = field(default_factory=list)
     cancelled: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
+    current_models: dict[str, str] = field(default_factory=dict)  # mode -> model_id
 
 
 class SessionManager:
