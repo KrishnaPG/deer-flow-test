@@ -5,7 +5,7 @@ All message types, tool names, configuration keys, and protocol constants
 defined here for easy modification and extension.
 """
 
-from enum import Enum, auto
+from enum import Enum
 from typing import Final
 
 

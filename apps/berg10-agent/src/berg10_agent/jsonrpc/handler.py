@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Optional, TypeVar, Union
+from uuid import uuid4
 
 from .core import (
     ErrorCode,

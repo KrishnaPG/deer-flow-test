@@ -1,0 +1,21 @@
+# Example AGENTS.md Skills File
+
+This file defines agent capabilities and behavioral guidelines.
+
+## Code Review
+
+- Always check for security issues before committing
+- Validate all user inputs against schemas
+- Use type hints for all function signatures
+
+## File Operations
+
+- Never modify files outside the working directory
+- Always create backups before applying patches
+- Prefer reading files with line ranges for large files
+
+## Shell Commands
+
+- Timeout all commands to prevent hanging
+- Never run destructive commands without confirmation
+- Capture both stdout and stderr
