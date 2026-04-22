@@ -15,7 +15,7 @@ class ListFilesNode(AsyncNode):
         super().__init__()
         self._work_dir = Path(work_dir).resolve()
 
-    async def prep(self, shared: dict[str, Any]) -> dict[str, Any]:
+    async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         tc = shared.get("current_tool_call", {})
         args = tc.arguments if hasattr(tc, "arguments") else tc.get("arguments", {})
         return {
@@ -23,7 +23,7 @@ class ListFilesNode(AsyncNode):
             "pattern": args.get("pattern", "*"),
         }
 
-    async def exec(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+    async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         target = (self._work_dir / prep_res["path"]).resolve()
 
         if not str(target).startswith(str(self._work_dir)):
@@ -46,7 +46,7 @@ class ListFilesNode(AsyncNode):
 
         return {"entries": entries, "path": str(target.relative_to(self._work_dir))}
 
-    async def post(
+    async def post_async(
         self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: dict[str, Any]
     ) -> str:
         tc = shared.get("current_tool_call", {})

@@ -16,7 +16,7 @@ class RunCommandNode(AsyncNode):
         self._work_dir = work_dir
         self._default_timeout = default_timeout
 
-    async def prep(self, shared: dict[str, Any]) -> dict[str, Any]:
+    async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         tc = shared.get("current_tool_call", {})
         args = tc.arguments if hasattr(tc, "arguments") else tc.get("arguments", {})
         return {
@@ -24,7 +24,7 @@ class RunCommandNode(AsyncNode):
             "timeout": args.get("timeout", self._default_timeout),
         }
 
-    async def exec(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+    async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         command = prep_res["command"]
         if not command:
             return {"error": "Command is required"}
@@ -52,7 +52,7 @@ class RunCommandNode(AsyncNode):
         except Exception as e:
             return {"error": f"Command failed: {e}", "exit_code": -1}
 
-    async def post(
+    async def post_async(
         self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: dict[str, Any]
     ) -> str:
         tc = shared.get("current_tool_call", {})

@@ -23,7 +23,7 @@ class CompactHistoryNode(AsyncNode):
         self.max_tokens = max_tokens
         self.compact_threshold = compact_threshold
 
-    async def prep(self, shared: dict[str, Any]) -> dict[str, Any]:
+    async def prep_async(self, shared: dict[str, Any]) -> dict[str, Any]:
         history = shared.get("history", [])
         token_count = _estimate_tokens(history)
         return {
@@ -32,7 +32,7 @@ class CompactHistoryNode(AsyncNode):
             "needs_compaction": token_count > self.compact_threshold,
         }
 
-    async def exec(self, prep_res: dict[str, Any]) -> dict[str, Any]:
+    async def exec_async(self, prep_res: dict[str, Any]) -> dict[str, Any]:
         if not prep_res["needs_compaction"]:
             return {"compacted": False, "history": prep_res["history"]}
 
@@ -64,7 +64,7 @@ class CompactHistoryNode(AsyncNode):
 
         return {"compacted": True, "history": compacted}
 
-    async def post(
+    async def post_async(
         self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: dict[str, Any]
     ) -> str:
         shared["history"] = exec_res["history"]
