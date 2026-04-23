@@ -22,4 +22,4 @@ pub use spiral_trails::SpiralTrail;
 pub use static_glow::GlowEntity;
 pub use systems::{barge_system, cloud_system, drop_pod_system, traveller_system};
 pub use terrain::{MedievalTerrain, TerrainLayerConfig};
-pub use vegetation::{spawn_vegetation, VegetationGenerator};
+pub use vegetation::{VegetationGenerator, VegetationInstance, VegetationKind};
