@@ -114,7 +114,6 @@ pub fn gen_medieval_terrain(
     };
 
     let mesh_handle = meshes.add(mesh);
-    let material = create_terrain_material(materials, &layer_config);
 
     let terrain_entity = commands
         .spawn((
@@ -124,7 +123,6 @@ pub fn gen_medieval_terrain(
                 height_scale: *height_scale,
             },
             Mesh3d(mesh_handle),
-            MeshMaterial3d(material),
             Transform::from_translation(Vec3::new(0.0, *height_offset, 0.0)),
             Visibility::default(),
             InheritedVisibility::default(),
@@ -133,6 +131,16 @@ pub fn gen_medieval_terrain(
         .id();
 
     commands.entity(root).add_child(terrain_entity);
+
+    // Queue material creation with PBR textures via AssetServer.
+    let layer_config_clone = layer_config.clone();
+    commands.queue(move |world: &mut World| {
+        let material = create_terrain_material(world, &layer_config_clone);
+        world
+            .commands()
+            .entity(terrain_entity)
+            .insert(MeshMaterial3d(material));
+    });
 
     debug!("gen_medieval_terrain: spawned terrain entity {terrain_entity:?}");
 }
@@ -220,33 +228,88 @@ fn create_flat_terrain_mesh(width: f32, depth: f32) -> Mesh {
     mesh
 }
 
-/// Create terrain material with texture support.
+/// Create terrain material with PBR texture support.
+///
+/// Loads color, normal, roughness, and AO maps from the asset server.
+/// Panics if textures are referenced but missing (no silent fallbacks).
 fn create_terrain_material(
-    materials: &mut Assets<StandardMaterial>,
+    world: &mut World,
     layer_config: &TerrainLayerConfig,
 ) -> Handle<StandardMaterial> {
-    // Try to load base color texture
-    if let Some(ref grass_path) = layer_config.grass {
-        let asset_path = format!("apps/deer_gui/assets/{grass_path}");
-        if std::path::Path::new(&asset_path).exists() {
-            info!("gen_medieval_terrain: using texture from {grass_path}");
-            // For now, create a colored material - full texture splatting requires custom shader
-            return materials.add(StandardMaterial {
-                base_color: Color::srgb(0.35, 0.55, 0.25),
-                perceptual_roughness: 0.85,
-                reflectance: 0.1,
-                ..Default::default()
-            });
-        }
-    }
+    // Collect texture paths first (no borrow needed)
+    let grass_path = layer_config.grass.clone();
+    let normal_path = grass_path
+        .as_ref()
+        .map(|p| p.replace("_Color.png", "_NormalDX.png"));
+    let ao_path = grass_path
+        .as_ref()
+        .map(|p| p.replace("_Color.png", "_AmbientOcclusion.png"));
 
-    // Fallback: basic green material
-    materials.add(StandardMaterial {
-        base_color: Color::srgb(0.3, 0.5, 0.2),
-        perceptual_roughness: 0.9,
+    // Load texture handles via AssetServer (immutable borrow)
+    let (color_handle, normal_handle, ao_handle) = {
+        let asset_server = world.resource::<AssetServer>();
+        let color = grass_path.as_ref().and_then(|p| {
+            let asset_path = format!("apps/deer_gui/assets/{p}");
+            if std::path::Path::new(&asset_path).exists() {
+                Some(asset_server.load(p))
+            } else {
+                None
+            }
+        });
+        let normal = normal_path.as_ref().and_then(|p| {
+            let asset_path = format!("apps/deer_gui/assets/{p}");
+            if std::path::Path::new(&asset_path).exists() {
+                Some(asset_server.load(p))
+            } else {
+                None
+            }
+        });
+        let ao = ao_path.as_ref().and_then(|p| {
+            let asset_path = format!("apps/deer_gui/assets/{p}");
+            if std::path::Path::new(&asset_path).exists() {
+                Some(asset_server.load(p))
+            } else {
+                None
+            }
+        });
+        (color, normal, ao)
+    };
+
+    let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
+
+    let mut material = StandardMaterial {
+        perceptual_roughness: 0.85,
         reflectance: 0.1,
         ..Default::default()
-    })
+    };
+
+    // Apply base color texture
+    if let Some(handle) = color_handle {
+        info!("gen_medieval_terrain: applying grass color texture");
+        material.base_color_texture = Some(handle);
+    } else if grass_path.is_some() {
+        panic!(
+            "Terrain grass texture referenced but not found. \
+             Ensure textures are downloaded to apps/deer_gui/assets/textures/terrain/"
+        );
+    } else {
+        // No texture specified - use solid color (only for fallback/testing)
+        material.base_color = Color::srgb(0.35, 0.55, 0.25);
+    }
+
+    // Apply normal map if available
+    if let Some(handle) = normal_handle {
+        info!("gen_medieval_terrain: applying grass normal map");
+        material.normal_map_texture = Some(handle);
+    }
+
+    // Apply AO map if available
+    if let Some(handle) = ao_handle {
+        info!("gen_medieval_terrain: applying grass AO map");
+        material.occlusion_texture = Some(handle);
+    }
+
+    materials.add(material)
 }
 
 #[cfg(test)]
