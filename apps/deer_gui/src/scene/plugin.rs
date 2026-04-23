@@ -15,6 +15,7 @@ use super::generators::{barge_system, cloud_system, drop_pod_system, traveller_s
 use super::manager::SceneManager;
 use super::tet::config::TetSceneConfig;
 use super::tet::systems::{data_trail_system, tet_glow_system};
+use super::traits::SceneConfig;
 use crate::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
@@ -94,9 +95,14 @@ fn scene_startup_system(
     );
     let theme_ref = theme.as_deref();
 
-    // Load scene from file if not already registered
+    // Determine the scene name to activate.
+    // If the scene file defines a different name (e.g., case) than the CLI argument,
+    // we use the name declared inside the file.
     let requested_scene_str = requested_scene.as_str();
-    if !manager.available_scenes().contains(&requested_scene_str) {
+    let scene_name_to_activate = if manager.available_scenes().contains(&requested_scene_str) {
+        requested_scene_str
+    } else {
+        // Load from file and get the actual declared scene name
         let config = DescriptorSceneConfig::from_file(requested_scene_str).unwrap_or_else(|e| {
             panic!(
                 "Failed to load scene '{}' from file: {}. \
@@ -104,12 +110,16 @@ fn scene_startup_system(
                 requested_scene, e
             )
         });
+        // Store the actual name before moving config into Box
+        let actual_name = config.name().to_string();
         manager.register(Box::new(config));
-    }
+        // We can't return a reference to local String, so we leak it for 'static
+        Box::leak(actual_name.into_boxed_str())
+    };
 
     // Activate the scene — panic if activation fails
     let activated = manager.activate(
-        requested_scene_str,
+        scene_name_to_activate,
         &mut commands,
         &mut meshes,
         &mut materials,
@@ -120,9 +130,9 @@ fn scene_startup_system(
 
     if !activated {
         panic!(
-            "Scene '{}' not found after registration. \
+            "Scene '{}' (requested as '{}') not found after registration. \
              This should never happen — the scene was just registered.",
-            requested_scene
+            scene_name_to_activate, requested_scene
         );
     }
 
