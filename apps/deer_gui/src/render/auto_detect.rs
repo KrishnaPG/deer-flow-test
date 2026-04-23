@@ -2,9 +2,8 @@
 //!
 //! Profiles the GPU and system to recommend appropriate quality settings.
 
-use bevy::log::{debug, info, warn};
+use bevy::log::{info, warn};
 use bevy::prelude::*;
-use bevy::render::renderer::RenderAdapter;
 
 use super::quality::{QualityPreset, QualitySettings};
 

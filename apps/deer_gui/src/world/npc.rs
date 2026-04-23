@@ -247,7 +247,7 @@ pub struct NpcMovement {
 
 impl NpcMovement {
     /// Create a new movement component based on NPC type.
-    pub fn for_type(npc_type: NpcType) -> Self {
+    pub fn for_type(_npc_type: NpcType) -> Self {
         Self {
             speed_multiplier: 1.0,
             velocity: Vec3::ZERO,
@@ -308,6 +308,7 @@ impl Plugin for NpcPlugin {
 // ---------------------------------------------------------------------------
 
 /// Setup the NPC system.
+#[allow(dead_code)]
 fn setup_npc_system(
     mut commands: Commands,
     config: Res<NpcGlobalConfig>,
@@ -335,6 +336,7 @@ fn setup_npc_system(
 }
 
 /// Spawn a group of NPCs based on spawn configuration.
+#[allow(dead_code)]
 fn spawn_npc_group(commands: &mut Commands, _asset_server: &AssetServer, spawn: &NpcSpawnConfig) {
     let center = Vec3::from(spawn.center);
     let count = spawn.count;
@@ -371,7 +373,7 @@ fn npc_animation_system(tag: Res<ActiveSceneTag>, mut npcs: Query<(&mut Npc, &mu
     if tag.0.as_deref() != Some("medieval_open") {
         return;
     }
-    for (mut npc, mut movement) in npcs.iter_mut() {
+    for (mut npc, movement) in npcs.iter_mut() {
         // Update animation based on movement
         if movement.velocity.length_squared() > 0.01 {
             if npc.animation_state != AnimationState::Walk

@@ -451,7 +451,7 @@ impl FactionColored {
     }
 
     /// Start transition to a new color.
-    pub fn transition_to(&mut self, new_color: Vec3, duration: f32) {
+    pub fn transition_to(&mut self, new_color: Vec3, _duration: f32) {
         self.target_color = Some(new_color);
         self.transition_progress = 0.0;
     }

@@ -3,7 +3,6 @@
 //! Configures bloom, tone mapping, and other screen-space effects.
 
 use bevy::prelude::*;
-use bevy::render::view::ColorGrading;
 use serde::{Deserialize, Serialize};
 
 /// Post-processing configuration.

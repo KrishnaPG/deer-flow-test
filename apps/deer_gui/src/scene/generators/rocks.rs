@@ -5,11 +5,10 @@
 
 use std::f32::consts::TAU;
 
-use bevy::asset::AssetServer;
 use bevy::ecs::system::Commands;
 use bevy::log::{debug, info, warn};
 use bevy::math::Vec3;
-use bevy::prelude::{ChildOf, Entity, InheritedVisibility, Name, SceneRoot, Transform, Visibility};
+use bevy::prelude::{Entity, InheritedVisibility, Name, Transform, Visibility};
 use rand::{thread_rng, Rng};
 
 use crate::scene::descriptor::GeneratorParams;

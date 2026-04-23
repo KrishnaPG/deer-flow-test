@@ -4,12 +4,12 @@
 
 use bevy::ecs::system::Commands;
 use bevy::log::{debug, info, warn};
-use bevy::prelude::{ChildOf, Entity, InheritedVisibility, Name, Transform, Visibility};
+use bevy::prelude::{Entity, InheritedVisibility, Name, Transform, Visibility};
 
 use bevy_water::WaterSettings;
 
 use crate::scene::descriptor::GeneratorParams;
-use crate::world::water::{WaterBody, WaterBodyDef, WaterGlobalConfig, WaterType};
+use crate::world::water::{WaterBody, WaterGlobalConfig};
 
 /// Generate water bodies from scene descriptor parameters.
 pub fn gen_water(
