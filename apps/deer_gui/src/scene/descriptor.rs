@@ -7,6 +7,9 @@
 use bevy::log::trace;
 use serde::Deserialize;
 
+use crate::world::npc::NpcSpawnConfig;
+use crate::world::water::WaterBodyDef;
+
 // ---------------------------------------------------------------------------
 // SceneDescriptor
 // ---------------------------------------------------------------------------
@@ -161,6 +164,24 @@ pub enum GeneratorParams {
         #[serde(default = "default_vegetation_draw_distance")]
         draw_distance: f32,
     },
+    Foliage {
+        /// Biome type name.
+        biome: String,
+        /// Wind speed in m/s (default: 2.0).
+        #[serde(default = "default_wind_speed")]
+        wind_speed: f32,
+        /// Maximum draw distance in meters (default: 500.0).
+        #[serde(default = "default_vegetation_draw_distance")]
+        draw_distance: f32,
+    },
+    Water {
+        /// Water body definitions.
+        bodies: Vec<WaterBodyDef>,
+    },
+    Npcs {
+        /// NPC spawn configurations.
+        spawns: Vec<NpcSpawnConfig>,
+    },
 }
 
 fn default_height_scale() -> f32 {
@@ -189,4 +210,8 @@ fn default_true_bool() -> bool {
 
 fn default_vegetation_draw_distance() -> f32 {
     500.0
+}
+
+fn default_wind_speed() -> f32 {
+    2.0
 }

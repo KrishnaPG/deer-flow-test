@@ -2,8 +2,10 @@
 
 pub mod cloud_layer;
 pub mod drop_pods;
+pub mod foliage;
 pub mod gltf_subscene;
 pub mod monolith;
+pub mod npcs;
 pub mod path_travellers;
 pub mod registry;
 pub mod river_barges;
@@ -13,6 +15,7 @@ pub mod static_glow;
 pub mod systems;
 pub mod terrain;
 pub mod vegetation;
+pub mod water;
 
 pub use cloud_layer::CloudParticle;
 pub use drop_pods::DropPod;

@@ -85,6 +85,10 @@ impl GeneratorRegistry {
         registry.register("medieval_terrain", super::terrain::gen_medieval_terrain);
         // Vegetation for biome-based foliage scattering
         registry.register("vegetation", super::vegetation::gen_vegetation);
+        // Scene-driven foliage, water, and NPC generators
+        registry.register("foliage", super::foliage::gen_foliage);
+        registry.register("water", super::water::gen_water);
+        registry.register("npcs", super::npcs::gen_npcs);
         debug!(
             "GeneratorRegistry::with_builtins — {} generators",
             registry.factories.len(),

@@ -26,6 +26,12 @@ use bevy_hanabi::prelude::*;
 use bevy_water::{WaterPlugin as BevyWaterPlugin, WaterSettings};
 use serde::{Deserialize, Serialize};
 
+use crate::scene::common::ActiveSceneTag;
+
+fn is_medieval(tag: &Res<ActiveSceneTag>) -> bool {
+    tag.0.as_deref() == Some("medieval_open")
+}
+
 /// Trait for terrain water integration.
 ///
 /// This provides a common interface for terrain systems to integrate with water.
@@ -483,8 +489,7 @@ impl Plugin for WaterPlugin {
         // Add splash configuration
         app.init_resource::<SplashConfig>();
 
-        // Add systems
-        app.add_systems(Startup, (setup_water_system, setup_splash_particles));
+        // Add per-frame systems (scene-conditional via ActiveSceneTag check)
         app.add_systems(
             Update,
             (
@@ -526,7 +531,14 @@ fn setup_water_system(config: Res<WaterGlobalConfig>) {
 }
 
 /// Update wave animations for water bodies.
-fn update_water_waves_system(time: Res<Time>, mut water_bodies: Query<&mut WaterBody>) {
+fn update_water_waves_system(
+    time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
+    mut water_bodies: Query<&mut WaterBody>,
+) {
+    if !is_medieval(&tag) {
+        return;
+    }
     let delta = time.delta_secs();
 
     for mut water in water_bodies.iter_mut() {
@@ -536,19 +548,27 @@ fn update_water_waves_system(time: Res<Time>, mut water_bodies: Query<&mut Water
 
 /// Update water level from config to bevy_water settings.
 fn update_water_level_system(
+    tag: Res<ActiveSceneTag>,
     config: Res<WaterGlobalConfig>,
     mut water_settings: ResMut<WaterSettings>,
 ) {
+    if !is_medieval(&tag) {
+        return;
+    }
     // Sync water level from our config to bevy_water settings
     water_settings.height = config.water_level;
 }
 
 /// Update swimming state for entities in water.
 fn update_swimming_system(
+    tag: Res<ActiveSceneTag>,
     config: Res<WaterGlobalConfig>,
     time: Res<Time>,
     mut query: Query<(&mut Swimmable, &Transform)>,
 ) {
+    if !is_medieval(&tag) {
+        return;
+    }
     let delta = time.delta_secs();
 
     for (mut swimmable, transform) in query.iter_mut() {
@@ -571,67 +591,15 @@ fn update_swimming_system(
     }
 }
 
-/// Setup splash particle effects.
-fn setup_splash_particles(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
-    // Create expression writer for particle attributes
-    let writer = ExprWriter::new();
-
-    // Particle age starts at 0
-    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.).expr());
-
-    // Particle lifetime
-    let lifetime = writer.lit(0.8).expr();
-    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
-
-    // Spawn position - circle at origin
-    let init_pos = SetPositionCircleModifier {
-        center: writer.lit(Vec3::ZERO).expr(),
-        axis: writer.lit(Vec3::Y).expr(),
-        radius: writer.lit(0.2).expr(),
-        dimension: ShapeDimension::Surface,
-    };
-
-    // Initial velocity - upward burst
-    let init_vel = SetVelocityCircleModifier {
-        center: writer.lit(Vec3::ZERO).expr(),
-        axis: writer.lit(Vec3::Y).expr(),
-        speed: writer.lit(3.0).expr(),
-    };
-
-    let module = writer.finish();
-
-    // Color gradient - white to transparent
-    let mut gradient = bevy_hanabi::Gradient::new();
-    gradient.add_key(0.0, Vec4::new(0.8, 0.9, 1.0, 0.8));
-    gradient.add_key(1.0, Vec4::new(0.6, 0.8, 0.9, 0.0));
-
-    // Create the effect asset
-    let effect = EffectAsset::new(256, SpawnerSettings::once(32.0.into()), module)
-        .init(init_pos)
-        .init(init_vel)
-        .init(init_age)
-        .init(init_lifetime)
-        .render(ColorOverLifetimeModifier::new(gradient))
-        .render(SizeOverLifetimeModifier {
-            gradient: bevy_hanabi::Gradient::constant(Vec3::splat(0.05)),
-            screen_space_size: false,
-        });
-
-    let effect_handle = effects.add(effect);
-
-    commands.spawn((
-        Name::new("WaterSplashEffect"),
-        ParticleEffect::new(effect_handle),
-        WaterSplashEmitter,
-        Transform::default(),
-        Visibility::default(),
-    ));
-
-    info!("WaterPlugin: splash particle effect created");
-}
-
 /// Update splash effect states.
-fn update_splash_effects_system(time: Res<Time>, mut query: Query<&mut SplashEffect>) {
+fn update_splash_effects_system(
+    tag: Res<ActiveSceneTag>,
+    time: Res<Time>,
+    mut query: Query<&mut SplashEffect>,
+) {
+    if !is_medieval(&tag) {
+        return;
+    }
     let delta = time.delta_secs();
 
     for mut splash in query.iter_mut() {
@@ -641,54 +609,15 @@ fn update_splash_effects_system(time: Res<Time>, mut query: Query<&mut SplashEff
 
 /// Trigger splash when entities contact water.
 fn trigger_splash_on_water_contact_system(
+    tag: Res<ActiveSceneTag>,
     config: Res<WaterGlobalConfig>,
     water_config: Res<SplashConfig>,
     mut commands: Commands,
     mut splashables: Query<(&Transform, &Swimmable, Option<&mut SplashEffect>), Changed<Transform>>,
     water_emitters: Query<(Entity, &Transform), With<WaterSplashEmitter>>,
 ) {
-    if !config.enable_splash {
+    if !is_medieval(&tag) || !config.enable_splash {
         return;
-    }
-
-    for (transform, swimmable, splash_effect) in splashables.iter_mut() {
-        let entity_height = transform.translation.y;
-        let water_level = config.water_level;
-
-        // Check if entity just entered water (crossed from above to below)
-        if entity_height < water_level && entity_height > water_level - 0.5 {
-            // Trigger splash effect
-            if let Some(mut splash) = splash_effect {
-                splash.trigger(1.0);
-            } else {
-                // Spawn a one-time splash effect
-                commands.spawn((
-                    Name::new("WaterSplash"),
-                    SplashEffect {
-                        active: true,
-                        intensity: 1.0,
-                        burst_timer: water_config.particle_lifetime,
-                        burst_duration: water_config.particle_lifetime,
-                    },
-                    transform.clone(),
-                    Visibility::default(),
-                ));
-            }
-
-            // Find nearest water emitter and trigger it
-            let entity_pos = transform.translation.truncate();
-            for (_, water_transform) in water_emitters.iter() {
-                let water_pos = water_transform.translation.truncate();
-                let distance = entity_pos.distance(water_pos);
-
-                // If within 10 meters of water emitter, trigger splash
-                if distance < 10.0 {
-                    // This would trigger the particle effect at the water surface
-                    // For now, we just log it
-                    trace!("Splash triggered at water surface");
-                }
-            }
-        }
     }
 }
 

@@ -6,7 +6,7 @@ SceneDescriptor(
     gltf_scene: None,
     theme: "medieval",
     generators: [
-        // Meadow terrain - flat green ground
+        // Meadow terrain with heightmap and PBR textures
         (
             generator: "medieval_terrain",
             params: Terrain(
@@ -27,7 +27,52 @@ SceneDescriptor(
                 invert_heightmap: false,
             ),
         ),
-        // Procedural trees using simple geometry
+        // Water system - lake/river
+        (
+            generator: "water",
+            params: Water(
+                bodies: [
+                    (
+                        id: "main_lake",
+                        name: "Lake",
+                        water_type: Lake,
+                        position: (0.0, 5.0, 0.0),
+                        size: (200.0, 200.0),
+                        waves: (),
+                        color: (0.1, 0.3, 0.5, 0.8),
+                        opacity: 0.8,
+                        has_collision: true,
+                        depth: 5.0,
+                    ),
+                ],
+            ),
+        ),
+        // Foliage system - meadow biome
+        (
+            generator: "foliage",
+            params: Foliage(
+                biome: "Meadow",
+                wind_speed: 2.0,
+                draw_distance: 500.0,
+            ),
+        ),
+        // NPCs - small group of peasants
+        (
+            generator: "npcs",
+            params: Npcs(
+                spawns: [
+                    (
+                        npc_type: Peasant,
+                        count: 5,
+                        radius: 30.0,
+                        center: (0.0, 10.0, 0.0),
+                        behavior: Wander(radius: 20.0),
+                        faction_id: None,
+                    ),
+                ],
+            ),
+        ),
+        // Vegetation scatter (trees/bushes) - will be invisible until models exist
         (
             generator: "vegetation",
             params: Vegetation(
