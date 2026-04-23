@@ -10,7 +10,7 @@ use bevy::prelude::{
     Res, Startup, Transform, Update, With,
 };
 use bevy::render::view::Hdr;
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{egui, EguiContexts, EguiPrimaryContextPass};
 
 use super::components::CinematicCamera;
 use super::navigation::{camera_sync_snapshot_system, CameraSyncState};
@@ -52,10 +52,10 @@ impl Plugin for CameraPlugin {
                     viewport_navigation_system,
                     camera_focus_system,
                     camera_sync_snapshot_system,
-                    camera_debug_overlay,
                 )
                     .chain(),
-            );
+            )
+            .add_systems(EguiPrimaryContextPass, camera_debug_overlay);
     }
 }
 
@@ -78,8 +78,9 @@ fn camera_spawn_system(
     }
     cam.mode_transition = 1.0; // No transition.
 
-    let position = cam.compute_position(ORBIT_RADIUS);
     let look_at = cam.compute_look_at();
+    let offset = cam.compute_position(ORBIT_RADIUS);
+    let position = look_at + offset;
 
     debug!(
         "camera_spawn: pos={:?} look_at={:?} mode={:?}",
@@ -160,8 +161,13 @@ fn camera_debug_overlay(
     };
 
     let pos = cam_transform.translation;
-    let orbit_radius = 200.0;
-    let effective_radius = orbit_radius * cam.zoom;
+    let effective_radius = match cam.mode {
+        super::components::CameraMode::Orbital | super::components::CameraMode::Cinematic => {
+            200.0 * cam.zoom
+        }
+        super::components::CameraMode::ThirdPerson => cam.third_person.distance * cam.zoom,
+        super::components::CameraMode::FirstPerson => 0.0,
+    };
 
     egui::Window::new("Camera Debug")
         .collapsible(false)
@@ -183,6 +189,6 @@ fn camera_debug_overlay(
             ui.label(format!("Pitch: {:.1}°", cam.pitch_deg));
             ui.label(format!("Zoom: {:.2}x", cam.zoom));
             ui.label(format!("Radius: {:.1}m", effective_radius));
-            ui.label(format!("Mode: {:?}", cam.mode));
+            ui.label(format!("Mode: {:?} (Press TAB to toggle)", cam.mode));
         });
 }

@@ -132,7 +132,7 @@ pub fn camera_interpolation_system(
             }
             CameraMode::ThirdPerson => {
                 // ThirdPerson: orbit around focus_target
-                let target = cam.focus_target.unwrap_or(Vec3::ZERO);
+                let target = cam.focus_target.unwrap_or(Vec3::new(0.0, 10.0, 0.0));
                 let distance = cam.third_person.distance * cam.zoom;
                 let height = cam.third_person.height_offset;
 
@@ -157,8 +157,9 @@ pub fn camera_interpolation_system(
             }
             CameraMode::Orbital | CameraMode::Cinematic => {
                 // Orbital/Cinematic: existing behavior
-                let pos = cam.compute_position(ORBIT_RADIUS);
                 let look = cam.compute_look_at();
+                let offset = cam.compute_position(ORBIT_RADIUS);
+                let pos = look + offset;
                 *tf = Transform::from_translation(pos).looking_at(look, Vec3::Y);
 
                 trace!(
