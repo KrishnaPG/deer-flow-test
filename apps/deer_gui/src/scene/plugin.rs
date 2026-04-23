@@ -38,11 +38,15 @@ impl Plugin for ScenePlugin {
         let mut manager = SceneManager::new();
         manager.register(Box::new(TetSceneConfig));
 
-        // Try to load medieval_open scene from file
+        // We can just try to load medieval_open unconditionally or rely on
+        // the startup system to request it. But registering it beforehand
+        // doesn't hurt. We can also lazily load it later if needed.
         match DescriptorSceneConfig::from_file("medieval_open") {
             Ok(config) => manager.register(Box::new(config)),
             Err(e) => warn!("Failed to load medieval_open scene: {}", e),
         }
+
+        // We will load the actual initial scene inside the startup system
 
         debug!(
             "ScenePlugin::build — registered scenes: {:?}",
@@ -78,8 +82,9 @@ impl Plugin for ScenePlugin {
 // Startup system
 // ---------------------------------------------------------------------------
 
-/// Activates the first registered scene (medieval_open) via [`SceneManager`].
+/// Activates the first registered scene via [`SceneManager`] based on [`InitialScene`].
 fn scene_startup_system(
+    initial_scene: Res<super::InitialScene>,
     mut manager: ResMut<SceneManager>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -87,20 +92,40 @@ fn scene_startup_system(
     theme: Option<Res<ThemeManager>>,
     mut audio_state: ResMut<SceneAudioState>,
 ) {
-    info!("scene_startup_system — activating initial scene");
+    info!(
+        "scene_startup_system — activating initial scene: {}",
+        initial_scene.0
+    );
     let theme_ref = theme.as_deref();
-    // Default to medieval_open landscape scene
+
+    // First, try to load it from file dynamically if it's not registered
+    let requested_scene_str = initial_scene.0.as_str();
+    if !manager.available_scenes().contains(&requested_scene_str) {
+        match DescriptorSceneConfig::from_file(requested_scene_str) {
+            Ok(config) => manager.register(Box::new(config)),
+            Err(e) => warn!(
+                "Failed to dynamically load requested scene {}: {}",
+                requested_scene_str, e
+            ),
+        }
+    }
+
+    // Attempt to activate the requested scene
     let activated = manager.activate(
-        "medieval_open",
+        requested_scene_str,
         &mut commands,
         &mut meshes,
         &mut materials,
         theme_ref,
         Some(&mut audio_state),
     );
+
     if !activated {
-        // Fallback to TET if medieval_open not found
-        warn!("scene_startup_system — medieval_open not found, falling back to TET");
+        // Fallback to TET if the requested scene is not found
+        warn!(
+            "scene_startup_system — {} not found, falling back to TET",
+            initial_scene.0
+        );
         let _ = manager.activate(
             "TET",
             &mut commands,

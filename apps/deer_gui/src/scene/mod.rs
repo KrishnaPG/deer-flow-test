@@ -16,6 +16,12 @@ pub mod primitives;
 pub mod tet;
 mod traits;
 
+use bevy::prelude::Resource;
+
+/// Resource specifying which scene should be loaded on startup.
+#[derive(Resource, Debug, Clone)]
+pub struct InitialScene(pub String);
+
 pub use audio_bridge::{scene_audio_bridge_system, SceneAudioState};
 pub use descriptor::{GeneratorParams, GeneratorSpec, SceneDescriptor};
 pub use descriptor_config::DescriptorSceneConfig;
