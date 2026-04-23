@@ -7,6 +7,7 @@ use bevy::ecs::system::Commands;
 use bevy::log::{debug, info, warn};
 use bevy::prelude::*;
 
+use crate::render::lighting::CinematicLighting;
 use crate::scene::descriptor::GeneratorParams;
 
 /// Marker component for atmosphere entities.
@@ -85,6 +86,12 @@ pub fn gen_atmosphere(
         color: Color::srgba(fog_color[0], fog_color[1], fog_color[2], 1.0),
         density: *fog_density,
         enabled: true,
+    });
+
+    // Disable auto-sun-position to prevent RenderQualityPlugin from hijacking sun position
+    commands.insert_resource(CinematicLighting {
+        auto_sun_position: false,
+        ..default()
     });
 
     // Load skybox if specified

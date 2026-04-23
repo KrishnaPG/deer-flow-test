@@ -1,14 +1,16 @@
 //! [`CameraPlugin`] — registers startup and per-frame camera systems.
 
+use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
 use bevy::light::GlobalAmbientLight;
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
 use bevy::pbr::{DistanceFog, FogFalloff, ScreenSpaceAmbientOcclusion};
 use bevy::prelude::{
-    App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Msaa, Plugin, Res,
-    Startup, Transform, Update,
+    App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Msaa, Plugin, Query,
+    Res, Startup, Transform, Update, With,
 };
 use bevy::render::view::Hdr;
+use bevy_egui::{egui, EguiContexts};
 
 use super::components::CinematicCamera;
 use super::navigation::{camera_sync_snapshot_system, CameraSyncState};
@@ -50,6 +52,7 @@ impl Plugin for CameraPlugin {
                     viewport_navigation_system,
                     camera_focus_system,
                     camera_sync_snapshot_system,
+                    camera_debug_overlay,
                 )
                     .chain(),
             );
@@ -88,6 +91,8 @@ fn camera_spawn_system(
         Camera3d::default(),
         Hdr::default(),                         // Enable HDR rendering
         Msaa::Off,                              // Required for SSAO
+        DepthPrepass,                           // Required for SSAO
+        NormalPrepass,                          // Required for SSAO
         ScreenSpaceAmbientOcclusion::default(), // Enable SSAO
         cam,
         Transform::from_translation(position).looking_at(look_at, Vec3::Y),
@@ -135,4 +140,49 @@ fn camera_spawn_system(
     });
 
     info!("camera_spawn: camera + lighting ready");
+}
+
+/// Displays camera debug info in an egui overlay.
+fn camera_debug_overlay(
+    mut contexts: EguiContexts,
+    camera: Query<&CinematicCamera>,
+    cameras: Query<&Transform, With<Camera3d>>,
+) {
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+
+    let Ok(cam) = camera.get_single() else {
+        return;
+    };
+    let Ok(cam_transform) = cameras.get_single() else {
+        return;
+    };
+
+    let pos = cam_transform.translation;
+    let orbit_radius = 200.0;
+    let effective_radius = orbit_radius * cam.zoom;
+
+    egui::Window::new("Camera Debug")
+        .collapsible(false)
+        .resizable(false)
+        .title_bar(false)
+        .anchor(egui::Align2::RIGHT_TOP, [-10.0, 10.0])
+        .show(ctx, |ui| {
+            ui.label(format!(
+                "Position: {:.1}, {:.1}, {:.1}",
+                pos.x, pos.y, pos.z
+            ));
+            ui.label(format!(
+                "Look At: {:.1}, {:.1}, {:.1}",
+                cam.focus_target.unwrap_or(Vec3::new(0.0, 10.0, 0.0)).x,
+                cam.focus_target.unwrap_or(Vec3::new(0.0, 10.0, 0.0)).y,
+                cam.focus_target.unwrap_or(Vec3::new(0.0, 10.0, 0.0)).z
+            ));
+            ui.label(format!("Yaw: {:.1}°", cam.yaw_deg));
+            ui.label(format!("Pitch: {:.1}°", cam.pitch_deg));
+            ui.label(format!("Zoom: {:.2}x", cam.zoom));
+            ui.label(format!("Radius: {:.1}m", effective_radius));
+            ui.label(format!("Mode: {:?}", cam.mode));
+        });
 }
