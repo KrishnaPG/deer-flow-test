@@ -6,6 +6,18 @@ SceneDescriptor(
     gltf_scene: None,
     theme: "medieval",
     generators: [
+        // Atmospheric fog and lighting
+        (
+            generator: "atmosphere",
+            params: Atmosphere(
+                fog_color: (0.7, 0.75, 0.8),
+                fog_density: 0.005,
+                sun_direction: (100.0, 150.0, 80.0),
+                sun_color: (1.0, 0.9, 0.7),
+                sun_intensity: 80000.0,
+                skybox_path: Some("sky/meadow.hdr"),
+            ),
+        ),
         // Meadow terrain with heightmap and PBR textures
         (
             generator: "medieval_terrain",
