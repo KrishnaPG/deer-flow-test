@@ -1,5 +1,6 @@
 //! Procedural generator factories for data-driven scene construction.
 
+pub mod atmosphere;
 pub mod cloud_layer;
 pub mod drop_pods;
 pub mod foliage;
@@ -9,6 +10,7 @@ pub mod npcs;
 pub mod path_travellers;
 pub mod registry;
 pub mod river_barges;
+pub mod rocks;
 pub mod spiral_trails;
 pub mod starfield;
 pub mod static_glow;

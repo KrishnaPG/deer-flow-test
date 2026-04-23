@@ -89,6 +89,8 @@ impl GeneratorRegistry {
         registry.register("foliage", super::foliage::gen_foliage);
         registry.register("water", super::water::gen_water);
         registry.register("npcs", super::npcs::gen_npcs);
+        registry.register("rocks", super::rocks::gen_rocks);
+        registry.register("atmosphere", super::atmosphere::gen_atmosphere);
         debug!(
             "GeneratorRegistry::with_builtins — {} generators",
             registry.factories.len(),

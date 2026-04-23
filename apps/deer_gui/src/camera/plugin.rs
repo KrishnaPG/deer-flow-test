@@ -3,7 +3,7 @@
 use bevy::light::GlobalAmbientLight;
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
-use bevy::pbr::ScreenSpaceAmbientOcclusion;
+use bevy::pbr::{DistanceFog, FogFalloff, ScreenSpaceAmbientOcclusion};
 use bevy::prelude::{
     App, Camera3d, Color, Commands, DirectionalLight, IntoScheduleConfigs, Msaa, Plugin, Res,
     Startup, Transform, Update,
@@ -19,6 +19,7 @@ use super::systems::{
 };
 use crate::constants::camera::ORBIT_RADIUS;
 use crate::preferences::UserPreferences;
+use crate::scene::generators::atmosphere::SceneFogConfig;
 
 // ---------------------------------------------------------------------------
 // Plugin
@@ -60,8 +61,12 @@ impl Plugin for CameraPlugin {
 // ---------------------------------------------------------------------------
 
 /// Spawns the primary camera entity with [`CinematicCamera`] state,
-/// a directional light for basic illumination, and an ambient light resource.
-fn camera_spawn_system(mut commands: Commands, prefs: Option<Res<UserPreferences>>) {
+/// HDR, SSAO, and optional distance fog.
+fn camera_spawn_system(
+    mut commands: Commands,
+    prefs: Option<Res<UserPreferences>>,
+    fog_config: Option<Res<SceneFogConfig>>,
+) {
     let mut cam = CinematicCamera::default();
     // Apply saved camera mode from user preferences if available.
     if let Some(prefs) = prefs {
@@ -78,18 +83,41 @@ fn camera_spawn_system(mut commands: Commands, prefs: Option<Res<UserPreferences
         position, look_at, cam.mode
     );
 
-    // Camera entity with HDR and SSAO for cinematic quality.
-    // Note: SSAO requires Msaa::Off
-    commands.spawn((
+    // Build camera bundle.
+    let mut camera_bundle = (
         Camera3d::default(),
         Hdr::default(),                         // Enable HDR rendering
         Msaa::Off,                              // Required for SSAO
         ScreenSpaceAmbientOcclusion::default(), // Enable SSAO
         cam,
         Transform::from_translation(position).looking_at(look_at, Vec3::Y),
-    ));
+    );
 
-    // Directional light for scene illumination.
+    // Add distance fog if configured by the active scene.
+    if let Some(config) = fog_config {
+        if config.enabled {
+            commands.spawn((
+                camera_bundle,
+                DistanceFog {
+                    color: config.color,
+                    falloff: FogFalloff::Exponential {
+                        density: config.density,
+                    },
+                    ..Default::default()
+                },
+            ));
+            info!(
+                "camera_spawn: camera with distance fog (density={})",
+                config.density
+            );
+        } else {
+            commands.spawn(camera_bundle);
+        }
+    } else {
+        commands.spawn(camera_bundle);
+    }
+
+    // Fallback directional light for scenes without atmosphere generator.
     commands.spawn((
         DirectionalLight {
             illuminance: 10_000.0,
@@ -99,7 +127,7 @@ fn camera_spawn_system(mut commands: Commands, prefs: Option<Res<UserPreferences
         Transform::from_translation(Vec3::new(50.0, 200.0, 100.0)).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Ambient fill light.
+    // Fallback ambient fill light.
     commands.insert_resource(GlobalAmbientLight {
         color: Color::WHITE,
         brightness: 300.0,

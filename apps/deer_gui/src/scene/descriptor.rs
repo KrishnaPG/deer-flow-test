@@ -182,6 +182,36 @@ pub enum GeneratorParams {
         /// NPC spawn configurations.
         spawns: Vec<NpcSpawnConfig>,
     },
+    Rocks {
+        /// Model paths for rock variants.
+        models: Vec<String>,
+        /// Center position for scatter.
+        center: [f32; 3],
+        /// Scatter radius in meters.
+        radius: f32,
+        /// Number of rocks to spawn.
+        count: usize,
+        /// Height offset above terrain.
+        #[serde(default)]
+        height_offset: f32,
+    },
+    Atmosphere {
+        /// Fog color (RGB).
+        fog_color: [f32; 3],
+        /// Fog density (default: 0.01).
+        #[serde(default = "default_fog_density")]
+        fog_density: f32,
+        /// Sun direction vector.
+        sun_direction: [f32; 3],
+        /// Sun color (RGB).
+        sun_color: [f32; 3],
+        /// Sun intensity in lux (default: 100000).
+        #[serde(default = "default_sun_intensity")]
+        sun_intensity: f32,
+        /// Optional skybox HDRI path.
+        #[serde(default)]
+        skybox_path: Option<String>,
+    },
 }
 
 fn default_height_scale() -> f32 {
@@ -214,4 +244,12 @@ fn default_vegetation_draw_distance() -> f32 {
 
 fn default_wind_speed() -> f32 {
     2.0
+}
+
+fn default_fog_density() -> f32 {
+    0.01
+}
+
+fn default_sun_intensity() -> f32 {
+    100_000.0
 }

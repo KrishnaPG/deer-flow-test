@@ -80,7 +80,6 @@ fn main() {
         .add_plugins(WorldPlugin)
         .add_plugins(FoliagePlugin::default())
         .add_plugins(WaterPlugin::default())
-        .add_systems(Startup, setup_landscape)
         .add_plugins(ShellPlugin)
         .add_plugins(HudPlugin)
         .add_plugins(DeerPickingPlugin)
@@ -105,27 +104,6 @@ fn load_dotenv() {
         info!("main::load_dotenv — no manifest .env, trying cwd");
         dotenvy::dotenv().ok();
     }
-}
-
-/// Sets up the initial landscape scene.
-fn setup_landscape(mut commands: Commands) {
-    info!("Setting up medieval landscape...");
-
-    // Add directional light (sun)
-    commands.spawn((
-        Name::new("Sun"),
-        DirectionalLight {
-            color: Color::srgb(1.0, 0.95, 0.85),
-            illuminance: 100_000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(100.0, 200.0, 100.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
-
-    // Add ambient light component to the camera or use default
-
-    info!("Landscape setup complete!");
 }
 
 /// Builds the `tracing` filter string for [`LogPlugin`].
