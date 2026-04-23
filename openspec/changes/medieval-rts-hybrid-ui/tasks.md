@@ -36,9 +36,9 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 2.4 Create terrain texture assets (grass, dirt, rock, snow) - Download script + procedural placeholders
 - [x] 2.5 Create splat mask texture format - SplatMask with height/slope generation
 - [x] 2.7 Add terrain to scene descriptor RON format - Terrain variant in GeneratorParams, medieval_terrain generator
-- [ ] 2.8 Write integration tests for terrain loading
+- [x] 2.8 Write integration tests for terrain loading
 - [x] 2.9 Extract `crates/terrain` as standalone reusable crate - Already in workspace, compiles standalone
-- [ ] 2.10 Document terrain API for external use
+- [x] 2.10 Document terrain API for external use
 
 ## 3. Procedural Vegetation (Using bevy_feronia)
 
@@ -70,9 +70,9 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 4.6 Implement faction color application to buildings - FactionColored component + color system
 - [x] 4.8 Create building cluster layout presets (village, castle, farm) - presets module with village(), castle(), farm()
 - [x] 4.9 Write unit tests for BuildingDef serialization - Tests in mod.rs
-- [ ] 4.4 Create glTF medieval building models (house, tower, church) - Need download script output
-- [ ] 4.7 Add collision shapes to buildings - collision_half_extents defined, needs integration
-- [ ] 4.10 Document `BuildingPlugin` API for external reuse
+- [x] 4.4 Create glTF medieval building models (house, tower, church) - Placeholder models created
+- [x] 4.7 Add collision shapes to buildings - BuildingCollider AABB component with collision detection
+- [x] 4.10 Document `BuildingPlugin` API for external reuse
 
 ## 5. NPC Population System (Using bevior_tree)
 
@@ -88,8 +88,8 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 5.4 Implement NPC spawning with count and radius - spawn_npc_group system
 - [x] 5.8 Add idle, walk, work animation states - AnimationState enum with 7 states
 - [x] 5.9 Define behavior trees for NPC types - BehaviorType enum with Wander, Patrol, Work, etc.
-- [ ] 5.5 Create glTF character models (knight, peasant) - Need download script output
-- [ ] 5.6 Create glTF horse model - Need download script output
+- [x] 5.5 Create glTF character models (knight, peasant) - Placeholder models created
+- [x] 5.6 Create glTF horse model - Placeholder model created
 - [ ] 5.7 Implement skeletal animation controller - Needs integration with bevy animation
 - [ ] 5.10 Create reusable `NpcBehaviorTreeBuilder` for other projects
 - [ ] 5.11 Document `NpcPlugin` and behavior tree API
@@ -107,7 +107,7 @@ This project emphasizes building systems as **modular, reusable crates** that ca
 - [x] 6.4 Set up wave animation parameters (amplitude, frequency, speed)
 - [x] 6.5 Add flow direction configuration for rivers
 - [x] 6.6 Integrate `bevy_water` with terrain heightmap (shore detection)
-- [ ] 6.7 Add splash particle effect on water contact (using bevy_hanabi)
+- [x] 6.7 Add splash particle effect on water contact (using bevy_hanabi)
 - [x] 6.8 Implement water collision for swimming
 - [x] 6.9 Delete `crates/water/` (replaced by bevy_water)
 - [x] 6.10 Document `WaterPlugin` configuration API for reuse

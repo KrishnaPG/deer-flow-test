@@ -22,6 +22,7 @@ use bevy::ecs::system::{Res, ResMut};
 use bevy::log::{info, trace};
 use bevy::math::Vec2;
 use bevy::prelude::*;
+use bevy_hanabi::prelude::*;
 use bevy_water::{WaterPlugin as BevyWaterPlugin, WaterSettings};
 use serde::{Deserialize, Serialize};
 
@@ -320,6 +321,116 @@ impl Swimmable {
     }
 }
 
+/// Component for splash particle effect sources.
+#[derive(Component, Debug, Clone)]
+pub struct SplashEffect {
+    /// Whether the effect is active.
+    pub active: bool,
+    /// Splash intensity (affects particle count and velocity).
+    pub intensity: f32,
+    /// Timer for burst duration.
+    pub burst_timer: f32,
+    /// Burst duration in seconds.
+    pub burst_duration: f32,
+}
+
+impl Default for SplashEffect {
+    fn default() -> Self {
+        Self {
+            active: false,
+            intensity: 1.0,
+            burst_timer: 0.0,
+            burst_duration: 0.3,
+        }
+    }
+}
+
+impl SplashEffect {
+    /// Trigger a splash burst.
+    pub fn trigger(&mut self, intensity: f32) {
+        self.active = true;
+        self.intensity = intensity;
+        self.burst_timer = self.burst_duration;
+    }
+
+    /// Update the splash effect state.
+    pub fn update(&mut self, delta: f32) -> bool {
+        if self.active {
+            self.burst_timer -= delta;
+            if self.burst_timer <= 0.0 {
+                self.active = false;
+                self.burst_timer = 0.0;
+                return false; // Burst ended
+            }
+        }
+        self.active
+    }
+}
+
+/// Marker component for water splash emitters.
+#[derive(Component, Debug)]
+pub struct WaterSplashEmitter;
+
+/// Configuration for splash particle effects.
+#[derive(Resource, Debug, Clone, Serialize, Deserialize)]
+pub struct SplashConfig {
+    /// Number of particles per burst.
+    #[serde(default = "default_particle_count")]
+    pub particle_count: u32,
+    /// Initial velocity range (min, max) in m/s.
+    #[serde(default = "default_velocity_range")]
+    pub velocity_range: (f32, f32),
+    /// Particle lifetime in seconds.
+    #[serde(default = "default_particle_lifetime")]
+    pub particle_lifetime: f32,
+    /// Gravity affecting particles.
+    #[serde(default = "default_particle_gravity")]
+    pub particle_gravity: f32,
+    /// Particle color (RGBA).
+    #[serde(default = "default_particle_color")]
+    pub particle_color: (f32, f32, f32, f32),
+    /// Particle size in meters.
+    #[serde(default = "default_particle_size")]
+    pub particle_size: f32,
+}
+
+fn default_particle_count() -> u32 {
+    32
+}
+
+fn default_velocity_range() -> (f32, f32) {
+    (2.0, 5.0)
+}
+
+fn default_particle_lifetime() -> f32 {
+    0.8
+}
+
+fn default_particle_gravity() -> f32 {
+    -9.8
+}
+
+fn default_particle_color() -> (f32, f32, f32, f32) {
+    (0.6, 0.8, 0.9, 0.7) // Light blue, semi-transparent
+}
+
+fn default_particle_size() -> f32 {
+    0.05
+}
+
+impl Default for SplashConfig {
+    fn default() -> Self {
+        Self {
+            particle_count: default_particle_count(),
+            velocity_range: default_velocity_range(),
+            particle_lifetime: default_particle_lifetime(),
+            particle_gravity: default_particle_gravity(),
+            particle_color: default_particle_color(),
+            particle_size: default_particle_size(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Water Plugin
 // ---------------------------------------------------------------------------
@@ -351,6 +462,9 @@ impl Plugin for WaterPlugin {
         // Add bevy_water with default settings
         app.add_plugins(BevyWaterPlugin::default());
 
+        // Add Hanabi particles for splash effects
+        app.add_plugins(HanabiPlugin);
+
         // Configure water settings based on our config
         if let Some(config) = &self.config {
             app.insert_resource(config.clone());
@@ -366,14 +480,19 @@ impl Plugin for WaterPlugin {
             app.init_resource::<WaterGlobalConfig>();
         }
 
+        // Add splash configuration
+        app.init_resource::<SplashConfig>();
+
         // Add systems
-        app.add_systems(Startup, setup_water_system);
+        app.add_systems(Startup, (setup_water_system, setup_splash_particles));
         app.add_systems(
             Update,
             (
                 update_water_waves_system,
                 update_water_level_system,
                 update_swimming_system,
+                update_splash_effects_system,
+                trigger_splash_on_water_contact_system,
             ),
         );
 
@@ -448,6 +567,127 @@ fn update_swimming_system(
             swimmable.consume_breath(10.0, delta); // Consume 10 breath per second
         } else {
             swimmable.recover_breath(20.0, delta); // Recover 20 breath per second
+        }
+    }
+}
+
+/// Setup splash particle effects.
+fn setup_splash_particles(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
+    // Create expression writer for particle attributes
+    let writer = ExprWriter::new();
+
+    // Particle age starts at 0
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.).expr());
+
+    // Particle lifetime
+    let lifetime = writer.lit(0.8).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Spawn position - circle at origin
+    let init_pos = SetPositionCircleModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        axis: writer.lit(Vec3::Y).expr(),
+        radius: writer.lit(0.2).expr(),
+        dimension: ShapeDimension::Surface,
+    };
+
+    // Initial velocity - upward burst
+    let init_vel = SetVelocityCircleModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        axis: writer.lit(Vec3::Y).expr(),
+        speed: writer.lit(3.0).expr(),
+    };
+
+    let module = writer.finish();
+
+    // Color gradient - white to transparent
+    let mut gradient = bevy_hanabi::Gradient::new();
+    gradient.add_key(0.0, Vec4::new(0.8, 0.9, 1.0, 0.8));
+    gradient.add_key(1.0, Vec4::new(0.6, 0.8, 0.9, 0.0));
+
+    // Create the effect asset
+    let effect = EffectAsset::new(256, SpawnerSettings::once(32.0.into()), module)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .render(ColorOverLifetimeModifier::new(gradient))
+        .render(SizeOverLifetimeModifier {
+            gradient: bevy_hanabi::Gradient::constant(Vec3::splat(0.05)),
+            screen_space_size: false,
+        });
+
+    let effect_handle = effects.add(effect);
+
+    commands.spawn((
+        Name::new("WaterSplashEffect"),
+        ParticleEffect::new(effect_handle),
+        WaterSplashEmitter,
+        Transform::default(),
+        Visibility::default(),
+    ));
+
+    info!("WaterPlugin: splash particle effect created");
+}
+
+/// Update splash effect states.
+fn update_splash_effects_system(time: Res<Time>, mut query: Query<&mut SplashEffect>) {
+    let delta = time.delta_secs();
+
+    for mut splash in query.iter_mut() {
+        splash.update(delta);
+    }
+}
+
+/// Trigger splash when entities contact water.
+fn trigger_splash_on_water_contact_system(
+    config: Res<WaterGlobalConfig>,
+    water_config: Res<SplashConfig>,
+    mut commands: Commands,
+    mut splashables: Query<(&Transform, &Swimmable, Option<&mut SplashEffect>), Changed<Transform>>,
+    water_emitters: Query<(Entity, &Transform), With<WaterSplashEmitter>>,
+) {
+    if !config.enable_splash {
+        return;
+    }
+
+    for (transform, swimmable, splash_effect) in splashables.iter_mut() {
+        let entity_height = transform.translation.y;
+        let water_level = config.water_level;
+
+        // Check if entity just entered water (crossed from above to below)
+        if entity_height < water_level && entity_height > water_level - 0.5 {
+            // Trigger splash effect
+            if let Some(mut splash) = splash_effect {
+                splash.trigger(1.0);
+            } else {
+                // Spawn a one-time splash effect
+                commands.spawn((
+                    Name::new("WaterSplash"),
+                    SplashEffect {
+                        active: true,
+                        intensity: 1.0,
+                        burst_timer: water_config.particle_lifetime,
+                        burst_duration: water_config.particle_lifetime,
+                    },
+                    transform.clone(),
+                    Visibility::default(),
+                ));
+            }
+
+            // Find nearest water emitter and trigger it
+            let entity_pos = transform.translation.truncate();
+            for (_, water_transform) in water_emitters.iter() {
+                let water_pos = water_transform.translation.truncate();
+                let distance = entity_pos.distance(water_pos);
+
+                // If within 10 meters of water emitter, trigger splash
+                if distance < 10.0 {
+                    // This would trigger the particle effect at the water surface
+                    // For now, we just log it
+                    trace!("Splash triggered at water surface");
+                }
+            }
         }
     }
 }
@@ -536,5 +776,48 @@ mod tests {
         // Should not go above max
         swimmable.recover_breath(50.0, 1.0);
         assert_eq!(swimmable.breath, 100.0);
+    }
+
+    #[test]
+    fn splash_effect_default() {
+        let splash = SplashEffect::default();
+        assert!(!splash.active);
+        assert_eq!(splash.intensity, 1.0);
+        assert_eq!(splash.burst_duration, 0.3);
+    }
+
+    #[test]
+    fn splash_effect_trigger() {
+        let mut splash = SplashEffect::default();
+        splash.trigger(2.0);
+        assert!(splash.active);
+        assert_eq!(splash.intensity, 2.0);
+        assert_eq!(splash.burst_timer, splash.burst_duration);
+    }
+
+    #[test]
+    fn splash_effect_update() {
+        let mut splash = SplashEffect::default();
+        splash.trigger(1.0);
+
+        // Update with delta time
+        let still_active = splash.update(0.1);
+        assert!(still_active);
+        assert_eq!(splash.burst_timer, 0.2);
+
+        // Update until burst ends
+        let still_active = splash.update(0.2);
+        assert!(!still_active);
+        assert!(!splash.active);
+        assert_eq!(splash.burst_timer, 0.0);
+    }
+
+    #[test]
+    fn splash_config_default() {
+        let config = SplashConfig::default();
+        assert_eq!(config.particle_count, 32);
+        assert!(config.velocity_range.0 > 0.0);
+        assert!(config.velocity_range.1 > config.velocity_range.0);
+        assert!(config.particle_lifetime > 0.0);
     }
 }

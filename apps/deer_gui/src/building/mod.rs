@@ -490,6 +490,92 @@ pub struct BuildingHealth {
     pub max: f32,
 }
 
+/// Component for building collision shapes (AABB).
+///
+/// This component stores the axis-aligned bounding box for collision detection.
+/// Can be used with custom collision systems or integrated with physics engines.
+#[derive(Component, Debug, Clone)]
+pub struct BuildingCollider {
+    /// Half-extents of the AABB (width/2, height/2, depth/2).
+    pub half_extents: Vec3,
+    /// Offset from the entity's transform (for irregular shapes).
+    pub offset: Vec3,
+    /// Collision layer mask (for filtering collisions).
+    pub layer: u32,
+    /// Whether this collider is static (doesn't move).
+    pub is_static: bool,
+}
+
+impl BuildingCollider {
+    /// Create a new axis-aligned bounding box collider.
+    pub fn aabb(half_extents: Vec3) -> Self {
+        Self {
+            half_extents,
+            offset: Vec3::ZERO,
+            layer: 0,
+            is_static: true,
+        }
+    }
+
+    /// Create a collider with offset.
+    pub fn aabb_with_offset(half_extents: Vec3, offset: Vec3) -> Self {
+        Self {
+            half_extents,
+            offset,
+            layer: 0,
+            is_static: true,
+        }
+    }
+
+    /// Set the collision layer.
+    pub fn with_layer(mut self, layer: u32) -> Self {
+        self.layer = layer;
+        self
+    }
+
+    /// Set whether the collider is static.
+    pub fn with_static(mut self, is_static: bool) -> Self {
+        self.is_static = is_static;
+        self
+    }
+
+    /// Get the AABB min corner in world space.
+    pub fn world_min(&self, transform: &Transform) -> Vec3 {
+        let world_center = transform.transform_point(self.offset);
+        world_center - self.half_extents
+    }
+
+    /// Get the AABB max corner in world space.
+    pub fn world_max(&self, transform: &Transform) -> Vec3 {
+        let world_center = transform.transform_point(self.offset);
+        world_center + self.half_extents
+    }
+
+    /// Check if a point is inside this collider.
+    pub fn contains_point(&self, transform: &Transform, point: Vec3) -> bool {
+        let min = self.world_min(transform);
+        let max = self.world_max(transform);
+        point.x >= min.x
+            && point.x <= max.x
+            && point.y >= min.y
+            && point.y <= max.y
+            && point.z >= min.z
+            && point.z <= max.z
+    }
+
+    /// Check if this collider intersects another AABB.
+    pub fn intersects_aabb(&self, transform: &Transform, other_min: Vec3, other_max: Vec3) -> bool {
+        let min = self.world_min(transform);
+        let max = self.world_max(transform);
+        min.x <= other_max.x
+            && max.x >= other_min.x
+            && min.y <= other_max.y
+            && max.y >= other_min.y
+            && min.z <= other_max.z
+            && max.z >= other_min.z
+    }
+}
+
 impl BuildingHealth {
     /// Create a new health component.
     pub fn new(max_health: f32) -> Self {
@@ -605,6 +691,99 @@ fn update_faction_colors_system(time: Res<Time>, mut query: Query<(&mut FactionC
 }
 
 // ---------------------------------------------------------------------------
+// Building Spawning
+// ---------------------------------------------------------------------------
+
+/// Helper struct for creating building components.
+pub struct BuildingSpawnConfig {
+    /// The building definition to spawn.
+    pub def: BuildingDef,
+    /// Grid position.
+    pub grid_pos: (i32, i32),
+    /// World position (optional).
+    pub position: Option<Vec3>,
+    /// Rotation in degrees around Y axis.
+    pub rotation_degrees: f32,
+    /// Faction ID and color (optional).
+    pub faction: Option<(String, Vec3)>,
+}
+
+impl BuildingSpawnConfig {
+    /// Create a new spawn config from a building definition.
+    pub fn new(def: &BuildingDef, grid_pos: (i32, i32)) -> Self {
+        Self {
+            def: def.clone(),
+            grid_pos,
+            position: None,
+            rotation_degrees: 0.0,
+            faction: None,
+        }
+    }
+
+    /// Set the world position.
+    pub fn at_position(mut self, position: Vec3) -> Self {
+        self.position = Some(position);
+        self
+    }
+
+    /// Set the rotation.
+    pub fn with_rotation(mut self, degrees: f32) -> Self {
+        self.rotation_degrees = degrees;
+        self
+    }
+
+    /// Set the faction.
+    pub fn with_faction(mut self, faction_id: String, color: Vec3) -> Self {
+        self.faction = Some((faction_id, color));
+        self
+    }
+
+    /// Create the PlacedBuilding component.
+    pub fn create_placed_building(&self) -> PlacedBuilding {
+        PlacedBuilding {
+            building_id: self.def.id.clone(),
+            weathering: self.def.default_weathering,
+            grid_pos: self.grid_pos,
+            faction_id: self.faction.as_ref().map(|(id, _)| id.clone()),
+        }
+    }
+
+    /// Create the FactionColored component if the building supports it.
+    pub fn create_faction_colored(&self) -> Option<FactionColored> {
+        if self.def.faction_colorable {
+            let color = self
+                .faction
+                .as_ref()
+                .map(|(_, c)| *c)
+                .unwrap_or(Vec3::splat(0.5));
+            Some(FactionColored::new(color))
+        } else {
+            None
+        }
+    }
+
+    /// Create the BuildingHealth component.
+    pub fn create_health(&self) -> BuildingHealth {
+        BuildingHealth::new(100.0)
+    }
+
+    /// Create the BuildingCollider component.
+    pub fn create_collider(&self) -> BuildingCollider {
+        BuildingCollider::aabb(self.def.collision_half_extents)
+    }
+
+    /// Create the Transform component.
+    pub fn create_transform(&self) -> Transform {
+        let mut transform =
+            Transform::from_rotation(Quat::from_rotation_y(self.rotation_degrees.to_radians()));
+        if let Some(pos) = self.position {
+            transform.translation = pos;
+        }
+        transform
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -689,5 +868,102 @@ mod tests {
         assert_eq!(faction_colored.transition_progress, 1.0);
         assert!(faction_colored.target_color.is_none());
         assert_eq!(faction_colored.color, Vec3::new(0.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn building_collider_aabb() {
+        let collider = BuildingCollider::aabb(Vec3::new(2.0, 3.0, 2.5));
+        assert_eq!(collider.half_extents, Vec3::new(2.0, 3.0, 2.5));
+        assert_eq!(collider.offset, Vec3::ZERO);
+        assert!(collider.is_static);
+    }
+
+    #[test]
+    fn building_collider_with_offset() {
+        let collider =
+            BuildingCollider::aabb_with_offset(Vec3::new(1.0, 1.0, 1.0), Vec3::new(0.0, 0.5, 0.0));
+        assert_eq!(collider.offset, Vec3::new(0.0, 0.5, 0.0));
+    }
+
+    #[test]
+    fn building_collider_contains_point() {
+        let collider = BuildingCollider::aabb(Vec3::new(1.0, 1.0, 1.0));
+        let transform = Transform::from_translation(Vec3::new(0.0, 0.0, 0.0));
+
+        // Point inside should be contained
+        assert!(collider.contains_point(&transform, Vec3::new(0.0, 0.0, 0.0)));
+        assert!(collider.contains_point(&transform, Vec3::new(0.5, 0.5, 0.5)));
+
+        // Point on boundary should be contained
+        assert!(collider.contains_point(&transform, Vec3::new(1.0, 0.0, 0.0)));
+        assert!(collider.contains_point(&transform, Vec3::new(0.0, 1.0, 0.0)));
+
+        // Point outside should not be contained
+        assert!(!collider.contains_point(&transform, Vec3::new(1.1, 0.0, 0.0)));
+        assert!(!collider.contains_point(&transform, Vec3::new(0.0, 1.1, 0.0)));
+    }
+
+    #[test]
+    fn building_collider_aabb_intersection() {
+        let collider = BuildingCollider::aabb(Vec3::new(1.0, 1.0, 1.0));
+        let transform = Transform::from_translation(Vec3::new(0.0, 0.0, 0.0));
+
+        // Intersecting AABB
+        let other_min = Vec3::new(0.5, 0.5, 0.5);
+        let other_max = Vec3::new(1.5, 1.5, 1.5);
+        assert!(collider.intersects_aabb(&transform, other_min, other_max));
+
+        // Non-intersecting AABB
+        let other_min = Vec3::new(2.0, 2.0, 2.0);
+        let other_max = Vec3::new(3.0, 3.0, 3.0);
+        assert!(!collider.intersects_aabb(&transform, other_min, other_max));
+    }
+
+    #[test]
+    fn building_collider_world_bounds() {
+        let collider = BuildingCollider::aabb(Vec3::new(1.0, 2.0, 1.5));
+        let transform = Transform::from_translation(Vec3::new(10.0, 5.0, -3.0));
+
+        let min = collider.world_min(&transform);
+        let max = collider.world_max(&transform);
+
+        assert_eq!(min, Vec3::new(9.0, 3.0, -4.5));
+        assert_eq!(max, Vec3::new(11.0, 7.0, -1.5));
+    }
+
+    #[test]
+    fn building_spawn_config() {
+        let def = BuildingDef {
+            collision_half_extents: Vec3::new(2.0, 3.0, 2.5),
+            ..Default::default()
+        };
+
+        let config = BuildingSpawnConfig::new(&def, (5, 10))
+            .at_position(Vec3::new(100.0, 0.0, 200.0))
+            .with_faction("english".to_string(), Vec3::new(1.0, 0.0, 0.0));
+
+        let placed = config.create_placed_building();
+        assert_eq!(placed.grid_pos, (5, 10));
+        assert_eq!(placed.faction_id, Some("english".to_string()));
+
+        let collider = config.create_collider();
+        assert_eq!(collider.half_extents, Vec3::new(2.0, 3.0, 2.5));
+
+        let faction_colored = config.create_faction_colored();
+        assert!(faction_colored.is_some());
+
+        let transform = config.create_transform();
+        assert_eq!(transform.translation, Vec3::new(100.0, 0.0, 200.0));
+    }
+
+    #[test]
+    fn building_spawn_config_no_faction() {
+        let def = BuildingDef {
+            faction_colorable: false,
+            ..Default::default()
+        };
+
+        let config = BuildingSpawnConfig::new(&def, (0, 0));
+        assert!(config.create_faction_colored().is_none());
     }
 }
