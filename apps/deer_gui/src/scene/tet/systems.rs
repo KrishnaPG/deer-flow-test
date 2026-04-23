@@ -9,6 +9,7 @@ use bevy::prelude::{MeshMaterial3d, Query, Res, ResMut, Time, Transform, With};
 
 use crate::constants::timing::BEACON_PULSE_HZ;
 use crate::constants::visual::{DATA_TRAIL_SPEED, TET_GLOW_MAX, TET_GLOW_MIN};
+use crate::scene::common::ActiveSceneTag;
 use crate::scene::generators::{Monolith, SpiralTrail};
 use crate::theme::ThemeManager;
 
@@ -21,10 +22,15 @@ use crate::theme::ThemeManager;
 /// at [`BEACON_PULSE_HZ`].
 pub fn tet_glow_system(
     time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
     monolith_query: Query<&MeshMaterial3d<StandardMaterial>, With<Monolith>>,
     materials: Option<ResMut<Assets<StandardMaterial>>>,
     theme: Option<Res<ThemeManager>>,
 ) {
+    if tag.0.as_deref() != Some("TET") {
+        return;
+    }
+
     // Gracefully no-op when AssetPlugin is absent (e.g. headless / test).
     let Some(mut materials) = materials else {
         return;
@@ -67,8 +73,12 @@ pub fn tet_glow_system(
 /// [`DATA_TRAIL_SPEED`], wrapping `t` back to 0.0 on overflow.
 pub fn data_trail_system(
     time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
     mut trail_query: Query<(&mut SpiralTrail, &mut Transform)>,
 ) {
+    if tag.0.as_deref() != Some("TET") {
+        return;
+    }
     let dt = time.delta_secs();
     let advance = DATA_TRAIL_SPEED * dt * 0.01; // normalize speed to [0,1] range
 
