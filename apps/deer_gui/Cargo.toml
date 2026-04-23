@@ -64,3 +64,4 @@ regex = "1"
 # ── Terrain generation ──────────────────────────────────────────────
 deer-terrain = { path = "../../crates/terrain" }
 image = "0.25"
+rand = "0.8"
