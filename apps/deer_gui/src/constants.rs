@@ -27,8 +27,8 @@ pub mod z_layer {
 pub mod camera {
     /// Starting horizontal rotation (degrees).
     pub const DEFAULT_YAW: f32 = 0.0;
-    /// Starting vertical tilt (degrees, negative = looking down).
-    pub const DEFAULT_PITCH: f32 = -15.0;
+    /// Starting vertical tilt (degrees, positive = looking down).
+    pub const DEFAULT_PITCH: f32 = 45.0;
     /// Starting zoom factor (1.0 = normal).
     pub const DEFAULT_ZOOM: f32 = 1.0;
 
