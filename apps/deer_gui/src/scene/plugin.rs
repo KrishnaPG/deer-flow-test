@@ -1,7 +1,7 @@
 //! [`ScenePlugin`] — registers scene resources, startup, and per-frame systems.
 
 use bevy::asset::Assets;
-use bevy::log::{debug, info, warn};
+use bevy::log::{debug, info};
 use bevy::pbr::StandardMaterial;
 use bevy::prelude::{App, Commands, Mesh, Plugin, Res, ResMut, Startup, Update};
 
@@ -75,7 +75,8 @@ impl Plugin for ScenePlugin {
 // Startup system
 // ---------------------------------------------------------------------------
 
-/// Activates the first registered scene via [`SceneManager`] based on [`InitialScene`].
+/// Activates the requested scene via [`SceneManager`] based on [`InitialScene`].
+/// Fails loudly (panics) if the scene cannot be loaded — no silent fallbacks.
 fn scene_startup_system(
     initial_scene: Res<super::InitialScene>,
     mut manager: ResMut<SceneManager>,
@@ -84,26 +85,29 @@ fn scene_startup_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
     theme: Option<Res<ThemeManager>>,
     mut audio_state: ResMut<SceneAudioState>,
+    generators: Res<GeneratorRegistry>,
 ) {
+    let requested_scene = &initial_scene.0;
     info!(
         "scene_startup_system — activating initial scene: {}",
-        initial_scene.0
+        requested_scene
     );
     let theme_ref = theme.as_deref();
 
-    // First, try to load it from file dynamically if it's not registered
-    let requested_scene_str = initial_scene.0.as_str();
+    // Load scene from file if not already registered
+    let requested_scene_str = requested_scene.as_str();
     if !manager.available_scenes().contains(&requested_scene_str) {
-        match DescriptorSceneConfig::from_file(requested_scene_str) {
-            Ok(config) => manager.register(Box::new(config)),
-            Err(e) => warn!(
-                "Failed to dynamically load requested scene {}: {}",
-                requested_scene_str, e
-            ),
-        }
+        let config = DescriptorSceneConfig::from_file(requested_scene_str).unwrap_or_else(|e| {
+            panic!(
+                "Failed to load scene '{}' from file: {}. \
+                     Check that the .scene.ron file exists and is valid.",
+                requested_scene, e
+            )
+        });
+        manager.register(Box::new(config));
     }
 
-    // Attempt to activate the requested scene
+    // Activate the scene — panic if activation fails
     let activated = manager.activate(
         requested_scene_str,
         &mut commands,
@@ -111,22 +115,19 @@ fn scene_startup_system(
         &mut materials,
         theme_ref,
         Some(&mut audio_state),
+        &generators,
     );
 
     if !activated {
-        // Fallback to TET if the requested scene is not found
-        warn!(
-            "scene_startup_system — {} not found, falling back to TET",
-            initial_scene.0
-        );
-        let _ = manager.activate(
-            "TET",
-            &mut commands,
-            &mut meshes,
-            &mut materials,
-            theme_ref,
-            Some(&mut audio_state),
+        panic!(
+            "Scene '{}' not found after registration. \
+             This should never happen — the scene was just registered.",
+            requested_scene
         );
     }
-    debug!("scene_startup_system — activated scene");
+
+    info!(
+        "scene_startup_system — successfully activated scene '{}'",
+        requested_scene
+    );
 }

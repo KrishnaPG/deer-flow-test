@@ -6,11 +6,12 @@
 use bevy::asset::Assets;
 use bevy::ecs::system::Commands;
 use bevy::ecs::world::World;
-use bevy::log::{debug, info};
+use bevy::log::{debug, info, warn};
 use bevy::pbr::StandardMaterial;
 use bevy::prelude::{AssetServer, ChildOf, Entity, Handle, Mesh, Scene, SceneRoot};
 
 use super::descriptor::SceneDescriptor;
+use super::generators::GeneratorRegistry;
 use super::primitives::spawn_root;
 use super::traits::SceneConfig;
 use crate::theme::ThemeManager;
@@ -71,9 +72,10 @@ impl SceneConfig for DescriptorSceneConfig {
     fn spawn_environment(
         &self,
         commands: &mut Commands,
-        _meshes: &mut Assets<Mesh>,
-        _materials: &mut Assets<StandardMaterial>,
+        meshes: &mut Assets<Mesh>,
+        materials: &mut Assets<StandardMaterial>,
         _theme: Option<&ThemeManager>,
+        generators: &GeneratorRegistry,
     ) -> Entity {
         info!(
             "DescriptorSceneConfig::spawn_environment — scene='{}'",
@@ -95,13 +97,20 @@ impl SceneConfig for DescriptorSceneConfig {
             });
         }
 
-        // Generators are resolved and invoked by the plugin system after
-        // scene activation. Here we just log the generators for verification.
+        // Invoke generators from the registry
         for spec in &self.descriptor.generators {
-            info!(
-                "DescriptorSceneConfig: generator='{}' (will be resolved by plugin)",
-                spec.generator,
-            );
+            if let Some(factory) = generators.get(&spec.generator) {
+                info!(
+                    "DescriptorSceneConfig: invoking generator='{}'",
+                    spec.generator,
+                );
+                factory(commands, meshes, materials, root, &spec.params);
+            } else {
+                warn!(
+                    "DescriptorSceneConfig: unknown generator='{}', skipping",
+                    spec.generator,
+                );
+            }
         }
 
         root

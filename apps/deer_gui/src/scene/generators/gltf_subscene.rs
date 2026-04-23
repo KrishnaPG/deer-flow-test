@@ -6,7 +6,10 @@ use bevy::ecs::world::World;
 use bevy::log::{debug, trace, warn};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{AssetServer, ChildOf, Entity, Handle, Mesh, Scene, SceneRoot, Transform};
+use bevy::prelude::{
+    AssetServer, ChildOf, Entity, Handle, InheritedVisibility, Mesh, Scene, SceneRoot, Transform,
+    Visibility,
+};
 
 use crate::scene::descriptor::GeneratorParams;
 
@@ -40,9 +43,13 @@ pub fn gen_gltf_subscene(
         let asset_server = world.resource::<AssetServer>();
         let scene_handle: Handle<Scene> = asset_server.load(format!("{path}#Scene0"));
         let t = build_transform(transform_arr, scale_val);
-        world
-            .commands()
-            .spawn((ChildOf(root), SceneRoot(scene_handle), t));
+        world.commands().spawn((
+            ChildOf(root),
+            SceneRoot(scene_handle),
+            t,
+            Visibility::default(),
+            InheritedVisibility::default(),
+        ));
         debug!("gen_gltf_subscene: queued glTF load path='{path}' root={root:?}");
     });
 }

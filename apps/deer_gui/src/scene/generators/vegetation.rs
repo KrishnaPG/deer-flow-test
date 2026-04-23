@@ -187,6 +187,7 @@ pub fn gen_vegetation(
                     scale: Vec3::splat(scale),
                 },
                 Visibility::default(),
+                InheritedVisibility::default(),
             ))
             .id();
 

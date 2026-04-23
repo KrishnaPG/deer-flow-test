@@ -126,6 +126,8 @@ pub fn gen_medieval_terrain(
             Mesh3d(mesh_handle),
             MeshMaterial3d(material),
             Transform::from_translation(Vec3::new(0.0, *height_offset, 0.0)),
+            Visibility::default(),
+            InheritedVisibility::default(),
             Name::new("MedievalTerrain"),
         ))
         .id();

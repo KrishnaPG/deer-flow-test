@@ -5,7 +5,10 @@ use bevy::ecs::system::Commands;
 use bevy::log::{debug, warn};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
+use bevy::prelude::{
+    ChildOf, Component, Entity, InheritedVisibility, Mesh, Mesh3d, MeshMaterial3d, Sphere,
+    Transform, Visibility,
+};
 
 use crate::scene::descriptor::GeneratorParams;
 use crate::scene::primitives;
@@ -50,6 +53,8 @@ pub fn gen_static_glow_cluster(
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(pos).with_scale(Vec3::splat(scale)),
+            Visibility::default(),
+            InheritedVisibility::default(),
         ));
     }
     debug!("gen_static_glow_cluster: count={count} spread={spread}");

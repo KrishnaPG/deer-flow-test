@@ -1,9 +1,7 @@
-// Medieval Open World Scene
-// A medieval landscape with terrain, vegetation, buildings, and NPCs
-(
+SceneDescriptor(
     name: "medieval_open",
     ambient_audio: "audio/ambient/medieval_forest.ogg",
-    gltf_scene: null,
+    gltf_scene: None,
     theme: "medieval",
     generators: [
         // Medieval terrain with heightmap and texture splatting
@@ -11,44 +9,44 @@
             generator: "medieval_terrain",
             params: Terrain(
                 heightmap: "textures/terrain/heightmaps/medieval_valley.png",
-                world_size: [2000.0, 2000.0],
+                world_size: (2000.0, 2000.0),
                 height_scale: 150.0,
                 height_offset: 0.0,
                 resolution: 64,
                 chunk_size: 100.0,
-                splat_mask: null,
-                layer_textures: [
-                    "textures/terrain/grass/Grass003_1K-PNG_Color.png",
-                    "textures/terrain/dirt/Ground011_1K-PNG_Color.png",
-                    "textures/terrain/rock/Rock030_1K-PNG_Color.png",
-                    "textures/terrain/snow/Snow006_1K-PNG_Color.png",
-                ],
+                splat_mask: None,
+                layer_textures: (
+                    Some("textures/terrain/grass/Grass003_1K-PNG_Color.png"),
+                    Some("textures/terrain/dirt/Ground011_1K-PNG_Color.png"),
+                    Some("textures/terrain/rock/Rock030_1K-PNG_Color.png"),
+                    Some("textures/terrain/snow/Snow006_1K-PNG_Color.png"),
+                ),
                 uv_scale: 10.0,
                 invert_heightmap: false,
             ),
         ),
-        // Meadow vegetation
+        // Meadow vegetation (limited count for performance)
         (
             generator: "vegetation",
             params: Vegetation(
                 biome: "Meadow",
-                center: [0.0, 0.0, 0.0],
-                radius: 800.0,
-                density: 0.8,
+                center: (0.0, 0.0, 0.0),
+                radius: 200.0,
+                density: 0.3,
                 enable_wind: true,
-                draw_distance: 600.0,
+                draw_distance: 300.0,
             ),
         ),
-        // Forest vegetation on edges
+        // Forest vegetation on edges (limited count for performance)
         (
             generator: "vegetation",
             params: Vegetation(
                 biome: "Forest",
-                center: [400.0, 0.0, 400.0],
-                radius: 300.0,
-                density: 1.2,
+                center: (100.0, 0.0, 100.0),
+                radius: 80.0,
+                density: 0.5,
                 enable_wind: true,
-                draw_distance: 500.0,
+                draw_distance: 250.0,
             ),
         ),
         // Ambient particles (dust motes in sunlight)
