@@ -60,3 +60,7 @@ thiserror = "2"
 # ── HTTP / parsing ──────────────────────────────────────────────────
 ureq = "3"
 regex = "1"
+
+# ── Terrain generation ──────────────────────────────────────────────
+deer-terrain = { path = "../../crates/terrain" }
+image = "0.25"
