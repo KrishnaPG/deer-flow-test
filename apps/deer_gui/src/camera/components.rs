@@ -200,9 +200,9 @@ impl CinematicCamera {
 
     /// Returns the world-space point the camera should look at.
     ///
-    /// Defaults to [`Vec3::ZERO`] when no explicit focus target is set.
+    /// Defaults to a point above water (Y=10m) to avoid looking into the lake.
     pub fn compute_look_at(&self) -> Vec3 {
-        let target = self.focus_target.unwrap_or(Vec3::ZERO);
+        let target = self.focus_target.unwrap_or(Vec3::new(0.0, 10.0, 0.0));
         trace!("compute_look_at: {:?}", target);
         target
     }
