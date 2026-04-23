@@ -4,7 +4,7 @@ Download CC0 3D models and textures for medieval landscape scene.
 
 Sources (all CC0 / free):
   - Poly Haven: https://polyhaven.com - CC0 HDRIs (direct downloads)
-  - AmbientCG: https://ambientcg.com - CC0 PBR materials (direct downloads)
+  - AmbientCG: https://ambientcg.com - CC0 PBR materials (via v3 API)
   - Kenney: https://kenney.nl - CC0 game assets (manual download required)
 
 Usage:
@@ -17,9 +17,6 @@ Categories:
 
 Note: Kenney 3D models require manual download from https://kenney.nl
       as they don't provide stable direct download URLs.
-
-Defaults:
-    --output: apps/deer_gui/assets
 """
 
 import argparse
@@ -27,6 +24,9 @@ import os
 import sys
 import urllib.request
 import urllib.error
+import tempfile
+import zipfile
+import json
 from pathlib import Path
 
 
@@ -65,32 +65,28 @@ POLYHAVEN_HDRIS = {
 }
 
 # ---------------------------------------------------------------------------
-# AmbientCG PBR textures (CC0) - direct download URLs
+# AmbientCG PBR textures (CC0)
 # ---------------------------------------------------------------------------
 
 AMBIENTCG_TEXTURES = {
     "grass": {
         "name": "Grass 01",
         "id": "Grass01",
-        "url_1k": "https://dl.polyhaven.org/file/ph-assets/AmbientCG/textures/Grass01_1K.zip",
         "description": "Green grass with normal and roughness maps",
     },
     "dirt": {
         "name": "Dirt 01",
         "id": "Dirt01",
-        "url_1k": "https://dl.polyhaven.org/file/ph-assets/AmbientCG/textures/Dirt01_1K.zip",
         "description": "Brown dirt/soil texture",
     },
     "rock": {
         "name": "Rock 01",
         "id": "Rock01",
-        "url_1k": "https://dl.polyhaven.org/file/ph-assets/AmbientCG/textures/Rock01_1K.zip",
         "description": "Grey rock texture",
     },
     "snow": {
         "name": "Snow 01",
         "id": "Snow01",
-        "url_1k": "https://dl.polyhaven.org/file/ph-assets/AmbientCG/textures/Snow01_1K.zip",
         "description": "White snow texture",
     },
 }
@@ -99,7 +95,6 @@ AMBIENTCG_TEXTURES = {
 # ---------------------------------------------------------------------------
 # Download utilities
 # ---------------------------------------------------------------------------
-
 
 def download_file(url: str, dest: Path, timeout: int = 300) -> bool:
     """Download a file with progress reporting."""
@@ -136,49 +131,6 @@ def download_file(url: str, dest: Path, timeout: int = 300) -> bool:
         return False
 
 
-def download_and_extract_zip(url: str, extract_dir: Path, timeout: int = 300) -> bool:
-    """Download a ZIP file and extract its contents."""
-    import tempfile
-    import zipfile
-
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-
-        print(f"  Downloading ZIP: {url}")
-        try:
-            req = urllib.request.Request(
-                url, headers={"User-Agent": "DeerGUI/0.1 (Bevy Game Engine)"}
-            )
-
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                data = response.read()
-
-            tmp.write(data)
-            tmp.close()
-
-            size_mb = len(data) / (1024 * 1024)
-            print(f"  ✓ Downloaded ZIP ({size_mb:.1f} MB)")
-
-        except Exception as e:
-            print(f"  ✗ Download failed: {e}")
-            tmp_path.unlink(missing_ok=True)
-            return False
-
-        # Extract ZIP
-        print(f"  Extracting to: {extract_dir}")
-        try:
-            with zipfile.ZipFile(tmp_path, "r") as zf:
-                zf.extractall(extract_dir)
-            print(f"  ✓ Extracted {len(zf.namelist())} files")
-        except Exception as e:
-            print(f"  ✗ Extraction failed: {e}")
-            tmp_path.unlink(missing_ok=True)
-            return False
-
-        tmp_path.unlink(missing_ok=True)
-        return True
-
-
 def download_polyhaven_hdri(
     hdri_key: str, output_dir: Path, resolution: str = "2k"
 ) -> bool:
@@ -198,59 +150,87 @@ def download_polyhaven_hdri(
     return download_file(url, dest)
 
 
-def download_ambientcg_texture(texture_key: str, output_dir: Path) -> bool:
-    """Download AmbientCG PBR texture and extract to proper directory."""
-    import tempfile
-    import zipfile
-
+def download_ambientcg_texture(texture_key: str, output_dir: Path, resolution: str = "1K", format_pref: str = "PNG") -> bool:
+    """Download AmbientCG PBR texture using v3 API and extract to proper directory."""
     tex_info = AMBIENTCG_TEXTURES.get(texture_key)
     if not tex_info:
         print(f"  ✗ Unknown texture: {texture_key}")
         return False
 
+    texture_id = tex_info["id"]
     tex_dir = output_dir / "textures" / "terrain" / texture_key
     tex_dir.mkdir(parents=True, exist_ok=True)
 
-    # Download ZIP
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-
-        print(f"  Downloading: {tex_info['url_1k']}")
-        try:
-            req = urllib.request.Request(
-                tex_info["url_1k"],
-                headers={"User-Agent": "DeerGUI/0.1 (Bevy Game Engine)"},
-            )
-
-            with urllib.request.urlopen(req, timeout=300) as response:
-                data = response.read()
-
-            tmp.write(data)
+    print(f"  Querying AmbientCG API for {texture_id}...")
+    api_url = f"https://ambientcg.com/api/v3/assets?id={texture_id}&include=downloads"
+    
+    try:
+        req = urllib.request.Request(api_url, headers={"User-Agent": "DeerGUI/0.1"})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception as e:
+        print(f"  ✗ Failed to fetch API metadata: {e}")
+        return False
+        
+    if not data.get("assets"):
+        print(f"  ✗ Asset {texture_id} not found in AmbientCG.")
+        return False
+        
+    asset_info = data["assets"][0]
+    downloads = asset_info.get("downloads", [])
+    
+    target_attr = f"{resolution}-{format_pref}"
+    download_url = None
+    
+    for dl in downloads:
+        if dl.get("attributes") == target_attr and dl.get("extension") == "zip":
+            download_url = dl.get("url")
+            break
+            
+    if not download_url and format_pref == "PNG":
+        target_attr = f"{resolution}-JPG"
+        for dl in downloads:
+            if dl.get("attributes") == target_attr and dl.get("extension") == "zip":
+                download_url = dl.get("url")
+                break
+                
+    if not download_url:
+        print(f"  ✗ Could not find a ZIP download for {resolution} resolution.")
+        return False
+        
+    print(f"  Downloading ZIP: {download_url}")
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+            req = urllib.request.Request(download_url, headers={"User-Agent": "DeerGUI/0.1"})
+            with urllib.request.urlopen(req, timeout=120) as response:
+                total_size = int(response.headers.get("Content-Length", 0))
+                chunk_size = 1024 * 1024
+                downloaded = 0
+                while True:
+                    chunk = response.read(chunk_size)
+                    if not chunk:
+                        break
+                    tmp.write(chunk)
+                    downloaded += len(chunk)
+            
             tmp.close()
-
-            size_mb = len(data) / (1024 * 1024)
-            print(f"  ✓ Downloaded ({size_mb:.1f} MB)")
-
-        except Exception as e:
-            print(f"  ✗ Download failed: {e}")
-            tmp_path.unlink(missing_ok=True)
-            return False
-
-        # Extract ZIP and organize files
-        try:
+            
+            print(f"  Extracting ZIP to {tex_dir}...")
             with zipfile.ZipFile(tmp_path, "r") as zf:
                 for name in zf.namelist():
-                    if name.endswith((".png", ".jpg", ".jpeg", ".tga")):
-                        # Extract to texture directory
+                    if name.endswith((".png", ".jpg", ".jpeg")):
                         zf.extract(name, tex_dir)
                         print(f"  ✓ {name}")
-        except Exception as e:
-            print(f"  ✗ Extraction failed: {e}")
+            
             tmp_path.unlink(missing_ok=True)
-            return False
-
-        tmp_path.unlink(missing_ok=True)
-        return True
+            return True
+            
+    except Exception as e:
+        print(f"  ✗ Failed during download or extraction: {e}")
+        if 'tmp_path' in locals():
+            Path(tmp_path).unlink(missing_ok=True)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +284,7 @@ def main():
 
     print("=" * 60)
     print("  Deer GUI - CC0 Asset Downloader")
-    print("  Sources: PolyHaven, AmbientCG")
+    print("  Sources: PolyHaven, AmbientCG (API v3)")
     print("=" * 60)
     print(f"Output: {output_dir}")
     print(f"Category: {args.category}")
@@ -338,11 +318,14 @@ def main():
 
         textures_to_download = list(AMBIENTCG_TEXTURES.keys())
 
+        # For textures we typically want 1K by default, but we can respect args.resolution if it fits (1k -> 1K)
+        tex_res = args.resolution.upper()
+
         for tex_key in textures_to_download:
             tex_info = AMBIENTCG_TEXTURES[tex_key]
             print(f"\n  [{tex_key}] {tex_info['name']}")
             print(f"    {tex_info['description']}")
-            download_ambientcg_texture(tex_key, output_dir)
+            download_ambientcg_texture(tex_key, output_dir, resolution=tex_res)
 
     print(f"\n{'=' * 60}")
     print("Done! Assets downloaded to:", output_dir)
