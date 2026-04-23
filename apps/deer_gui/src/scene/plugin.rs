@@ -38,15 +38,8 @@ impl Plugin for ScenePlugin {
         let mut manager = SceneManager::new();
         manager.register(Box::new(TetSceneConfig));
 
-        // We can just try to load medieval_open unconditionally or rely on
-        // the startup system to request it. But registering it beforehand
-        // doesn't hurt. We can also lazily load it later if needed.
-        match DescriptorSceneConfig::from_file("medieval_open") {
-            Ok(config) => manager.register(Box::new(config)),
-            Err(e) => warn!("Failed to load medieval_open scene: {}", e),
-        }
-
-        // We will load the actual initial scene inside the startup system
+        // The actual initial scene will be loaded dynamically in the startup system
+        // based on the InitialScene resource (from CLI args or env vars).
 
         debug!(
             "ScenePlugin::build — registered scenes: {:?}",
