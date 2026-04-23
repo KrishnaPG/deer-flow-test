@@ -43,6 +43,20 @@ impl DescriptorSceneConfig {
             audio_track,
         }
     }
+
+    /// Create from a scene descriptor file (e.g., "medieval_open" → scenes/medieval_open.scene.ron).
+    pub fn from_file(scene_name: &str) -> std::io::Result<Self> {
+        use super::loader::LoaderError;
+
+        let scenes_dir = std::path::PathBuf::from("apps/deer_gui/assets/scenes");
+        let scene_file = scenes_dir.join(format!("{}.scene.ron", scene_name));
+
+        let content = std::fs::read_to_string(&scene_file)?;
+        let descriptor: SceneDescriptor = ron::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        Ok(Self::new(descriptor))
+    }
 }
 
 impl SceneConfig for DescriptorSceneConfig {

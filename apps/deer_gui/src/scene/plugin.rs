@@ -1,7 +1,7 @@
 //! [`ScenePlugin`] — registers scene resources, startup, and per-frame systems.
 
 use bevy::asset::Assets;
-use bevy::log::{debug, info};
+use bevy::log::{debug, info, warn};
 use bevy::pbr::StandardMaterial;
 use bevy::prelude::{App, Commands, Mesh, Plugin, Res, ResMut, Startup, Update};
 
@@ -9,6 +9,7 @@ use super::audio_bridge::{scene_audio_bridge_system, SceneAudioState};
 use super::common::atmosphere::{atmosphere_transition_system, AtmosphereConfig};
 use super::common::parallax::PreviousCameraPosition;
 use super::common::weather::{weather_transition_system, weather_update_system, WeatherMachine};
+use super::descriptor_config::DescriptorSceneConfig;
 use super::generators::registry::GeneratorRegistry;
 use super::generators::{barge_system, cloud_system, drop_pod_system, traveller_system};
 use super::manager::SceneManager;
@@ -36,6 +37,13 @@ impl Plugin for ScenePlugin {
         // Build and register the SceneManager with known scene configs.
         let mut manager = SceneManager::new();
         manager.register(Box::new(TetSceneConfig));
+
+        // Try to load medieval_open scene from file
+        match DescriptorSceneConfig::from_file("medieval_open") {
+            Ok(config) => manager.register(Box::new(config)),
+            Err(e) => warn!("Failed to load medieval_open scene: {}", e),
+        }
+
         debug!(
             "ScenePlugin::build — registered scenes: {:?}",
             manager.available_scenes(),
@@ -70,7 +78,7 @@ impl Plugin for ScenePlugin {
 // Startup system
 // ---------------------------------------------------------------------------
 
-/// Activates the first registered scene (TET) via [`SceneManager`].
+/// Activates the first registered scene (medieval_open) via [`SceneManager`].
 fn scene_startup_system(
     mut manager: ResMut<SceneManager>,
     mut commands: Commands,
@@ -81,13 +89,26 @@ fn scene_startup_system(
 ) {
     info!("scene_startup_system — activating initial scene");
     let theme_ref = theme.as_deref();
+    // Default to medieval_open landscape scene
     let activated = manager.activate(
-        "TET",
+        "medieval_open",
         &mut commands,
         &mut meshes,
         &mut materials,
         theme_ref,
         Some(&mut audio_state),
     );
-    debug!("scene_startup_system — activated={activated}");
+    if !activated {
+        // Fallback to TET if medieval_open not found
+        warn!("scene_startup_system — medieval_open not found, falling back to TET");
+        let _ = manager.activate(
+            "TET",
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            theme_ref,
+            Some(&mut audio_state),
+        );
+    }
+    debug!("scene_startup_system — activated scene");
 }
