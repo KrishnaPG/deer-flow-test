@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# ── CLI Parsing ─────────────────────────────────────────────────────
+clap = { version = "4.5", features = ["derive"] }
+
 # ── Engine ───────────────────────────────────────────────────────────
 bevy = { version = "0.18.1", default-features = false, features = [
     "bevy_asset",

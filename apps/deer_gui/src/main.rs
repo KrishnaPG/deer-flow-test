@@ -8,6 +8,7 @@ use bevy::log::{info, LogPlugin};
 use bevy::prelude::*;
 use bevy::window::{Window, WindowResolution};
 use bevy_egui::EguiPlugin;
+use clap::Parser;
 
 use deer_gui::audio::DeerAudioPlugin;
 use deer_gui::bridge::BridgePlugin;
@@ -19,10 +20,18 @@ use deer_gui::hud::HudPlugin;
 use deer_gui::picking::PickingPlugin as DeerPickingPlugin;
 use deer_gui::preferences::PreferencesPlugin;
 use deer_gui::render::{CapabilityQualityPlugin, RenderQualityPlugin};
-use deer_gui::scene::ScenePlugin;
+use deer_gui::scene::{InitialScene, ScenePlugin};
 use deer_gui::shell::ShellPlugin;
 use deer_gui::theme::ThemePlugin;
 use deer_gui::world::{FoliagePlugin, WaterGlobalConfig, WaterPlugin, WorldPlugin};
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Name of the scene to load on startup
+    #[arg(short, long, default_value = "medieval_open")]
+    scene: String,
+}
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -32,8 +41,10 @@ fn main() {
     load_dotenv();
 
     let log_filter = build_log_filter();
+    let args = Args::parse();
 
     App::new()
+        .insert_resource(InitialScene(args.scene))
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
