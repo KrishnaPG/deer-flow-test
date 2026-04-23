@@ -12,6 +12,8 @@ use bevy::prelude::{Entity, Mesh};
 
 use crate::theme::ThemeManager;
 
+use super::generators::GeneratorRegistry;
+
 // ---------------------------------------------------------------------------
 // SceneConfig trait
 // ---------------------------------------------------------------------------
@@ -39,6 +41,7 @@ pub trait SceneConfig: Send + Sync + 'static {
         meshes: &mut Assets<Mesh>,
         materials: &mut Assets<StandardMaterial>,
         theme: Option<&ThemeManager>,
+        generators: &GeneratorRegistry,
     ) -> Entity;
 
     /// Returns the asset path of the ambient audio track for this scene.

@@ -5,7 +5,7 @@ use bevy::ecs::system::Commands;
 use bevy::log::{debug, warn};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
+use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform, InheritedVisibility, Visibility};
 
 use crate::scene::descriptor::GeneratorParams;
 
@@ -55,6 +55,8 @@ pub fn gen_cloud_layer(
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(pos).with_scale(Vec3::new(3.0, 0.5, 3.0)),
+            Visibility::default(),
+            InheritedVisibility::default(),
         ));
     }
     debug!("gen_cloud_layer: count={count} speed={speed} radius={radius}");

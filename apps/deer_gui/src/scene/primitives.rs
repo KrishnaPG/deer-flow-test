@@ -7,7 +7,10 @@ use bevy::asset::Assets;
 use bevy::log::{debug, trace};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
+use bevy::prelude::{
+    ChildOf, Component, Entity, InheritedVisibility, Mesh, Mesh3d, MeshMaterial3d, Sphere,
+    Transform, Visibility,
+};
 
 use crate::scene::common::parallax::ParallaxLayer;
 use crate::scene::manager::SceneRoot;
@@ -30,7 +33,14 @@ pub struct Star;
 /// The root entity serves as the parent for all scene-specific entities.
 /// Despawning it recursively removes the entire scene.
 pub fn spawn_root(commands: &mut bevy::ecs::system::Commands) -> Entity {
-    let root = commands.spawn((SceneRoot, Transform::default())).id();
+    let root = commands
+        .spawn((
+            SceneRoot,
+            Transform::default(),
+            Visibility::default(),
+            InheritedVisibility::default(),
+        ))
+        .id();
     debug!("primitives::spawn_root — root={root:?}");
     root
 }
@@ -65,6 +75,8 @@ pub fn spawn_starfield(
             Mesh3d(star_mesh.clone()),
             MeshMaterial3d(star_material.clone()),
             Transform::from_translation(pos).with_scale(Vec3::splat(entity_scale(i))),
+            Visibility::default(),
+            InheritedVisibility::default(),
         ));
     }
 

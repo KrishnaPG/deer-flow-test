@@ -5,7 +5,7 @@ use bevy::ecs::system::Commands;
 use bevy::log::{debug, warn};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
+use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform, InheritedVisibility, Visibility};
 
 use crate::scene::descriptor::GeneratorParams;
 
@@ -52,6 +52,8 @@ pub fn gen_drop_pods(
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(pos),
+            Visibility::default(),
+            InheritedVisibility::default(),
         ));
     }
     debug!("gen_drop_pods: count={count} speed={speed}");

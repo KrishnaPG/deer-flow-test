@@ -12,6 +12,7 @@ use bevy::pbr::StandardMaterial;
 use bevy::prelude::{Component, Entity, Mesh, Resource};
 
 use super::audio_bridge::SceneAudioState;
+use super::generators::GeneratorRegistry;
 use super::traits::SceneConfig;
 use crate::theme::ThemeManager;
 
@@ -79,6 +80,7 @@ impl SceneManager {
         materials: &mut Assets<StandardMaterial>,
         theme: Option<&ThemeManager>,
         audio_state: Option<&mut SceneAudioState>,
+        generators: &GeneratorRegistry,
     ) -> bool {
         debug!("SceneManager::activate — requested scene='{name}'");
 
@@ -91,7 +93,8 @@ impl SceneManager {
         self.deactivate(commands, None);
 
         // Spawn new scene environment.
-        let root = self.configs[index].spawn_environment(commands, meshes, materials, theme);
+        let root =
+            self.configs[index].spawn_environment(commands, meshes, materials, theme, generators);
         self.configs[index].on_activate();
 
         self.active_index = Some(index);
@@ -134,7 +137,11 @@ impl SceneManager {
                 "SceneManager::deactivate — despawning '{}', root={root:?}",
                 self.configs[index].name(),
             );
-            commands.entity(root).despawn();
+            // Manually despawn all children first, then the root
+            // Bevy 0.18 doesn't have despawn_recursive on EntityCommands
+            commands.queue(move |world: &mut bevy::prelude::World| {
+                despawn_recursive(world, root);
+            });
         }
 
         // Stop ambient audio for the departing scene.
@@ -189,4 +196,25 @@ impl Default for SceneManager {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: recursive despawn
+// ---------------------------------------------------------------------------
+
+/// Recursively despawn an entity and all its descendants.
+fn despawn_recursive(world: &mut bevy::prelude::World, entity: bevy::prelude::Entity) {
+    // Get children before despawning (to avoid borrow issues)
+    let children: Vec<bevy::prelude::Entity> = world
+        .get::<bevy::prelude::Children>(entity)
+        .map(|c| c.iter().copied().collect())
+        .unwrap_or_default();
+
+    // Recursively despawn children first
+    for child in children {
+        despawn_recursive(world, child);
+    }
+
+    // Despawn the entity itself
+    world.despawn(entity);
 }

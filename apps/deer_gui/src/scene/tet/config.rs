@@ -6,6 +6,7 @@ use bevy::log::info;
 use bevy::pbr::StandardMaterial;
 use bevy::prelude::{Entity, Mesh};
 
+use crate::scene::generators::GeneratorRegistry;
 use crate::scene::traits::SceneConfig;
 use crate::theme::ThemeManager;
 
@@ -31,6 +32,7 @@ impl SceneConfig for TetSceneConfig {
         meshes: &mut Assets<Mesh>,
         materials: &mut Assets<StandardMaterial>,
         theme: Option<&ThemeManager>,
+        _generators: &GeneratorRegistry,
     ) -> Entity {
         info!("TetSceneConfig::spawn_environment — spawning TET scene");
         super::setup::spawn_tet_environment(commands, meshes, materials, theme)

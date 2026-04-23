@@ -8,7 +8,10 @@ use bevy::ecs::system::{Commands, Res, ResMut};
 use bevy::log::{debug, info};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform};
+use bevy::prelude::{
+    ChildOf, Component, Entity, InheritedVisibility, Mesh, Mesh3d, MeshMaterial3d, Sphere,
+    Transform, Visibility,
+};
 
 use crate::constants::visual::{
     DATA_TRAIL_COUNT, DATA_TRAIL_SPEED, STARFIELD_COUNT, STARFIELD_RADIUS, TET_STRUCTURE_RADIUS,
@@ -168,6 +171,8 @@ fn spawn_monolith(
         Mesh3d(monolith_mesh),
         MeshMaterial3d(monolith_material),
         Transform::from_translation(Vec3::ZERO),
+        Visibility::default(),
+        InheritedVisibility::default(),
     ));
 
     debug!(
@@ -206,6 +211,8 @@ fn spawn_data_trails(
             Mesh3d(trail_mesh.clone()),
             MeshMaterial3d(trail_material.clone()),
             Transform::from_translation(pos),
+            Visibility::default(),
+            InheritedVisibility::default(),
         ));
     }
 
