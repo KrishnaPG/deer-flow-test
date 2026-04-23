@@ -101,6 +101,10 @@ pub enum GeneratorParams {
         position: [f32; 3],
         spread: f32,
     },
+    Monolith {
+        radius: f32,
+        emissive: [f32; 4],
+    },
     GltfSubscene {
         path: String,
         transform: Option<[f32; 3]>,

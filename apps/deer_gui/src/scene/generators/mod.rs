@@ -3,6 +3,7 @@
 pub mod cloud_layer;
 pub mod drop_pods;
 pub mod gltf_subscene;
+pub mod monolith;
 pub mod path_travellers;
 pub mod registry;
 pub mod river_barges;
@@ -15,6 +16,7 @@ pub mod vegetation;
 
 pub use cloud_layer::CloudParticle;
 pub use drop_pods::DropPod;
+pub use monolith::Monolith;
 pub use path_travellers::Traveller;
 pub use registry::GeneratorRegistry;
 pub use river_barges::Barge;

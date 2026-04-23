@@ -4,6 +4,10 @@ SceneDescriptor(
     gltf_scene: None,
     theme: "TET Orchestrator",
     generators: [
+        (generator: "monolith", params: Monolith(
+            radius: 5.0,
+            emissive: (0.3, 0.5, 1.0, 1.0),
+        )),
         (generator: "starfield", params: Starfield(
             count: 2000,
             radius: 800.0,
