@@ -5,7 +5,10 @@ use bevy::ecs::system::Commands;
 use bevy::log::{debug, warn};
 use bevy::math::Vec3;
 use bevy::pbr::StandardMaterial;
-use bevy::prelude::{ChildOf, Component, Entity, Mesh, Mesh3d, MeshMaterial3d, Sphere, Transform, InheritedVisibility, Visibility};
+use bevy::prelude::{
+    ChildOf, Component, Entity, InheritedVisibility, Mesh, Mesh3d, MeshMaterial3d, Sphere,
+    Transform, Visibility,
+};
 
 use crate::scene::descriptor::GeneratorParams;
 

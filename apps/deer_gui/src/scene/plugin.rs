@@ -13,7 +13,6 @@ use super::descriptor_config::DescriptorSceneConfig;
 use super::generators::registry::GeneratorRegistry;
 use super::generators::{barge_system, cloud_system, drop_pod_system, traveller_system};
 use super::manager::SceneManager;
-use super::tet::config::TetSceneConfig;
 use super::tet::systems::{data_trail_system, tet_glow_system};
 use super::traits::SceneConfig;
 use crate::theme::ThemeManager;
@@ -35,12 +34,10 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         info!("ScenePlugin::build — registering scene systems");
 
-        // Build and register the SceneManager with known scene configs.
-        let mut manager = SceneManager::new();
-        manager.register(Box::new(TetSceneConfig));
-
-        // The actual initial scene will be loaded dynamically in the startup system
+        // Build and register the SceneManager.
+        // Scenes are loaded dynamically from .scene.ron files in the startup system
         // based on the InitialScene resource (from CLI args or env vars).
+        let manager = SceneManager::new();
 
         debug!(
             "ScenePlugin::build — registered scenes: {:?}",

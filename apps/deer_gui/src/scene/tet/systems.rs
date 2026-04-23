@@ -7,9 +7,9 @@ use bevy::log::trace;
 use bevy::pbr::StandardMaterial;
 use bevy::prelude::{MeshMaterial3d, Query, Res, ResMut, Time, Transform, With};
 
-use super::setup::{DataTrail, TetMonolith};
 use crate::constants::timing::BEACON_PULSE_HZ;
 use crate::constants::visual::{DATA_TRAIL_SPEED, TET_GLOW_MAX, TET_GLOW_MIN};
+use crate::scene::generators::{Monolith, SpiralTrail};
 use crate::theme::ThemeManager;
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ use crate::theme::ThemeManager;
 /// at [`BEACON_PULSE_HZ`].
 pub fn tet_glow_system(
     time: Res<Time>,
-    monolith_query: Query<&MeshMaterial3d<StandardMaterial>, With<TetMonolith>>,
+    monolith_query: Query<&MeshMaterial3d<StandardMaterial>, With<Monolith>>,
     materials: Option<ResMut<Assets<StandardMaterial>>>,
     theme: Option<Res<ThemeManager>>,
 ) {
@@ -63,11 +63,11 @@ pub fn tet_glow_system(
 // Data trails
 // ---------------------------------------------------------------------------
 
-/// Advances [`DataTrail`] entities along their spiral paths at
+/// Advances [`SpiralTrail`] entities along their spiral paths at
 /// [`DATA_TRAIL_SPEED`], wrapping `t` back to 0.0 on overflow.
 pub fn data_trail_system(
     time: Res<Time>,
-    mut trail_query: Query<(&mut DataTrail, &mut Transform)>,
+    mut trail_query: Query<(&mut SpiralTrail, &mut Transform)>,
 ) {
     let dt = time.delta_secs();
     let advance = DATA_TRAIL_SPEED * dt * 0.01; // normalize speed to [0,1] range
