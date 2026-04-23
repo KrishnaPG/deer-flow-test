@@ -23,6 +23,8 @@ use bevy::math::Vec3;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::scene::common::ActiveSceneTag;
+
 // ---------------------------------------------------------------------------
 // NPC Types
 // ---------------------------------------------------------------------------
@@ -294,8 +296,7 @@ impl Plugin for NpcPlugin {
             app.init_resource::<NpcGlobalConfig>();
         }
 
-        // Add systems
-        app.add_systems(Startup, setup_npc_system);
+        // Add per-frame systems (scene-conditional)
         app.add_systems(Update, npc_animation_system);
 
         info!("NpcPlugin: registered systems");
@@ -366,7 +367,10 @@ fn spawn_npc_group(commands: &mut Commands, _asset_server: &AssetServer, spawn: 
 }
 
 /// Update NPC animations based on state.
-fn npc_animation_system(time: Res<Time>, mut npcs: Query<(&mut Npc, &mut NpcMovement)>) {
+fn npc_animation_system(tag: Res<ActiveSceneTag>, mut npcs: Query<(&mut Npc, &mut NpcMovement)>) {
+    if tag.0.as_deref() != Some("medieval_open") {
+        return;
+    }
     for (mut npc, mut movement) in npcs.iter_mut() {
         // Update animation based on movement
         if movement.velocity.length_squared() > 0.01 {

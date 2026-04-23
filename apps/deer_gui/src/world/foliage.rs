@@ -21,7 +21,8 @@ use bevy::ecs::system::{Commands, Res};
 use bevy::log::{debug, info, trace};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
+use crate::scene::common::ActiveSceneTag;
 
 // ---------------------------------------------------------------------------
 // Biome Types
@@ -244,8 +245,7 @@ impl Plugin for FoliagePlugin {
             app.init_resource::<FoliageGlobalConfig>();
         }
 
-        // Add systems
-        app.add_systems(Startup, setup_foliage_system);
+        // Add per-frame systems (scene-conditional)
         app.add_systems(Update, update_wind_system);
 
         // Log available biome configs
@@ -276,7 +276,14 @@ fn setup_foliage_system(mut commands: Commands, config: Res<FoliageGlobalConfig>
 }
 
 /// Update wind animation parameters.
-fn update_wind_system(time: Res<Time>, mut config: ResMut<FoliageGlobalConfig>) {
+fn update_wind_system(
+    time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
+    mut config: ResMut<FoliageGlobalConfig>,
+) {
+    if tag.0.as_deref() != Some("medieval_open") {
+        return;
+    }
     // Update wind turbulence based on time for natural variation
     // This would be used by bevy_feronia's wind shader
     let elapsed = time.elapsed_secs();

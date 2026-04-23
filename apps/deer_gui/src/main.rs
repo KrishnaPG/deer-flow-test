@@ -23,7 +23,7 @@ use deer_gui::render::{CapabilityQualityPlugin, RenderQualityPlugin};
 use deer_gui::scene::{InitialScene, ScenePlugin};
 use deer_gui::shell::ShellPlugin;
 use deer_gui::theme::ThemePlugin;
-use deer_gui::world::{FoliagePlugin, WaterGlobalConfig, WaterPlugin, WorldPlugin};
+use deer_gui::world::{FoliagePlugin, WaterPlugin, WorldPlugin};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -79,14 +79,7 @@ fn main() {
         .add_plugins(BridgePlugin)
         .add_plugins(WorldPlugin)
         .add_plugins(FoliagePlugin::default())
-        .add_plugins(WaterPlugin {
-            config: Some(WaterGlobalConfig {
-                water_level: 10.0, // River at 10m elevation
-                enable_splash: true,
-                enable_swimming: true,
-                ..default()
-            }),
-        })
+        .add_plugins(WaterPlugin::default())
         .add_systems(Startup, setup_landscape)
         .add_plugins(ShellPlugin)
         .add_plugins(HudPlugin)
