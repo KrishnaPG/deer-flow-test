@@ -8,8 +8,20 @@ use super::drop_pods::{self, DropPod};
 use super::path_travellers::{self, Traveller};
 use super::river_barges::{self, Barge};
 use crate::constants::descent::CLOUD_RADIUS;
+use crate::scene::common::ActiveSceneTag;
 
-pub fn barge_system(time: Res<Time>, mut query: Query<(&mut Barge, &mut Transform)>) {
+fn is_scene(tag: &Res<ActiveSceneTag>, name: &str) -> bool {
+    tag.0.as_deref() == Some(name)
+}
+
+pub fn barge_system(
+    time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
+    mut query: Query<(&mut Barge, &mut Transform)>,
+) {
+    if !is_scene(&tag, "Precursors") {
+        return;
+    }
     let dt = time.delta_secs();
     for (mut barge, mut tf) in query.iter_mut() {
         barge.t = (barge.t + barge.speed * dt * 0.01) % 1.0;
@@ -18,7 +30,14 @@ pub fn barge_system(time: Res<Time>, mut query: Query<(&mut Barge, &mut Transfor
     }
 }
 
-pub fn traveller_system(time: Res<Time>, mut query: Query<(&mut Traveller, &mut Transform)>) {
+pub fn traveller_system(
+    time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
+    mut query: Query<(&mut Traveller, &mut Transform)>,
+) {
+    if !is_scene(&tag, "Precursors") {
+        return;
+    }
     let dt = time.delta_secs();
     for (mut traveller, mut tf) in query.iter_mut() {
         traveller.t = (traveller.t + traveller.speed * dt * 0.01) % 1.0;
@@ -35,7 +54,14 @@ pub fn traveller_system(time: Res<Time>, mut query: Query<(&mut Traveller, &mut 
     }
 }
 
-pub fn cloud_system(time: Res<Time>, mut query: Query<(&mut CloudParticle, &mut Transform)>) {
+pub fn cloud_system(
+    time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
+    mut query: Query<(&mut CloudParticle, &mut Transform)>,
+) {
+    if !is_scene(&tag, "Descent") {
+        return;
+    }
     let dt = time.delta_secs();
     for (mut cloud, mut transform) in query.iter_mut() {
         cloud.t = (cloud.t + cloud.speed * dt * 0.01) % 1.0;
@@ -44,7 +70,14 @@ pub fn cloud_system(time: Res<Time>, mut query: Query<(&mut CloudParticle, &mut 
     }
 }
 
-pub fn drop_pod_system(time: Res<Time>, mut query: Query<(&mut DropPod, &mut Transform)>) {
+pub fn drop_pod_system(
+    time: Res<Time>,
+    tag: Res<ActiveSceneTag>,
+    mut query: Query<(&mut DropPod, &mut Transform)>,
+) {
+    if !is_scene(&tag, "Descent") {
+        return;
+    }
     let dt = time.delta_secs();
     for (mut pod, mut transform) in query.iter_mut() {
         pod.t = (pod.t + pod.speed * dt * 0.01) % 1.0;

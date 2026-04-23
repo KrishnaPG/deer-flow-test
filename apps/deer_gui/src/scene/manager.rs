@@ -12,6 +12,7 @@ use bevy::pbr::StandardMaterial;
 use bevy::prelude::{Component, Entity, Mesh, Resource};
 
 use super::audio_bridge::SceneAudioState;
+use super::common::ActiveSceneTag;
 use super::generators::GeneratorRegistry;
 use super::traits::SceneConfig;
 use crate::theme::ThemeManager;
@@ -100,6 +101,9 @@ impl SceneManager {
         self.active_index = Some(index);
         self.active_root = Some(root);
 
+        // Update active scene tag for conditional systems.
+        commands.insert_resource(ActiveSceneTag(Some(self.configs[index].name().to_string())));
+
         // Wire ambient audio for the new scene.
         if let Some(state) = audio_state {
             let track = self.configs[index].ambient_audio_track();
@@ -143,6 +147,9 @@ impl SceneManager {
                 despawn_recursive(world, root);
             });
         }
+
+        // Clear active scene tag.
+        commands.insert_resource(ActiveSceneTag(None));
 
         // Stop ambient audio for the departing scene.
         if let Some(state) = audio_state {
