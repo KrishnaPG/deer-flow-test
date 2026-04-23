@@ -16,24 +16,48 @@
                 height_offset: 0.0,
                 resolution: 64,
                 chunk_size: 100.0,
-                splat_mask: "textures/splat/medieval_valley_splat.png",
+                splat_mask: null,
                 layer_textures: [
-                    "textures/terrain/grass/grass_Color_2K.png",
-                    "textures/terrain/dirt/dirt_Color_2K.png",
-                    "textures/terrain/rock/rock_Color_2K.png",
-                    "textures/terrain/snow/snow_Color_2K.png",
+                    "textures/terrain/grass/grass_Color_512x512.png",
+                    "textures/terrain/dirt/dirt_Color_512x512.png",
+                    "textures/terrain/rock/rock_Color_512x512.png",
+                    "textures/terrain/snow/snow_Color_512x512.png",
                 ],
                 uv_scale: 10.0,
                 invert_heightmap: false,
+            ),
+        ),
+        // Meadow vegetation
+        (
+            generator: "vegetation",
+            params: Vegetation(
+                biome: "Meadow",
+                center: [0.0, 0.0, 0.0],
+                radius: 800.0,
+                density: 0.8,
+                enable_wind: true,
+                draw_distance: 600.0,
+            ),
+        ),
+        // Forest vegetation on edges
+        (
+            generator: "vegetation",
+            params: Vegetation(
+                biome: "Forest",
+                center: [400.0, 0.0, 400.0],
+                radius: 300.0,
+                density: 1.2,
+                enable_wind: true,
+                draw_distance: 500.0,
             ),
         ),
         // Ambient particles (dust motes in sunlight)
         (
             generator: "starfield",
             params: Starfield(
-                count: 500,
-                radius: 50.0,
-                emissive: (1.0, 0.95, 0.8, 0.3),
+                count: 200,
+                radius: 100.0,
+                emissive: (1.0, 0.95, 0.8, 0.2),
             ),
         ),
     ],

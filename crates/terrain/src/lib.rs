@@ -20,7 +20,7 @@ pub mod splat;
 
 pub use error::TerrainError;
 pub use heightmap::{Heightmap, HeightmapConfig};
-pub use lod::{LodConfig, TerrainLod};
+pub use lod::{calculate_lod, LodConfig, TerrainLod};
 pub use mesh_gen::{generate_terrain_mesh, MeshGenConfig, TerrainMeshData};
 pub use splat::{
     generate_splat_from_height, generate_splat_from_height_and_slope, SplatConfig,

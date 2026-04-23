@@ -24,4 +24,4 @@ pub use foliage::{BiomeType, FoliagePlugin, FoliageType, WindConfig};
 pub use npc::{AnimationState, NpcPlugin, NpcType};
 pub use plugin::WorldPlugin;
 pub use state::WorldState;
-pub use water::{WaterBody, WaterPlugin, WaterType};
+pub use water::{WaterBody, WaterGlobalConfig, WaterPlugin, WaterType};
