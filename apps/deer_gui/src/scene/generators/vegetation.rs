@@ -5,11 +5,10 @@
 
 use std::f32::consts::TAU;
 
-use bevy::asset::AssetServer;
 use bevy::ecs::system::Commands;
-use bevy::log::{debug, info, trace, warn};
+use bevy::log::{info, trace, warn};
 use bevy::math::Vec3;
-use bevy::pbr::{MeshMaterial3d, StandardMaterial};
+use bevy::pbr::StandardMaterial;
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};

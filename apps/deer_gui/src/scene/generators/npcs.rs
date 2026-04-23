@@ -5,12 +5,12 @@
 use bevy::ecs::system::Commands;
 use bevy::log::{debug, info, warn};
 use bevy::math::Vec3;
-use bevy::prelude::{ChildOf, Entity, InheritedVisibility, Name, Transform, Visibility};
-use rand::{thread_rng, Rng};
+use bevy::prelude::{Entity, InheritedVisibility, Name, Transform, Visibility};
+use rand::thread_rng;
 
 use crate::scene::descriptor::GeneratorParams;
 use crate::world::npc::{
-    AnimationState, Npc, NpcGlobalConfig, NpcHealth, NpcMovement, NpcSpawnConfig, NpcType,
+    AnimationState, Npc, NpcGlobalConfig, NpcHealth, NpcMovement,
 };
 
 /// Generate NPCs from scene descriptor parameters.
@@ -39,7 +39,7 @@ pub fn gen_npcs(
         ai_frequency: 10.0,
     });
 
-    let mut rng = thread_rng();
+    let _rng = thread_rng();
 
     for spawn in spawns {
         let center = Vec3::from(spawn.center);

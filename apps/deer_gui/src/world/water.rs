@@ -510,6 +510,7 @@ impl Plugin for WaterPlugin {
 // ---------------------------------------------------------------------------
 
 /// Setup the water system.
+#[allow(dead_code)]
 fn setup_water_system(config: Res<WaterGlobalConfig>) {
     trace!("setup_water_system: initializing");
 
@@ -611,10 +612,10 @@ fn update_splash_effects_system(
 fn trigger_splash_on_water_contact_system(
     tag: Res<ActiveSceneTag>,
     config: Res<WaterGlobalConfig>,
-    water_config: Res<SplashConfig>,
-    mut commands: Commands,
-    mut splashables: Query<(&Transform, &Swimmable, Option<&mut SplashEffect>), Changed<Transform>>,
-    water_emitters: Query<(Entity, &Transform), With<WaterSplashEmitter>>,
+    _water_config: Res<SplashConfig>,
+    _commands: Commands,
+    _splashables: Query<(&Transform, &Swimmable, Option<&mut SplashEffect>), Changed<Transform>>,
+    _water_emitters: Query<(Entity, &Transform), With<WaterSplashEmitter>>,
 ) {
     if !is_medieval(&tag) || !config.enable_splash {
         return;

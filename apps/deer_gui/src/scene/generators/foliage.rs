@@ -4,7 +4,7 @@
 
 use bevy::ecs::system::Commands;
 use bevy::log::{debug, info, warn};
-use bevy::prelude::{ChildOf, Entity, InheritedVisibility, Name, Transform, Visibility};
+use bevy::prelude::{Entity, Name, Transform, Visibility};
 
 use crate::scene::descriptor::GeneratorParams;
 use crate::world::foliage::{

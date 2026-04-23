@@ -87,7 +87,7 @@ fn camera_spawn_system(
     );
 
     // Build camera bundle.
-    let mut camera_bundle = (
+    let camera_bundle = (
         Camera3d::default(),
         Hdr::default(),                         // Enable HDR rendering
         Msaa::Off,                              // Required for SSAO
@@ -152,10 +152,10 @@ fn camera_debug_overlay(
         return;
     };
 
-    let Ok(cam) = camera.get_single() else {
+    let Ok(cam) = camera.single() else {
         return;
     };
-    let Ok(cam_transform) = cameras.get_single() else {
+    let Ok(cam_transform) = cameras.single() else {
         return;
     };
 

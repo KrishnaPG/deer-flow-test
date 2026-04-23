@@ -4,7 +4,6 @@
 
 use bevy::log::{debug, info};
 use bevy::prelude::*;
-use bevy::render::view::Hdr;
 
 use super::atmosphere::AtmosphereConfig;
 use super::lighting::CinematicLighting;

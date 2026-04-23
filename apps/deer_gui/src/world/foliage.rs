@@ -258,6 +258,7 @@ impl Plugin for FoliagePlugin {
 // ---------------------------------------------------------------------------
 
 /// Setup the foliage system root entity.
+#[allow(dead_code)]
 fn setup_foliage_system(mut commands: Commands, config: Res<FoliageGlobalConfig>) {
     trace!("setup_foliage_system: creating foliage root");
 
@@ -279,7 +280,7 @@ fn setup_foliage_system(mut commands: Commands, config: Res<FoliageGlobalConfig>
 fn update_wind_system(
     time: Res<Time>,
     tag: Res<ActiveSceneTag>,
-    mut config: ResMut<FoliageGlobalConfig>,
+    config: ResMut<FoliageGlobalConfig>,
 ) {
     if tag.0.as_deref() != Some("medieval_open") {
         return;

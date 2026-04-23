@@ -47,7 +47,7 @@ impl DescriptorSceneConfig {
 
     /// Create from a scene descriptor file (e.g., "medieval_open" → scenes/medieval_open.scene.ron).
     pub fn from_file(scene_name: &str) -> std::io::Result<Self> {
-        use super::loader::LoaderError;
+        
 
         let scenes_dir = std::path::PathBuf::from("apps/deer_gui/assets/scenes");
         let scene_file = scenes_dir.join(format!("{}.scene.ron", scene_name));

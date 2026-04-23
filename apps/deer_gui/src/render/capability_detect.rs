@@ -5,9 +5,7 @@
 
 use bevy::log::{debug, info, warn};
 use bevy::prelude::*;
-use bevy::render::render_resource::{
-    DownlevelFlags, WgpuFeatures as Features, WgpuLimits as Limits,
-};
+use bevy::render::render_resource::WgpuFeatures as Features;
 use bevy::render::renderer::{RenderAdapter, RenderDevice};
 
 use super::quality::{AntiAliasing, QualityPreset, QualitySettings};

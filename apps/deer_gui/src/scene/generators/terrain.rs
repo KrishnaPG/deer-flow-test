@@ -5,7 +5,6 @@
 
 use bevy::asset::AssetServer;
 use bevy::ecs::system::Commands;
-use bevy::image::Image;
 use bevy::log::{debug, info, warn};
 use bevy::math::Vec2;
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
@@ -59,7 +58,7 @@ impl Default for TerrainLayerConfig {
 pub fn gen_medieval_terrain(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    _materials: &mut Assets<StandardMaterial>,
     root: Entity,
     params: &GeneratorParams,
 ) {
@@ -222,9 +221,9 @@ fn convert_to_bevy_mesh(mesh_data: &deer_terrain::TerrainMeshData) -> Mesh {
 }
 
 /// Create a flat terrain mesh as fallback.
-fn create_flat_terrain_mesh(width: f32, depth: f32) -> Mesh {
+fn create_flat_terrain_mesh(_width: f32, _depth: f32) -> Mesh {
     let plane = bevy::math::primitives::Plane3d::default();
-    let mut mesh = Mesh::from(plane);
+    let mesh = Mesh::from(plane);
     mesh
 }
 
