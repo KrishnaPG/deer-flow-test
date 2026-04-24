@@ -5,6 +5,7 @@
 
 use bevy::ecs::system::Commands;
 use bevy::log::{debug, info, warn};
+use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::prelude::*;
 
 use crate::render::lighting::CinematicLighting;
@@ -96,9 +97,58 @@ pub fn gen_atmosphere(
 
     // Load skybox if specified
     if let Some(path) = skybox_path {
-        debug!("gen_atmosphere: loading skybox from {path}");
-        // Skybox will be added to camera via asset loading
-        // For now, just log it
+        let path_clone = path.clone();
+        commands.queue(move |world: &mut World| {
+            let (mesh_handle, material_handle) = {
+                let asset_server = world.resource::<AssetServer>();
+                let image_handle = asset_server.load(path_clone);
+
+                let mut meshes = world.resource_mut::<Assets<Mesh>>();
+                let mut mesh = Sphere::new(4000.0).mesh().build();
+
+                // Invert normals to make them face inward
+                if let Some(VertexAttributeValues::Float32x3(normals)) =
+                    mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
+                {
+                    for n in normals.iter_mut() {
+                        n[0] = -n[0];
+                        n[1] = -n[1];
+                        n[2] = -n[2];
+                    }
+                }
+
+                // Reverse triangle winding order
+                if let Some(Indices::U32(indices)) = mesh.indices_mut() {
+                    for i in (0..indices.len()).step_by(3) {
+                        indices.swap(i + 1, i + 2);
+                    }
+                }
+                let mesh_handle = meshes.add(mesh);
+
+                let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
+                let material_handle = materials.add(StandardMaterial {
+                    base_color_texture: Some(image_handle),
+                    unlit: true,
+                    cull_mode: None,
+                    fog_enabled: false,
+                    ..default()
+                });
+
+                (mesh_handle, material_handle)
+            };
+
+            world
+                .spawn((
+                    AtmosphereMarker,
+                    Name::new("SkyboxSphere"),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(material_handle),
+                    Transform::default(),
+                    Visibility::default(),
+                    InheritedVisibility::default(),
+                ))
+                .set_parent_in_place(root);
+        });
     }
 
     debug!("gen_atmosphere: complete");
