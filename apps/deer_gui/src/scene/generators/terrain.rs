@@ -13,6 +13,63 @@ use deer_terrain::{generate_terrain_mesh, Heightmap, MeshGenConfig};
 
 use crate::scene::descriptor::GeneratorParams;
 
+#[derive(Resource, Debug, Clone)]
+pub struct TerrainHeightmap {
+    pub width: f32,
+    pub depth: f32,
+    pub height_scale: f32,
+    pub height_offset: f32,
+    pub resolution: u32,
+    pub height_data: Vec<f32>, // 0.0 to 1.0
+}
+
+impl TerrainHeightmap {
+    pub fn get_height_at(&self, x: f32, z: f32) -> f32 {
+        let half_width = self.width / 2.0;
+        let half_depth = self.depth / 2.0;
+
+        // Map from world coordinates (-half to +half) to normalized (0.0 to 1.0)
+        let nx = ((x + half_width) / self.width).clamp(0.0, 1.0);
+        let nz = ((z + half_depth) / self.depth).clamp(0.0, 1.0);
+
+        // Map to heightmap grid
+        let hx = (nx * (self.resolution - 1) as f32).clamp(0.0, (self.resolution - 1) as f32);
+        let hz = (nz * (self.resolution - 1) as f32).clamp(0.0, (self.resolution - 1) as f32);
+
+        // Bilinear interpolation
+        let ix = hx.floor() as usize;
+        let iz = hz.floor() as usize;
+        let fx = hx.fract();
+        let fz = hz.fract();
+
+        let idx = |px: usize, pz: usize| -> usize { pz * self.resolution as usize + px };
+
+        let h00 = self.height_data[idx(ix, iz)];
+        let h10 = if ix + 1 < self.resolution as usize {
+            self.height_data[idx(ix + 1, iz)]
+        } else {
+            h00
+        };
+        let h01 = if iz + 1 < self.resolution as usize {
+            self.height_data[idx(ix, iz + 1)]
+        } else {
+            h00
+        };
+        let h11 = if ix + 1 < self.resolution as usize && iz + 1 < self.resolution as usize {
+            self.height_data[idx(ix + 1, iz + 1)]
+        } else {
+            h00
+        };
+
+        let h0 = h00 * (1.0 - fx) + h10 * fx;
+        let h1 = h01 * (1.0 - fx) + h11 * fx;
+
+        let normalized_height = h0 * (1.0 - fz) + h1 * fz;
+
+        self.height_offset + normalized_height * self.height_scale
+    }
+}
+
 /// Marker component for terrain entities spawned by the terrain generator.
 #[derive(Component, Debug, Clone)]
 pub struct MedievalTerrain {
@@ -106,7 +163,17 @@ pub fn gen_medieval_terrain(
     );
 
     let mesh = match mesh_result {
-        Ok(m) => m,
+        Ok((m, height_data)) => {
+            commands.insert_resource(TerrainHeightmap {
+                width: world_size[0],
+                depth: world_size[1],
+                height_scale: *height_scale,
+                height_offset: *height_offset,
+                resolution: *resolution,
+                height_data,
+            });
+            m
+        }
         Err(e) => {
             warn!("gen_medieval_terrain: failed to load heightmap, using flat plane: {e}");
             create_flat_terrain_mesh(world_size[0], world_size[1])
@@ -155,7 +222,7 @@ fn load_heightmap_and_create_mesh(
     resolution: u32,
     invert: bool,
     uv_scale: f32,
-) -> Result<Mesh, String> {
+) -> Result<(Mesh, Vec<f32>), String> {
     // Resolve asset path relative to assets directory
     let asset_path = format!("apps/deer_gui/assets/{heightmap_path}");
     let path = std::path::Path::new(&asset_path);
@@ -191,7 +258,7 @@ fn load_heightmap_and_create_mesh(
         .map_err(|e| format!("Failed to generate mesh: {e}"))?;
 
     // Convert TerrainMeshData to Bevy Mesh
-    Ok(convert_to_bevy_mesh(&mesh_data, uv_scale))
+    Ok((convert_to_bevy_mesh(&mesh_data, uv_scale), heightmap.values))
 }
 
 /// Convert deer-terrain mesh data to Bevy Mesh.
