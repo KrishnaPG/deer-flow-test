@@ -14,6 +14,7 @@ use super::common::{
 };
 use super::descriptor_config::DescriptorSceneConfig;
 use super::generators::registry::GeneratorRegistry;
+use super::generators::vegetation_spawner::spawn_vegetation_models;
 use super::generators::{barge_system, cloud_system, drop_pod_system, traveller_system};
 use super::manager::SceneManager;
 use super::tet::systems::{data_trail_system, tet_glow_system};
@@ -68,6 +69,7 @@ impl Plugin for ScenePlugin {
                     weather_update_system,
                     weather_transition_system,
                     scene_audio_bridge_system,
+                    spawn_vegetation_models,
                 ),
             );
     }

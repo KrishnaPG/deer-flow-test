@@ -9,9 +9,7 @@ use bevy::prelude::{Entity, InheritedVisibility, Name, Transform, Visibility};
 use rand::thread_rng;
 
 use crate::scene::descriptor::GeneratorParams;
-use crate::world::npc::{
-    AnimationState, Npc, NpcGlobalConfig, NpcHealth, NpcMovement,
-};
+use crate::world::npc::{AnimationState, Npc, NpcGlobalConfig, NpcHealth, NpcMovement};
 
 /// Generate NPCs from scene descriptor parameters.
 pub fn gen_npcs(

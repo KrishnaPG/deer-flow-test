@@ -17,6 +17,7 @@ pub mod static_glow;
 pub mod systems;
 pub mod terrain;
 pub mod vegetation;
+pub mod vegetation_spawner;
 pub mod water;
 
 pub use cloud_layer::CloudParticle;

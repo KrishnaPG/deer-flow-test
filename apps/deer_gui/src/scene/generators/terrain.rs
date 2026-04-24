@@ -102,6 +102,7 @@ pub fn gen_medieval_terrain(
         *height_offset,
         *resolution,
         *invert_heightmap,
+        *uv_scale,
     );
 
     let mesh = match mesh_result {
@@ -153,6 +154,7 @@ fn load_heightmap_and_create_mesh(
     height_offset: f32,
     resolution: u32,
     invert: bool,
+    uv_scale: f32,
 ) -> Result<Mesh, String> {
     // Resolve asset path relative to assets directory
     let asset_path = format!("apps/deer_gui/assets/{heightmap_path}");
@@ -189,11 +191,11 @@ fn load_heightmap_and_create_mesh(
         .map_err(|e| format!("Failed to generate mesh: {e}"))?;
 
     // Convert TerrainMeshData to Bevy Mesh
-    Ok(convert_to_bevy_mesh(&mesh_data))
+    Ok(convert_to_bevy_mesh(&mesh_data, uv_scale))
 }
 
 /// Convert deer-terrain mesh data to Bevy Mesh.
-fn convert_to_bevy_mesh(mesh_data: &deer_terrain::TerrainMeshData) -> Mesh {
+fn convert_to_bevy_mesh(mesh_data: &deer_terrain::TerrainMeshData, uv_scale: f32) -> Mesh {
     use bevy::asset::RenderAssetUsages;
     use bevy::mesh::{Indices, PrimitiveTopology};
 
@@ -211,7 +213,11 @@ fn convert_to_bevy_mesh(mesh_data: &deer_terrain::TerrainMeshData) -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
 
     // Convert UVs
-    let uvs: Vec<[f32; 2]> = mesh_data.uvs.clone();
+    let uvs: Vec<[f32; 2]> = mesh_data
+        .uvs
+        .iter()
+        .map(|uv| [uv[0] * uv_scale, uv[1] * uv_scale])
+        .collect();
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
     // Insert indices
